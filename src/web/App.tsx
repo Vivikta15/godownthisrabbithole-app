@@ -82,7 +82,7 @@ function Main({ me, cfg, refresh, send }: { me: Me; cfg: Cfg; refresh: () => voi
   const go = (t: typeof tab) => { setTab(t); send(t === 'finder' ? 'tab_change_finder' : 'tab_change_other'); };
   const names: [typeof tab, string][] = [['today', 'Today'], ['finder', 'Connect'], ['streaks', 'Streaks'], ['plan', 'Plan']];
   return <div>
-    <nav className="tabs" aria-label="Sections">{names.map(([k, l]) => <button key={k} aria-current={tab === k ? 'page' : undefined} onClick={() => go(k)}>{l}</button>)}</nav>
+    <nav className="tabs" aria-label="Sections">{names.map(([k, l]) => <button key={k} aria-current={tab === k ? 'page' : undefined} onClick={() => go(k)}><Icon k={k} />{l}</button>)}</nav>
     <div hidden={tab !== 'today'}><Today me={me} refresh={refresh} send={send} /></div>
     {tab === 'finder' && <Finder me={me} send={send} />}
     {tab === 'streaks' && <Streaks me={me} />}
@@ -117,20 +117,40 @@ function Today({ me, refresh, send }: { me: Me; refresh: () => void; send: Send 
     <p className="note">That's all for today. Nothing else to scroll. See you tomorrow!</p>
   </div>;
   return <div>
-    <div className="card">
-      <p className="note">Today's rabbit hole</p><h1>{h.title}</h1><p>{h.hook}</p><p className="note">{h.why}</p>
+    <div className="card hero">
+      <p className="eyebrow">Today's rabbit hole</p><h1>{h.title}</h1><p>{h.hook}</p><p className="note">{h.why}</p>
       {!reading && <button onClick={start}>Jump in</button>}
     </div>
-    {reading && <article className="card"><Story hole={h} />{h.shortened && <p className="note">Short version: some details are left out. The full version is shown when you pick "A good chew" in the quiz (changing it later is not built yet).</p>}<p><button onClick={finish}>I'm done reading</button></p>
+    {reading && <article className="card"><ReadProgress /><Story hole={h} />{h.shortened && <p className="note">Short version: some details are left out. The full version is shown when you pick "A good chew" in the quiz (changing it later is not built yet).</p>}<p><button onClick={finish}>I'm done reading</button></p>
       <p className="note">{h.sourceCheck === 'manual' ? `Sample story. Compared by hand against the source text on ${h.checked.date} (one source, not independent verification). Source: ` : 'Sample story. Its sources have not been checked by the app yet: '}{h.sources.map((s: any, i: number) => <span key={i}><a href={s.url} target="_blank" rel="noreferrer">{s.label}</a>{i < h.sources.length - 1 ? ', ' : ''}</span>)}</p></article>}
   </div>;
 }
 
+function Icon({ k }: { k: string }) {
+  const d: Record<string, string> = {
+    today: 'M4 18c0-5 3-9 8-9s8 4 8 9M12 9V4M8 6l4-2 4 2',
+    finder: 'M9 12a3 3 0 0 1 3-3h3M15 12a3 3 0 0 1-3 3H9M8 12h8',
+    streaks: 'M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9z',
+    plan: 'M20 14A8 8 0 1 1 10 4a6 6 0 0 0 10 10z',
+  };
+  return <svg className="ico" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d[k]} /></svg>;
+}
+
+function ReadProgress() {
+  const [p, setP] = useState(0);
+  useEffect(() => { const f = () => { const m = document.documentElement.scrollHeight - window.innerHeight; setP(m > 0 ? Math.min(100, Math.round((window.scrollY / m) * 100)) : 100); }; f(); window.addEventListener('scroll', f, { passive: true }); return () => window.removeEventListener('scroll', f); }, []);
+  return <div className="progress" role="progressbar" aria-label="Reading progress" aria-valuenow={p} aria-valuemin={0} aria-valuemax={100}><i style={{ width: p + '%' }} /></div>;
+}
+
 function Story({ hole }: { hole: any }) {
-  const beats: { q: string; a: string }[] = hole.beats;
-  if (hole.format === 'qa') return <>{beats.map((b, i) => <div className="beat" key={i}><h3>{b.q}</h3><p>{b.a}</p></div>)}</>;
-  if (hole.format === 'steps') return <ol className="steps">{beats.map((b, i) => <li key={i}><strong>{b.q}</strong> {b.a}</li>)}</ol>;
-  return <>{beats.map((b, i) => <p key={i}>{b.a}</p>)}</>;
+  const paras: string[] = hole.story || [];
+  const beats: { q: string; a: string }[] = hole.beats || [];
+  return <>
+    <div className="story">{paras.map((p, i) => <p key={i}>{p}</p>)}</div>
+    {hole.format !== 'narrative' && beats.length > 0 && <div className="recap"><h3>{hole.format === 'steps' ? 'The short version, step by step' : 'The short version, as questions'}</h3>
+      {hole.format === 'qa' ? beats.map((b, i) => <div className="beat" key={i}><h3 style={{ color: 'var(--ink)' }}>{b.q}</h3><p>{b.a}</p></div>)
+        : <ol className="steps">{beats.map((b, i) => <li key={i}><strong>{b.q}</strong> {b.a}</li>)}</ol>}</div>}
+  </>;
 }
 
 function Finder({ me, send }: { me: Me; send: Send }) {
@@ -141,12 +161,14 @@ function Finder({ me, send }: { me: Me; send: Send }) {
     const r = await api('/finder', { a, b }); setBusy(false); setMsg(r.data.message || r.data.error || ''); send('tab_change_other');
   }
   return <form onSubmit={go}>
-    <h1>Connection finder</h1>
-    <p>Type two random things. I'll look for a true, surprising link you can drop into conversation.</p>
-    <input type="text" placeholder="moon" value={a} onChange={(e) => setA(e.target.value)} aria-label="First word" />
-    <input type="text" placeholder="cheese" value={b} onChange={(e) => setB(e.target.value)} aria-label="Second word" />
+    <div className="card hero"><p className="eyebrow">Connection finder</p><h1>Two words. One true link.</h1>
+    <p>Type two random things and the rabbit looks for a real, surprising link you can drop into a conversation.</p>
+    <div className="pair"><input type="text" placeholder="moon" value={a} onChange={(e) => setA(e.target.value)} aria-label="First word" /><span aria-hidden="true">↔</span>
+    <input type="text" placeholder="cheese" value={b} onChange={(e) => setB(e.target.value)} aria-label="Second word" /></div>
+    <div className="examples" aria-label="Example pairs">{[['moon', 'cheese'], ['honey', 'Venus'], ['wombat', 'cube']].map(([x, y]) => <button type="button" className="soft" key={x + y} onClick={() => { setA(x); setB(y); }}>{x} + {y}</button>)}</div></div>
     <p><button disabled={busy || !a.trim() || !b.trim()}>{busy ? 'Thinking…' : 'Find the link'}</button></p>
-    {msg && <div className="bubble">{msg}</div>}
+    {msg && <div className="bubble" role="status">{msg}</div>}
+    <div className="card"><h3>How this will work</h3><ul className="ticks"><li>Every link comes with its sources, so you can check it.</li><li>If the rabbit can't find a true link, it says so instead of making one up.</li><li>Tries per day depend on your plan.</li></ul></div>
     {q && <p className="note">Your plan: {q.limit} {q.limit === 1 ? 'try' : 'tries'} per {q.period}.</p>}
   </form>;
 }
@@ -156,11 +178,12 @@ function Streaks({ me }: { me: Me }) {
   const load = () => api('/leaderboard').then((r) => setBoard(r.data.board || []));
   useEffect(() => { load(); }, []);
   return <div>
-    <div className="card"><p className="note">Current streak</p><div className="streak">{me.streak.current} <span className="note">day{me.streak.current === 1 ? "" : "s"}</span></div>
-      <p>Best: {me.streak.longest} · Freezes: {me.streak.freezesLeft} · Bonus holes: {me.streak.bonusHoles}</p>
+    <div className="card hero"><p className="eyebrow">Current streak</p><div className="streak"><svg className="flame" width="40" height="40" viewBox="0 0 24 24" fill="#ffb347" aria-hidden="true"><path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-2.500 1.200-4 2.500-5 .2 2 1 3 2 3 0-3-1.500-5 1.500-10z" /></svg> {me.streak.current} <span className="note">day{me.streak.current === 1 ? "" : "s"}</span></div>
+      <div className="pips" aria-label={`Progress toward a 7 day streak: ${Math.min(me.streak.current, 7)} of 7`}>{[1, 2, 3, 4, 5, 6, 7].map((n) => <div key={n} className={'pip' + (me.streak.current >= n ? ' on' : '')}>{n}</div>)}</div>
+      <div className="stat"><div><b>{me.streak.longest}</b>Best</div><div><b>{me.streak.freezesLeft}</b>Freezes</div><div><b>{me.streak.bonusHoles}</b>Bonus holes</div></div>
       <p className="note">You don't have to read every day. A freeze covers a missed day.</p></div>
     <div className="card"><h2>Friends</h2>
-      <ol className="board" aria-label="Friends streak leaderboard">{board.map((r, i) => <li key={i} className={'row' + (r.me ? ' me' : '')}><span>{r.name}{r.me ? ' (you)' : ''}</span><span>{r.streak} day{r.streak === 1 ? '' : 's'}</span></li>)}</ol>
+      <ol className="board" aria-label="Friends streak leaderboard">{board.map((r, i) => <li key={i} className={'row' + (r.me ? ' me' : '')}><span className="rank">{i + 1}</span><span className="nm">{r.name}{r.me ? ' (you)' : ''}</span><span>{r.streak} day{r.streak === 1 ? '' : 's'}</span></li>)}</ol>
       <p><button className="soft" onClick={async () => { const r = await api('/invite', {}); setCode(r.data.code); }}>Get an invite code</button></p>
       {code && <p role="status">Share this code: <strong>{code}</strong></p>}
       <input type="text" placeholder="Have a friend's code?" value={join} onChange={(e) => setJoin(e.target.value)} aria-label="Friend code" />
@@ -173,12 +196,16 @@ function Plan({ me, cfg }: { me: Me; cfg: Cfg }) {
   const p = cfg.plans; const fz = (n: number | null) => (n === null ? 'to be decided' : n);
   const fq = (x: any) => `${x.limit}/${x.period}`; const [msg, setMsg] = useState('');
   async function buy(plan: string) { const r = await api('/checkout', { plan }); if (r.ok && r.data.url) window.location.href = r.data.url; else setMsg(r.data.message || 'Could not start checkout.'); }
+  const per = (x: any) => (x.period === 'day' ? 'a day' : x.period === 'week' ? 'a week' : x.period);
   return <div>
-    <h1>Your plan</h1>
-    <div className="card"><p>Now: <strong>{me.access.plan === 'trial' ? 'Free trial' : me.access.plan}</strong>{me.access.plan === 'trial' && <> · ends {new Date(me.access.trialEndsAt).toLocaleString()}</>}</p></div>
-    {([['plan3', '$3 plan'], ['plan5', '$5 plan']] as const).map(([k, l]) => <div className="card" key={k}><h2>{l}</h2>
-      <p>Rabbit holes · Connection finder {fq(p[k].connection_finder)} · Streak freezes: {fz(p[k].streak_freezes)}</p>
-      <p className="note">Billing period: {p[k].billing ?? 'to be decided'}</p>{cfg.payments === 'test_mode' ? <button onClick={() => buy(k)}>Start {l} (test mode, no real charge)</button> : <button disabled>Payments not switched on yet</button>}</div>)}
+    <div className="card hero"><p className="eyebrow">Your plan</p><h1>{me.access.plan === 'trial' ? 'Free 3-day trial' : me.access.plan}</h1>
+      {me.access.plan === 'trial' && <p className="note">Trial ends {new Date(me.access.trialEndsAt).toLocaleString()}</p>}
+      <p className="note">One rabbit hole a day. No endless feed, ever.</p></div>
+    <div className="plans">{([['plan3', 'Little burrow', '$3'], ['plan5', 'Deep warren', '$5']] as const).map(([k, l, pr]) => <div className={'card plan' + (k === 'plan5' ? ' pop' : '')} key={k}>
+      <h2>{l}</h2><div className="price">{pr}<small> / {p[k].billing ?? 'billing period to be decided'}</small></div>
+      <ul className="ticks"><li>A personalised rabbit hole every day</li><li>Connection finder: {p[k].connection_finder.limit} {p[k].connection_finder.limit === 1 ? 'try' : 'tries'} {per(p[k].connection_finder)}</li><li>Streak freezes: {fz(p[k].streak_freezes)}</li></ul>
+      {cfg.payments === 'test_mode' ? <button onClick={() => buy(k)}>Start {l} (test mode, no real charge)</button> : <button disabled>Payments not switched on yet</button>}</div>)}</div>
     {msg && <p className="note" role="status">{msg}</p>}
+    <p className="note">Prices are in USD. Payments are not live; nothing can be charged in this preview.</p>
   </div>;
 }
