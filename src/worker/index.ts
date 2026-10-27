@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
-import { SEED, TOPIC_TAGS, FORMATS } from '../content/seed';
+import { SEED, TOPIC_TAGS, FORMATS, WHY_READ, COUNTRIES, COUNTRIES_WITH_STORIES } from '../content/seed';
 import { PLANS } from '../shared/config';
 import { accessFor, finderUsesAllowed, type Account } from '../shared/entitlements';
 import { recordRead, displayStreak, localDay, type StreakState } from '../shared/streak';
@@ -64,7 +64,7 @@ async function startSession(c: any, uid: string) {
   setCookie(c, 'sid', sid, { httpOnly: true, secure: new URL(c.req.url).protocol === 'https:', sameSite: 'Lax', path: '/', maxAge: 30 * 86400 });
 }
 
-app.get('/api/config', (c) => c.json({ topics: TOPIC_TAGS, formats: FORMATS, plans: PLANS, finderGenerator: false, emailRecovery: !!getMailer(c.env), payments: c.env.CHECKOUT_ENABLED === 'true' && c.env.DODO_API_KEY && c.env.DODO_ENV !== 'live_mode' ? 'test_mode' : 'not_configured' }));
+app.get('/api/config', (c) => c.json({ topics: TOPIC_TAGS, formats: FORMATS, whyRead: WHY_READ, countries: COUNTRIES, countriesWithStories: COUNTRIES_WITH_STORIES(), plans: PLANS, finderGenerator: false, emailRecovery: !!getMailer(c.env), payments: c.env.CHECKOUT_ENABLED === 'true' && c.env.DODO_API_KEY && c.env.DODO_ENV !== 'live_mode' ? 'test_mode' : 'not_configured' }));
 
 // Per-IP throttle (security, not a product rule). The IP is stored only as a truncated SHA-256 in login_attempts.
 async function ipKey(c: any, action: string) {
@@ -159,12 +159,20 @@ app.post('/api/email/verify', async (c) => {
 
 app.post('/api/logout', async (c) => { const sid = getCookie(c, 'sid'); if (sid) await c.env.DB.prepare('DELETE FROM sessions WHERE id=?').bind(sid).run(); deleteCookie(c, 'sid', { path: '/' }); return c.json({ ok: true }); });
 
+// Country is a starting point: for a reader's first few holes, prefer unseen local stories that also match an interest; otherwise the normal pool.
+function poolFor(pref: any, seenCount: number) {
+  let country: string | null = null; try { country = JSON.parse(pref?.quiz_answers || '{}').country ?? null; } catch { /* ignore */ }
+  if (!country || seenCount >= 3) return SEED;
+  const interests: string[] = JSON.parse(pref.interest_tags || '[]');
+  const local = SEED.filter((t) => t.countries?.includes(country!) && t.tags.some((g) => interests.includes(g)));
+  return local.length ? local : SEED;
+}
 async function loadAll(c: any) {
   const uid = c.get('uid');
   const u = await c.env.DB.prepare('SELECT id,email,display_name,timezone,signup_at,onboarded_at FROM users WHERE id=?').bind(uid).first();
   const s = await c.env.DB.prepare('SELECT current,longest,last_read_day,freezes_left,bonus_holes FROM streaks WHERE user_id=?').bind(uid).first();
   const sub = await c.env.DB.prepare('SELECT plan,status,paid_through FROM subscriptions WHERE user_id=?').bind(uid).first();
-  const pref = await c.env.DB.prepare('SELECT interest_tags,formats,length_pref FROM preferences WHERE user_id=?').bind(uid).first();
+  const pref = await c.env.DB.prepare('SELECT interest_tags,formats,length_pref,quiz_answers FROM preferences WHERE user_id=?').bind(uid).first();
   return { u, s, sub, pref };
 }
 function accessOf(u: any, sub: any) {
@@ -187,12 +195,17 @@ app.get('/api/me', async (c) => {
 });
 
 app.post('/api/quiz', async (c) => {
-  const b = await c.req.json<{ interestTags: string[]; formats: string[]; length?: string }>();
+  const b = await c.req.json<{ interestTags: string[]; formats: string[]; length?: string; country?: string; why?: string[]; curious?: string }>();
   const tags = (b.interestTags || []).filter((t) => TOPIC_TAGS.includes(t)); const fmts = (b.formats || []).filter((f) => FORMATS.some((x) => x.id === f));
   if (!tags.length || !fmts.length) return c.json({ error: 'Pick at least one topic and one style.' }, 400);
+  // Only validated fields are stored. Country is optional and is a starting point for topic order, never a restriction.
+  const country = COUNTRIES.some((x) => x.code === b.country) ? b.country : null;
+  const why = (b.why || []).filter((w) => WHY_READ.some((x) => x.id === w));
+  const curious = String(b.curious || '').replace(/\s+/g, ' ').trim().slice(0, 200) || null;
+  const length = ['short', 'medium'].includes(String(b.length)) ? b.length : null;
   const uid = c.get('uid');
   await c.env.DB.batch([
-    c.env.DB.prepare('INSERT OR REPLACE INTO preferences (user_id,interest_tags,formats,length_pref,quiz_answers) VALUES (?,?,?,?,?)').bind(uid, JSON.stringify(tags), JSON.stringify(fmts), b.length || null, JSON.stringify(b)),
+    c.env.DB.prepare('INSERT OR REPLACE INTO preferences (user_id,interest_tags,formats,length_pref,quiz_answers) VALUES (?,?,?,?,?)').bind(uid, JSON.stringify(tags), JSON.stringify(fmts), length, JSON.stringify({ interestTags: tags, formats: fmts, length, country, why, curious })),
     c.env.DB.prepare('UPDATE users SET onboarded_at=COALESCE(onboarded_at,?) WHERE id=?').bind(Date.now(), uid),
   ]);
   return c.json({ ok: true });
@@ -216,7 +229,7 @@ app.get('/api/today', async (c) => {
     const seen = ((await c.env.DB.prepare('SELECT topic_id FROM rabbit_holes WHERE user_id=?').bind(u.id).all()).results as any[]).map((r) => r.topic_id);
     const events = await recentEvents(c, u.id);
     const n = seen.length;
-    let pick = pickTopic(SEED.map((t) => ({ id: t.id, tags: t.tags, formats: FORMATS.map((f) => f.id) })), seen, events, profile, n > 0 && n % 4 === 3);
+    let pick = pickTopic(poolFor(pref, seen.length).map((t) => ({ id: t.id, tags: t.tags, formats: FORMATS.map((f) => f.id) })), seen, events, profile, n > 0 && n % 4 === 3) ?? pickTopic(SEED.map((t) => ({ id: t.id, tags: t.tags, formats: FORMATS.map((f) => f.id) })), seen, events, profile, n > 0 && n % 4 === 3);
     if (!pick) pick = pickTopic(SEED.map((t) => ({ id: t.id, tags: t.tags, formats: FORMATS.map((f) => f.id) })), [], events, profile);
     if (!pick) return c.json({ error: 'no content' }, 500);
     const seed = SEED.find((t) => t.id === pick.topic.id)!;

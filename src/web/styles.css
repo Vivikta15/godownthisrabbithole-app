@@ -60,3 +60,5 @@ main{padding-bottom:128px!important}
 @keyframes hopin{0%{transform:translateX(-50px) translateY(0)}45%{transform:translateX(-24px) translateY(-34px)}75%{transform:translateX(0) translateY(0)}100%{transform:translateX(0) translateY(32px)}}
 @keyframes hopout{0%{transform:translateX(0) translateY(32px)}40%{transform:translateX(0) translateY(-40px)}100%{transform:translateX(-50px) translateY(0)}}
 @media (prefers-reduced-motion:reduce){.mascot *{animation:none!important}}
+
+select{width:100%;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--bg2);color:var(--ink);font:inherit;margin:8px 0}

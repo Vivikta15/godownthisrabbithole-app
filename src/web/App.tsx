@@ -4,13 +4,13 @@ import { Mascot, useMascot } from './Mascot';
 import type { MascotEvent } from '../shared/mascot';
 
 type Me = { user: { email: string; name: string | null; onboarded: boolean }; access: { plan: string; rabbitHoles: boolean; finderQuota: { period: string; limit: number } | null; trialEndsAt: string }; streak: { current: number; longest: number; freezesLeft: number; bonusHoles: number; readToday: boolean }; prefs: any };
-type Cfg = { topics: string[]; formats: { id: string; label: string }[]; plans: any; payments?: string; emailRecovery?: boolean };
+type Cfg = { topics: string[]; formats: { id: string; label: string }[]; plans: any; payments?: string; emailRecovery?: boolean; whyRead?: { id: string; label: string }[]; countries?: { code: string; name: string }[]; countriesWithStories?: string[] };
 type Send = (e: MascotEvent) => void;
 
 export function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [cfg, setCfg] = useState<Cfg | null>(null);
-  const [mascot, send] = useMascot();
+  const [mascot, send] = useMascot(); const [redo, setRedo] = useState(false);
   const refresh = useCallback(async () => { const r = await api('/me'); setMe(r.ok ? r.data : null); }, []);
   useEffect(() => { refresh(); api('/config').then((r) => setCfg(r.data)); }, [refresh]);
 
@@ -19,8 +19,8 @@ export function App() {
   if (rt || vt) body = <TokenScreen kind={rt ? 'reset' : 'verify'} token={(rt || vt) as string} />;
   else if (me === undefined || !cfg) body = <p className="note">Waking the rabbit…</p>;
   else if (me === null) body = <Auth onDone={refresh} send={send} recovery={!!cfg.emailRecovery} />;
-  else if (!me.user.onboarded) body = <Quiz cfg={cfg} onDone={refresh} send={send} />;
-  else body = <Main me={me} cfg={cfg} refresh={refresh} send={send} />;
+  else if (!me.user.onboarded || redo) body = <Quiz cfg={cfg} onDone={() => { setRedo(false); refresh(); }} send={send} />;
+  else body = <Main me={me} cfg={cfg} refresh={refresh} send={send} onRedo={() => setRedo(true)} />;
   return <><main>{body}</main><div className="dock" aria-hidden="true" /><Mascot state={mascot} /></>;
 }
 
@@ -60,25 +60,49 @@ function Auth({ onDone, send, recovery }: { onDone: () => void; send: Send; reco
   </form>;
 }
 
+const TZ_COUNTRY: Record<string, string> = { 'Asia/Calcutta': 'IN', 'Asia/Kolkata': 'IN', 'America/New_York': 'US', 'America/Chicago': 'US', 'America/Los_Angeles': 'US', 'Europe/London': 'GB', 'Australia/Sydney': 'AU', 'Australia/Melbourne': 'AU', 'America/Toronto': 'CA', 'Asia/Singapore': 'SG', 'Asia/Dubai': 'AE', 'Europe/Berlin': 'DE', 'Europe/Paris': 'FR', 'Africa/Lagos': 'NG', 'Africa/Nairobi': 'KE', 'Africa/Johannesburg': 'ZA', 'America/Sao_Paulo': 'BR', 'Asia/Karachi': 'PK', 'Asia/Dhaka': 'BD', 'Asia/Colombo': 'LK', 'Asia/Kathmandu': 'NP', 'Asia/Tokyo': 'JP', 'Asia/Seoul': 'KR', 'Pacific/Auckland': 'NZ' };
 function Quiz({ cfg, onDone, send }: { cfg: Cfg; onDone: () => void; send: Send }) {
-  const [tags, setTags] = useState<string[]>([]); const [fmts, setFmts] = useState<string[]>([]); const [len, setLen] = useState('short'); const [err, setErr] = useState('');
+  const guess = TZ_COUNTRY[Intl.DateTimeFormat().resolvedOptions().timeZone] ?? '';
+  const [step, setStep] = useState(0); const [country, setCountry] = useState(guess);
+  const [tags, setTags] = useState<string[]>([]); const [why, setWhy] = useState<string[]>([]); const [fmts, setFmts] = useState<string[]>([]); const [len, setLen] = useState('medium'); const [curious, setCurious] = useState(''); const [err, setErr] = useState('');
   useEffect(() => { send('quiz_begin'); }, [send]);
   const tog = (a: string[], s: (x: string[]) => void, v: string) => s(a.includes(v) ? a.filter((x) => x !== v) : [...a, v]);
+  const withStories = cfg.countriesWithStories ?? []; const total = 5;
+  const next = () => { setErr(''); if (step === 1 && !tags.length) return setErr('Pick at least one so I know where to start.'); if (step === 3 && !fmts.length) return setErr('Pick at least one style.'); setStep(step + 1); };
+  const finish = async () => { const r = await api('/quiz', { interestTags: tags, formats: fmts, length: len, country: country || undefined, why, curious }); if (r.ok) onDone(); else setErr(r.data.error); };
   return <div>
     <h1>Let's get to know you</h1>
-    <div className="bubble">Just three quick questions, one time only. There are no wrong answers, I promise. I'll keep it cozy.</div>
-    <h2>What makes you curious?</h2>
-    <div className="chips">{cfg.topics.map((t) => <button key={t} type="button" className="chip" aria-pressed={tags.includes(t)} onClick={() => tog(tags, setTags, t)}>{t}</button>)}</div>
-    <h2>How do you like a story told?</h2>
-    <div className="chips">{cfg.formats.map((f) => <button key={f.id} type="button" className="chip" aria-pressed={fmts.includes(f.id)} onClick={() => tog(fmts, setFmts, f.id)}>{f.label}</button>)}</div>
-    <h2>How long should a rabbit hole be?</h2>
-    <div className="chips">{[['short', 'A quick nibble'], ['medium', 'A good chew']].map(([v, l]) => <button key={v} type="button" className="chip" aria-pressed={len === v} onClick={() => setLen(v)}>{l}</button>)}</div>
-    {err && <p className="err">{err}</p>}
-    <p><button onClick={async () => { const r = await api('/quiz', { interestTags: tags, formats: fmts, length: len }); if (r.ok) onDone(); else setErr(r.data.error); }}>All set!</button></p>
+    <div className="bubble">{['Where are you reading from? I can start with stories close to home.', 'What do you actually wonder about? Pick a few.', 'Why do you want a daily rabbit hole?', 'How should the story feel?', 'Last one, and you can skip it.'][step]}</div>
+    <p className="note" aria-label="Progress">Question {step + 1} of {total}</p>
+    {step === 0 && <div>
+      <select value={country} onChange={(e) => setCountry(e.target.value)} aria-label="Country">
+        <option value="">Somewhere else / skip</option>
+        {(cfg.countries ?? []).map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+      </select>
+      {guess && country === guess && <p className="note">I guessed this from your device's timezone. Change it if it's wrong.</p>}
+      <p className="note">{country && withStories.includes(country) ? "There are stories written for this country, and they'll come first." : "Local stories for this country aren't written yet, so you'll get general topics for now. Your choice is saved for when they are."}</p>
+    </div>}
+    {step === 1 && <div>
+      <div className="chips">{cfg.topics.map((t) => <button key={t} type="button" className="chip" aria-pressed={tags.includes(t)} onClick={() => tog(tags, setTags, t)}>{t}</button>)}</div>
+      <p className="note">Everyday life and money &amp; tech are about things you meet every day: your chai, your phone payments, your trains.</p>
+    </div>}
+    {step === 2 && <div><div className="chips">{(cfg.whyRead ?? []).map((w) => <button key={w.id} type="button" className="chip" aria-pressed={why.includes(w.id)} onClick={() => tog(why, setWhy, w.id)}>{w.label}</button>)}</div><p className="note">Saved with your answers. It doesn't change your stories yet.</p></div>}
+    {step === 3 && <div>
+      <h2>Style</h2>
+      <div className="chips">{cfg.formats.map((f) => <button key={f.id} type="button" className="chip" aria-pressed={fmts.includes(f.id)} onClick={() => tog(fmts, setFmts, f.id)}>{f.label}</button>)}</div>
+      <h2>Length</h2>
+      <div className="chips">{[['short', 'A quick nibble'], ['medium', 'A good chew']].map(([v, l]) => <button key={v} type="button" className="chip" aria-pressed={len === v} onClick={() => setLen(v)}>{l}</button>)}</div>
+    </div>}
+    {step === 4 && <div>
+      <input type="text" maxLength={200} placeholder="Something you've been curious about lately (optional)" value={curious} onChange={(e) => setCurious(e.target.value)} aria-label="Something you have been curious about" />
+      <p className="note">I keep this with your answers. It doesn't change your stories yet.</p>
+    </div>}
+    {err && <p className="err" role="alert">{err}</p>}
+    <p>{step > 0 && <button type="button" className="chip" onClick={() => setStep(step - 1)}>Back</button>} {step < total - 1 ? <button type="button" onClick={next}>Next</button> : <button type="button" onClick={finish}>All set!</button>}</p>
   </div>;
 }
 
-function Main({ me, cfg, refresh, send }: { me: Me; cfg: Cfg; refresh: () => void; send: Send }) {
+function Main({ me, cfg, refresh, send, onRedo }: { me: Me; cfg: Cfg; refresh: () => void; send: Send; onRedo: () => void }) {
   const [tab, setTab] = useState<'today' | 'finder' | 'streaks' | 'plan'>('today');
   const go = (t: typeof tab) => { setTab(t); send(t === 'finder' ? 'tab_change_finder' : 'tab_change_other'); };
   const names: [typeof tab, string][] = [['today', 'Today'], ['finder', 'Connect'], ['streaks', 'Streaks'], ['plan', 'Plan']];
@@ -87,6 +111,7 @@ function Main({ me, cfg, refresh, send }: { me: Me; cfg: Cfg; refresh: () => voi
     <div hidden={tab !== 'today'}><Today me={me} refresh={refresh} send={send} /></div>
     {tab === 'finder' && <Finder me={me} send={send} />}
     {tab === 'streaks' && <Streaks me={me} />}
+    {tab === 'streaks' && <p className="note"><button type="button" className="chip" onClick={onRedo}>Update my quiz answers</button></p>}
     {tab === 'plan' && <Plan me={me} cfg={cfg} />}
   </div>;
 }

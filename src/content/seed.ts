@@ -1,7 +1,7 @@
 // SAMPLE CONTENT. Hand-written, then compared claim by claim against the fetched Wikipedia text (revisions recorded in `checked`) on 2026-10-27.
 // This is a single-source manual check, not independent verification. Replace with generated content run through src/content/pipeline.ts later.
 export interface Beat { q: string; a: string }
-export interface Seed { id: string; title: string; tags: string[]; hook: string; beats: Beat[]; story: string[]; shortKeep?: number[]; sources: { label: string; url: string }[]; checked?: { revisions: { page: string; revid: number }[]; date: string; method: string } }
+export interface Seed { id: string; countries?: string[]; title: string; tags: string[]; hook: string; beats: Beat[]; story: string[]; shortKeep?: number[]; sources: { label: string; url: string }[]; checked?: { revisions: { page: string; revid: number }[]; date: string; method: string } }
 
 export const SEED: Seed[] = [
   { id: 'honey', story: ["Picture a bee heading home with a belly full of flower nectar. Filling her honey stomach, which holds about 40 mg, the article says, can take visits to more than a thousand flowers. The nectar she carries is mostly water: 70 to 80 percent, thin and runny. Finished honey is thick, with about 18 percent water. The story of honey is the story of how that water leaves.", "Back in the hive, she hands the nectar to hive bees, and the bees add enzymes from their own glands, regurgitate it and spread it in the comb so the water can evaporate. At this stage it is still wet enough, up to 70 percent water, that yeast spores could grow in it and eat the sugar. So the bees keep going until the water falls to roughly 15.5 to 18 percent, then seal each cell of finished honey with wax.", "That is the trick. With that much sugar and that little water, microbes struggle: the sugar concentration is so high that fermentation stops. Honey is also acidic. Because of both, Wikipedia says, properly stored honey does not spoil, and samples found in archaeological digs have been edible after thousands of years.", "There is a catch. Honey pulls moisture out of damp air. Leave a jar open somewhere humid and it slowly gets diluted until fermentation can begin. Its long life depends on staying dry and sealed, not on magic.", "One myth is worth dropping too. You may have read that edible honey was found in Egyptian tombs. The same article says that no edible honey has been found there; those cases turned out to be other substances or only chemical traces."], checked: { revisions: [{ page: 'Honey', revid: 1380415835 }], date: '2026-10-27', method: 'hand comparison of each claim against the fetched en.wikipedia.org text' }, title: 'The honey that outlasts everything', tags: ['food', 'science', 'history'],
@@ -46,8 +46,78 @@ export const SEED: Seed[] = [
       { q: 'How?', a: 'It is believed the intestine stretches more at the walls, with two flexible and two stiff areas, which shapes the droppings.' },
       { q: 'Why bother?', a: 'Wombats arrange droppings to mark territory and attract mates. The cube shape is believed to make them stack and not roll.' },
     ], shortKeep: [0, 2], sources: [{ label: 'Wikipedia: Wombat', url: 'https://en.wikipedia.org/wiki/Wombat' }] },
+
+  { id: 'masala-chai', countries: ['IN'], title: 'How tea became chai', tags: ['everyday life', 'food', 'history'],
+    story: [
+      "Here is a small puzzle. In most Indian languages the word for tea is chai, and chai comes from the Chinese word cha, by way of Hindi. A word borrowed from China, for a drink that many people now treat as unmistakably Indian. How did that happen?",
+      "Tea plants have grown wild in Assam since antiquity, so the plant was never the problem. The habit was. According to Wikipedia, Indians historically saw tea as an herbal medicine rather than a drink for pleasure. It took a different push to change that.",
+      "The push began with trade worries. In the 1830s the British East India Company was concerned about China's monopoly on tea, which made up most of its trade and fed Britain's huge appetite for it. British colonists noticed the Assamese tea plants and started plantations locally. In 1870 over 90% of the tea drunk in Britain was still Chinese. By 1900 that had fallen to 10%, replaced by tea from India (50%) and Ceylon (33%).",
+      "Even so, black tea drinking inside India stayed low until the Indian Tea Association ran a promotional campaign in the early 20th century. It encouraged factories, mines and textile mills to give workers tea breaks. It also supported many independent chaiwalas along the growing railway system. So the tea break and the tea stall along the railway were both part of how the Association pushed tea.",
+      "Then came an odd twist. The Association promoted tea served Indian style, with small amounts of milk and sugar. It initially disapproved when independent vendors added spices and much more milk and sugar, because that meant less tea leaf in each cup. Chai later established itself anyway. Today masala chai is made of three parts, masala, tea and milk, and recipes vary by region and by family. Assam, Darjeeling and Nilgiri are the three most common teas used, and cardamom, ginger and cinnamon are the spices most often added."],
+    hook: 'The word for tea in most Indian languages comes from Chinese, and for a long time many Indians saw tea as medicine.',
+    beats: [
+      { q: 'Where does the word chai come from?', a: 'From the Chinese word cha, by way of Hindi. It is the word for tea in most Indian languages.' },
+      { q: 'Did India always drink tea?', a: 'No. Tea plants grew wild in Assam, but Indians historically saw tea as an herbal medicine, not a recreational drink.' },
+      { q: 'What changed?', a: 'British companies started plantations in the 1830s and later the Indian Tea Association promoted tea breaks in factories, mines and mills, and supported chaiwalas along the railway.' },
+      { q: 'Why is chai spiced and milky?', a: 'Independent vendors added spices and more milk and sugar, which the Association first disapproved of because it used less tea. Chai established itself anyway.' },
+    ], shortKeep: [0, 3], sources: [{ label: 'Wikipedia: Masala chai', url: 'https://en.wikipedia.org/wiki/Masala_chai' }],
+    checked: { revisions: [{ page: 'Masala_chai', revid: 1380109236 }], date: '2026-10-27', method: 'hand comparison of each claim against the fetched en.wikipedia.org text' } },
+  { id: 'upi', countries: ['IN'], title: 'The payment system behind India\'s phone payments', tags: ['money & tech', 'everyday life'],
+    story: [
+      "UPI, the Unified Payments Interface, is the instant payment system behind most digital payments in India: Wikipedia says it accounts for 84% of them as of 2025, and that as of 2025, 50% of the world's digital transactions are conducted on India's UPI platform, with over 250 billion transactions a year worth US$3.4 trillion. In one month of 2025 it processed 20 billion transactions, nearly 7,500 every second.",
+      "It did not start from a world already full of digital payments. In March 2009 the Reserve Bank of India reported an annual average of just six non-cash transactions per person, even though more than 10 million retailers accepted card payments. Cash also made it harder to fight black money and corruption. In April 2009 the National Payments Corporation of India (NPCI) was formed to bring the country's retail payment systems together.",
+      "UPI itself launched as a pilot on 11 April 2016 in Mumbai, with 21 member banks, inaugurated by Raghuram Rajan, then Governor of the Reserve Bank. The idea is simple to describe: you move money instantly between two bank accounts using only a unique UPI ID on a mobile phone. Technically it is an open API that runs on top of the Immediate Payment Service, regulated by the Reserve Bank. Major banks released UPI apps from August 2016, and almost all Indian banks support it today.",
+      "A few decisions helped it spread. In 2019 the Ministry of Finance removed the merchant discount rate for UPI, and the article says low-value transactions then skyrocketed. For people without smartphones, UPI 123PAY was launched on 8 March 2022 to help almost 40 crore feature phone users, and one method works by giving a missed call to a merchant payment number and verifying with a PIN.",
+      "The numbers kept climbing. In financial year 2025-26 the article reports 241.62 billion transactions, and says value grew more than 4000-fold since the year UPI began. Other countries have noticed: in December 2019 Google suggested that the US Federal Reserve should follow UPI as an example when building FedNow, and the article lists Brazil, Bahrain, Saudi Arabia, Singapore, the United States and the European Union among places exploring UPI-like systems. Treat the figures as Wikipedia's reporting, not an audit."],
+    hook: 'As of 2025, Wikipedia says half of the world\'s digital transactions run on India\'s UPI.',
+    beats: [
+      { q: 'How big is UPI?', a: 'As of 2025, over 250 billion transactions a year worth US$3.4 trillion; in one month of 2025, 20 billion, nearly 7,500 per second.' },
+      { q: 'What was the starting point?', a: 'In 2009 the RBI reported just six non-cash transactions per person per year, though over 10 million retailers took cards.' },
+      { q: 'How does it work?', a: 'You move money instantly between two bank accounts using a unique UPI ID. It is an open API on top of IMPS, regulated by the RBI.' },
+      { q: 'What helped it grow?', a: 'Removing the merchant discount rate in 2019, and services like UPI 123PAY for feature phones from March 2022.' },
+    ], shortKeep: [0, 2], sources: [{ label: 'Wikipedia: Unified Payments Interface', url: 'https://en.wikipedia.org/wiki/Unified_Payments_Interface' }],
+    checked: { revisions: [{ page: 'Unified_Payments_Interface', revid: 1380979044 }], date: '2026-10-27', method: 'hand comparison of each claim against the fetched en.wikipedia.org text' } },
+  { id: 'indian-railways', countries: ['IN'], title: 'The railway that carries a country', tags: ['places', 'everyday life', 'history'],
+    story: [
+      "Picture a single day on Indian Railways. According to Wikipedia, in 2023-24 it ran 13,198 passenger trains on an average day, covering 7,325 stations, and carried 6.905 billion passengers over the year. Alongside them it ran 11,724 freight trains a day and moved 1588.06 million tonnes of freight.",
+      "Behind those trains are people. Indian Railways has more than 1.2 million employees, which makes it the ninth-largest employer in the world and the second largest in India. Its network is the fourth largest national railway system by size, with 135,207 km of track, and about 99.1% of the broad-gauge network had been electrified as of October 2025.",
+      "It started small. A railway between Red Hills and Chintadripet in Madras became operational in 1837, hauled by a steam engine imported from England and used to ferry granite. The first passenger railway ran in 1853 between Bombay and Thane. In 1925 the first electric train ran in Bombay.",
+      "The single system we know today was assembled. In 1951 Indian Railways was established by merging 42 different railway companies that together spanned 55,000 km. In 1951-52 the network was organised into six regional zones, which gradually grew to 18.",
+      "The trains themselves have changed. As of February 2026 the locomotive inventory was 13,569 electric, 4,169 diesel and 16 steam. And the railways connect to other everyday habits: the Masala chai article says the growing railway system supported many independent chaiwalas, so tea stalls and the railway grew up together."],
+    hook: 'Indian Railways has more than 1.2 million employees, the ninth-largest workforce in the world.',
+    beats: [
+      { q: 'How many trains a day?', a: 'In 2023-24, 13,198 passenger trains and 11,724 freight trains on an average day.' },
+      { q: 'How big is the workforce?', a: 'More than 1.2 million employees: ninth-largest employer in the world, second largest in India.' },
+      { q: 'When did it begin?', a: 'A steam-hauled line in Madras in 1837 (for granite), the first passenger line in 1853 from Bombay to Thane.' },
+      { q: 'Was it always one system?', a: 'No. It was established in 1951 by merging 42 railway companies, then organised into zones, now 18.' },
+    ], shortKeep: [0, 3], sources: [{ label: 'Wikipedia: Indian Railways', url: 'https://en.wikipedia.org/wiki/Indian_Railways' }, { label: 'Wikipedia: Masala chai', url: 'https://en.wikipedia.org/wiki/Masala_chai' }],
+    checked: { revisions: [{ page: 'Indian_Railways', revid: 1378641792 }, { page: 'Masala_chai', revid: 1380109236 }], date: '2026-10-27', method: 'hand comparison of each claim against the fetched en.wikipedia.org text' } },
+  { id: 'monsoon', countries: ['IN'], title: 'Why the rains arrive all at once', tags: ['nature', 'everyday life', 'places'],
+    story: [
+      "Every year from June through September, the monsoon decides a lot for South Asia. Wikipedia calls it one of the oldest and most anticipated weather phenomena of the subcontinent, and quotes Pranab Mukherjee calling it the real finance minister of India. The reason is farming: agriculture contributes 17-20% of India's GDP and is the largest employer, with about 60% of Indians depending on it.",
+      "The word itself comes from the Arabic mawsim, meaning season. The first people to observe the monsoon's pattern across South Asia were sailors in the Arabian Sea who travelled between Africa, India and Southeast Asia. The India Meteorological Department defines it as the seasonal reversal of winds along the shores of the Indian Ocean, blowing from the southwest for half the year and the northeast for the other half.",
+      "Why does it bring rain? One simple part is differential heating between a large land mass and the nearby ocean. Geography does the rest. The Western Ghats and the Himalayas lie across the path of the southwest winds and cause heavy rain. The article says that without the Himalayas, those winds would blow over the subcontinent into Tibet, Afghanistan and Russia without causing rain.",
+      "The most surprising part is how it arrives. The monsoon begins over the Bay of Bengal in May and reaches the Indian peninsula by June. One theory in the article says the onset is driven by the subtropical westerly jet shifting north toward the heated Tibetan Plateau, and that this shift is sudden and abrupt rather than slow, which causes the bursting of the southwest monsoon rains onto the plains. If the shift is delayed, so is the monsoon.",
+      "There is also what we do not know. The article says the monsoon is only partly understood and notoriously difficult to predict. It reports that since the 1950s, rainfall over central India has gradually declined by up to 10%, and that at least 60% of agriculture in that region is still largely rain-fed. The monsoon also brings rises in diseases such as dengue, malaria and cholera, and draws tourists to places like Kerala and the Western Ghats."],
+    hook: 'India\'s monsoon has been called the real finance minister of India, and it is still notoriously hard to predict.',
+    beats: [
+      { q: 'Why does it matter so much?', a: 'Agriculture contributes 17-20% of GDP and about 60% of Indians depend on it.' },
+      { q: 'Where does the word come from?', a: 'From Arabic mawsim, meaning season, first observed as a pattern by sailors in the Arabian Sea.' },
+      { q: 'What do the Himalayas do?', a: 'They confine the monsoon to the subcontinent. Without them the southwest winds would blow on into Tibet, Afghanistan and Russia without rain.' },
+      { q: 'Can we predict it?', a: 'Only partly. The article calls it partly understood and notoriously difficult to predict.' },
+    ], shortKeep: [0, 3], sources: [{ label: 'Wikipedia: Monsoon of South Asia', url: 'https://en.wikipedia.org/wiki/Monsoon_of_South_Asia' }],
+    checked: { revisions: [{ page: 'Monsoon_of_South_Asia', revid: 1378435602 }], date: '2026-10-27', method: 'hand comparison of each claim against the fetched en.wikipedia.org text' } },
 ];
-export const TOPIC_TAGS = ['animals', 'history', 'science', 'space', 'food'];
+export const TOPIC_TAGS = ['everyday life', 'money & tech', 'places', 'nature', 'animals', 'history', 'science', 'space', 'food'];
+export const WHY_READ = [
+  { id: 'unwind', label: 'To unwind instead of scrolling' },
+  { id: 'surprise', label: 'To have something surprising to tell people' },
+  { id: 'learn', label: 'To learn something real for study or work' },
+  { id: 'understand', label: 'To understand things I see every day' },
+];
+// Countries we ask about. Only some have local stories so far (see Seed.countries); others get general topics and the app says so.
+export const COUNTRIES: { code: string; name: string }[] = [['IN','India'],['US','United States'],['GB','United Kingdom'],['AU','Australia'],['CA','Canada'],['SG','Singapore'],['AE','United Arab Emirates'],['DE','Germany'],['FR','France'],['NG','Nigeria'],['KE','Kenya'],['ZA','South Africa'],['BR','Brazil'],['MX','Mexico'],['ID','Indonesia'],['PH','Philippines'],['PK','Pakistan'],['BD','Bangladesh'],['LK','Sri Lanka'],['NP','Nepal'],['JP','Japan'],['KR','South Korea'],['NZ','New Zealand']].map(([code, name]) => ({ code, name }));
+export const COUNTRIES_WITH_STORIES = (): string[] => [...new Set(SEED.flatMap((t) => t.countries ?? []))];
 export const FORMATS = [
   { id: 'narrative', label: 'A flowing story' },
   { id: 'qa', label: 'Questions and answers' },
