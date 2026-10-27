@@ -7,6 +7,7 @@ import { recordRead, displayStreak, localDay, type StreakState } from '../shared
 import { pickTopic, type ReadEvent } from '../shared/recommend';
 import { verifyWebhook } from './webhook';
 import { mapSubscriptionEvent } from './billing';
+import { shapeBeats } from '../shared/shape';
 
 type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; ENABLE_BONUS_CHANCE?: string };
 type Vars = { uid: string };
@@ -161,7 +162,7 @@ app.get('/api/today', async (c) => {
   const seed = SEED.find((t) => t.id === row.topic_id)!;
   const matched = seed.tags.filter((t) => profile.interestTags.includes(t));
   why = matched.length ? `Because you like ${matched.join(' and ')}.` : 'A fresh corner to explore, to keep things from getting samey.';
-  return c.json({ hole: { id: row.id, title: seed.title, format: row.format, hook: seed.hook, beats: seed.beats, sources: seed.sources, why, sourceCheck: 'pending' }, readToday: s.last_read_day === day });
+  return c.json({ hole: { id: row.id, title: seed.title, format: row.format, hook: seed.hook, beats: shapeBeats(seed.beats, pref.length_pref), length: pref.length_pref ?? 'medium', sources: seed.sources, why, sourceCheck: 'pending' }, readToday: s.last_read_day === day });
 });
 
 app.post('/api/read', async (c) => {
