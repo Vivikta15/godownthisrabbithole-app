@@ -13,5 +13,6 @@ await click('Next'); await wait(300); await click('To unwind'); await page.scree
 await click('Next'); await wait(300); await click('A flowing story'); await page.screenshot({ path: `${out}/q4-style.png` });
 await click('Next'); await wait(300); await page.type('input[type=text]', 'how my phone knows my location'); await page.screenshot({ path: `${out}/q5-curious.png` });
 await click('All set'); await page.waitForSelector('.tabs'); await wait(1200); await page.screenshot({ path: `${out}/today.png` });
+await click('Jump in'); await wait(1500); await page.screenshot({ path: `${out}/story.png` });
 console.log((await page.evaluate(() => document.querySelector('h2, h1')?.textContent)), '|', await page.evaluate(() => document.body.innerText.slice(0, 300).replace(/\n/g, ' / ')));
 await browser.close();
