@@ -18,3 +18,12 @@ it2('qualifier guard adversarial: known limits', () => {
   // NOT caught by token presence (documented limit): hedge present but a different one, or moved to the wrong clause
   expect2(qualifiersOk('Some octopuses live in every ocean.', ['Octopuses may live in most oceans.'])).toBe(true);
 });
+import { similar as sim } from './narrative';
+import honey from '../../test/fixtures/honey-pilot.json';
+it2('flags the reworded repeat found in the paid pilot, not distinct sentences', () => {
+  const p2 = honey.paragraphs[1].split('. '), p3 = honey.paragraphs[2].split('. ');
+  const cold2 = p2.find((x) => /cold weather/.test(x))!, cold3 = p3.find((x) => /cold weather/.test(x))!;
+  expect2(sim(cold2, cold3)).toBe(true);
+  expect2(sim(honey.paragraphs[0].split('. ')[0], cold3)).toBe(false);
+  expect2(sim('Venus is the second planet from the Sun.', 'Honey is a sweet viscous substance.')).toBe(false);
+});

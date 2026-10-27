@@ -23,6 +23,14 @@ const HEDGE = /\b(may|might|usually|often|about|approximately|frequently|typical
 export function qualifiersOk(claim: string, cited: string[]): boolean {
   return !HEDGE.test(cited.join(' ')) || HEDGE.test(claim);
 }
+const STOP = new Set('the a an and or of to in on for with is are was were it its that this these those as by from at be been has have had which who when while than then so such not no also more most many much can may'.split(' '));
+const words = (s: string) => new Set((s.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 2 && !STOP.has(w)));
+// Paraphrase-repeat detector: content-word overlap (Jaccard) between two sentences. Cheap, fallible; catches reworded repeats that share most content words.
+export function similar(a: string, b: string, th = 0.5): boolean {
+  const A = words(a), B = words(b); if (!A.size || !B.size) return false;
+  let i = 0; for (const w of A) if (B.has(w)) i++;
+  return i / (A.size + B.size - i) >= th;
+}
 export function parseGen(raw: string): GenSentence[][] | null {
   const m = raw.match(/\{[\s\S]*\}/); if (!m) return null;
   try { const o = JSON.parse(m[0]); if (!Array.isArray(o.paragraphs)) return null;
@@ -42,25 +50,25 @@ export type Runners = { write: (r: { system: string; prompt: string; maxTokens: 
 export async function generateStory(env: AiEnv, page: Page, fmt: Fmt, len: Len, debug?: string[], runners?: Runners): Promise<{ ok: true; story: Story } | { ok: false; reason: string }> {
   const src = sourceSentences(page, 30); if (src.length < 8) return { ok: false, reason: 'source_too_short' };
   const want = PARAS[len]; const win = Math.ceil(src.length / want);
-  const kept: string[] = []; let dropped = 0; const used = new Set<number>(); const seen = new Set<string>();
+  const kept: string[] = []; let dropped = 0; const used = new Set<number>(); const seen = new Set<string>(); const prevSentences: string[] = [];
   for (let k = 0; k < want; k++) {
-    const lo = k * win, hi = Math.min(src.length, lo + win + 2); if (lo >= src.length) break;
+    const lo = k * win, hi = Math.min(src.length, lo + win); if (lo >= src.length) break;
     const numbered = src.slice(lo, hi).map((x, i) => `[${lo + i + 1}] ${x}`).join('\n');
     let accepted: string | null = null;
     for (let attempt = 0; attempt < 2 && !accepted; attempt++) {
       const g = await (runners ? runners.write : (r: any) => guardedRun(env, { model: GEN_MODEL, ...r }))({ maxTokens: 350, system: `You write ${STYLE[fmt]} about "${page.title}" using ONLY the numbered source sentences. Write ONE paragraph of 2-3 sentences${k === 0 ? ', opening with an inviting first sentence that is itself a restated source fact (no rhetorical questions or teasers)' : ', continuing the piece'}. Each sentence must faithfully restate one or two source sentences: no added facts, dates, numbers or names. Keep every sentence under 30 words and end it with a period. Do not repeat a sentence. ${fmt === 'qa' ? 'Make the first sentence a question and the rest the answer.' : ''} Output exactly one line per sentence, one sentence per line, in this format:\nyour restated sentence || 3,4\nwhere the numbers after || are the source sentence numbers used. No other text.`, prompt: numbered });
       if (!g.ok) return { ok: false, reason: g.reason };
       const p = parseLines(g.text); if (!p.length) { dropped++; debug?.push('UNPARSED ' + g.text.slice(0, 200)); continue; }
-      const okS: string[] = []; let bad = false;
+      const okS: string[] = []; let bad = false; const tUsed = new Set<number>(); const tSeen = new Set<string>(); const tPrev: string[] = [];
       for (const x of p) {
-        const key = x.t.toLowerCase().replace(/[^a-z]/g, ''); if (seen.has(key) || x.c.every((n) => used.has(n))) { bad = true; debug?.push('REPEAT ' + x.t.slice(0, 60)); break; }
+        const key = x.t.toLowerCase().replace(/[^a-z]/g, ''); if (seen.has(key) || tSeen.has(key) || x.c.filter((n) => used.has(n) || tUsed.has(n)).length * 2 >= x.c.length || [...prevSentences, ...tPrev].some((q) => similar(q, x.t))) { bad = true; debug?.push('REPEAT ' + x.t.slice(0, 60)); break; }
         const cited = x.c.filter((n) => n >= lo + 1 && n <= hi).map((n) => src[n - 1]);
         if (!cited.length || !mechanicalOk(x.t, cited) || !qualifiersOk(x.t, cited)) { bad = true; debug?.push('MECH ' + x.t.slice(0, 90)); break; }
         const v = runners ? await runners.judge(cited.join(' '), x.t) : await judge(env, GEN_MODEL, cited.join(' '), x.t);
         if (v !== 'SUPPORTED') { bad = true; debug?.push(v + ' ' + x.t.slice(0, 90)); break; }
-        okS.push(x.t.replace(/[.\s]+$/, '') + '.'); seen.add(key); x.c.forEach((n) => used.add(n));
+        okS.push(x.t.replace(/[.\s]+$/, '') + '.'); tSeen.add(key); tPrev.push(x.t); x.c.forEach((n) => tUsed.add(n));
       }
-      if (bad) dropped++; else accepted = okS.join(' ');
+      if (bad) dropped++; else { accepted = okS.join(' '); tSeen.forEach((k) => seen.add(k)); tPrev.forEach((q) => prevSentences.push(q)); tUsed.forEach((n) => used.add(n)); }
     }
     if (accepted) kept.push(accepted);
   }
