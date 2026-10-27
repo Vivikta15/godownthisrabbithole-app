@@ -176,7 +176,7 @@ function Finder({ me, send }: { me: Me; send: Send }) {
       {found.inference && <p><span className="tag">Rabbit's guess, not sourced</span> {found.inference}</p>}
       {found.alternatives?.length > 0 && <p className="note">Other shared topics: {found.alternatives.join(', ')}.</p>}
       <p className="note">Both pages mentioning a topic is a lead, not proof the two things are closely related.</p></div>}
-    <div className="card"><h3>How this will work</h3><ul className="ticks"><li>Every link comes with its sources, so you can check it.</li><li>If the rabbit can't find a true link, it says so instead of making one up.</li><li>The app finds a topic both Wikipedia pages mention and shows the sentences from each. Anything the rabbit adds is labelled as its own guess.</li><li>Tries depend on your plan.</li></ul></div>
+    <div className="card"><h3>How this works for now</h3><ul className="ticks"><li>Every bridge shows the sentences it came from, with links, so you can check it.</li><li>If there is no bridge, the rabbit says so instead of making one up.</li><li>This is an early version. A bridge means two pages mention the same topic, not that the two things are closely related.</li><li>The app finds a topic both Wikipedia pages mention and shows the sentences from each. Anything the rabbit adds is labelled as its own guess.</li><li>Tries depend on your plan.</li></ul></div>
     {q && <p className="note">Your plan: {q.limit} {q.limit === 1 ? 'try' : 'tries'} per {q.period}.</p>}
   </form>;
 }
