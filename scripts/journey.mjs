@@ -35,4 +35,22 @@ for (const w of [320, 390]) {
   ok(`${w}: no unexpected console errors`, errs.length === 0, JSON.stringify(errs));
   await page.close(); await ctx.close();
 }
+
+// touch: tap (not mouse) on Jump in and a tab, in a mobile-emulated isolated context
+{
+  const ctx = await browser.createBrowserContext(); const page = await ctx.newPage(); await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  await page.goto(base); await page.waitForSelector('form');
+  await page.type('input[type=email]', `t${Date.now()}@t.co`); await page.type('input[type=password]', 'password1');
+  const tap = async (t) => { const [h] = await page.$$(`xpath/.//button[contains(., "${t}")]`); if (!h) throw new Error('no button ' + t); await h.tap(); };
+  await tap('Start my 3 free days'); await page.waitForSelector('.chips');
+  for (const t of ['space', 'Questions and answers', 'A quick nibble']) await tap(t);
+  await tap('All set'); await page.waitForSelector('.card h1'); await wait(800);
+  await tap('Jump in'); await wait(500);
+  ok('touch: tap on Jump in opens the reader', await page.evaluate(() => !!document.querySelector('article')));
+  await tap("I'm done reading"); await wait(600);
+  ok('touch: tap finishes the read', /That's today's rabbit hole|Streak/.test(await page.evaluate(() => document.body.innerText)));
+  await ctx.close();
+}
+
 await browser.close(); console.log(fails ? `${fails} FAILED` : 'ALL PASSED'); process.exit(fails ? 1 : 0);

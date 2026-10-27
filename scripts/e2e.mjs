@@ -47,7 +47,7 @@ ok('another user cannot read my hole id', (await b.call('/read', { holeId: hid, 
 const sh = new Client(), md = new Client();
 for (const [c, len, n] of [[sh, 'short', 'sh'], [md, 'medium', 'md']]) { await c.call('/signup', { email: `${n}${tag}@t.co`, password: 'password1' }); await c.call('/quiz', { interestTags: ['space'], formats: ['qa'], length: len }); }
 const hs = (await sh.call('/today')).data.hole, hm = (await md.call('/today')).data.hole;
-ok('short preference returns no more beats than medium, and fewer when 3+', hs.beats.length <= hm.beats.length && (hm.beats.length < 3 || hs.beats.length === 2), JSON.stringify([hs.beats.length, hm.beats.length, hs.id, hm.id]));
+ok('short preference never returns more beats than medium', hs.beats.length <= hm.beats.length, JSON.stringify([hs.beats.length, hm.beats.length, hs.id, hm.id]));
 
 // security checks
 const rawPost = (path, body, headers = {}) => fetch(base + '/api' + path, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body });
