@@ -19,3 +19,11 @@ Design for 1 and 2 (needs an email provider the user chooses; none is connected,
 - Reset: 1h expiry, single use, always responds the same whether or not the email exists, invalidates all sessions on success, throttled per email and per IP.
 - Email sending: Cloudflare Email Service or another provider, sent from a domain with SPF/DKIM. Decision for the user: provider and sending domain. Cost not yet verified.
 - Alternative that avoids passwords: passkeys/magic links (decision for the user: sign-in method, already listed as open).
+
+## Built behind the mail-off gate (2026-10-27)
+- migration 0004: auth_tokens table and users.email_verified_at.
+- src/worker/authtokens.ts: 32-byte random tokens, only the SHA-256 is stored, reset 1h / verify 24h, single use (atomic UPDATE), new token voids older unused ones.
+- /api/password/reset: spends a token, sets the new password, logs out all sessions, clears login throttle. /api/email/verify: sets email_verified_at.
+- /api/password/forgot: returns 501 "not available yet" because src/worker/mail.ts has no provider (getMailer returns null). When a provider exists, it answers the same generic message whether or not the email exists and is throttled to 3 per hour per email.
+- Tested by scripts/e2e-reset.mjs (plants tokens directly): wrong kind, expired, garbage, parallel reuse, session revocation.
+- NOT built: reset/verify screens in the UI (links would open /?reset=TOKEN and /?verify=TOKEN), sending verification on signup, blocking unverified accounts from invites/purchases, per-IP limits.

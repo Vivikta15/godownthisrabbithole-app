@@ -7,10 +7,12 @@ import { recordRead, displayStreak, localDay, type StreakState } from '../shared
 import { pickTopic, type ReadEvent } from '../shared/recommend';
 import { verifyWebhook } from './webhook';
 import { mapSubscriptionEvent } from './billing';
+import { createToken, consumeToken } from './authtokens';
+import { getMailer } from './mail';
 import { createCheckout } from './checkout';
 import { shapeBeats } from '../shared/shape';
 
-type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; BONUS_CHANCE?: string; DODO_API_KEY?: string; DODO_ENV?: string; APP_URL?: string; CHECKOUT_ENABLED?: string };
+type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; BONUS_CHANCE?: string; DODO_API_KEY?: string; MAIL_ENABLED?: string; DODO_ENV?: string; APP_URL?: string; CHECKOUT_ENABLED?: string };
 type Vars = { uid: string };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
@@ -45,7 +47,7 @@ app.onError((e, c) => (e instanceof SyntaxError ? c.json({ error: 'bad json' }, 
 
 app.use('/api/*', async (c, next) => {
   const p = new URL(c.req.url).pathname;
-  if (['/api/signup', '/api/login', '/api/config', '/api/webhooks/dodo'].includes(p)) return next();
+  if (['/api/signup', '/api/login', '/api/config', '/api/webhooks/dodo', '/api/password/forgot', '/api/password/reset', '/api/email/verify'].includes(p)) return next();
   const sid = getCookie(c, 'sid');
   if (!sid) return c.json({ error: 'auth' }, 401);
   const row = await c.env.DB.prepare('SELECT user_id FROM sessions WHERE id=? AND expires_at>?').bind(sid, Date.now()).first<{ user_id: string }>();
@@ -91,6 +93,42 @@ app.post('/api/login', async (c) => {
   await startSession(c, u.id);
   return c.json({ ok: true });
 });
+// Account recovery. Sending needs a mail provider, which is not connected: forgot answers 501 honestly instead of pretending.
+app.post('/api/password/forgot', async (c) => {
+  const mailer = getMailer(c.env);
+  if (!mailer) return c.json({ error: 'recovery_unavailable', message: 'Password reset by email is not available yet in this preview.' }, 501);
+  const b = await c.req.json<{ email: string }>();
+  const email = String(b.email || '').trim().toLowerCase().slice(0, 254);
+  const key = 'r:' + email; const since = Date.now() - 60 * 60000;
+  const n = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE key=? AND at>?').bind(key, since).first<{ n: number }>();
+  const generic = c.json({ ok: true, message: 'If that email has an account, a reset link is on its way.' });
+  if ((n?.n ?? 0) >= 3) return generic; // silent: no signal about the account
+  await c.env.DB.prepare('INSERT INTO login_attempts (key,at) VALUES (?,?)').bind(key, Date.now()).run();
+  const u = await c.env.DB.prepare('SELECT id FROM users WHERE email=?').bind(email).first<{ id: string }>();
+  if (u) { const t = await createToken(c.env.DB, u.id, 'reset'); await mailer.send(email, 'Reset your password', `Open this link within 1 hour: ${new URL(c.req.url).origin}/?reset=${t}`); }
+  return generic;
+});
+app.post('/api/password/reset', async (c) => {
+  const b = await c.req.json<{ token: string; password: string }>();
+  if (String(b.password || '').length < 8) return c.json({ error: 'Use a password of 8+ characters.' }, 400);
+  const uid = await consumeToken(c.env.DB, String(b.token || ''), 'reset');
+  if (!uid) return c.json({ error: 'That reset link is invalid or has expired.' }, 400);
+  const salt = rid();
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE users SET pw_hash=?, pw_salt=? WHERE id=?').bind(await hashPw(b.password, salt), salt, uid),
+    c.env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(uid), // everyone is logged out
+    c.env.DB.prepare('DELETE FROM login_attempts WHERE key IN (SELECT \'e:\' || email FROM users WHERE id=?)').bind(uid),
+  ]);
+  return c.json({ ok: true });
+});
+app.post('/api/email/verify', async (c) => {
+  const b = await c.req.json<{ token: string }>();
+  const uid = await consumeToken(c.env.DB, String(b.token || ''), 'verify');
+  if (!uid) return c.json({ error: 'That link is invalid or has expired.' }, 400);
+  await c.env.DB.prepare('UPDATE users SET email_verified_at=COALESCE(email_verified_at,?) WHERE id=?').bind(Date.now(), uid).run();
+  return c.json({ ok: true });
+});
+
 app.post('/api/logout', async (c) => { const sid = getCookie(c, 'sid'); if (sid) await c.env.DB.prepare('DELETE FROM sessions WHERE id=?').bind(sid).run(); deleteCookie(c, 'sid', { path: '/' }); return c.json({ ok: true }); });
 
 async function loadAll(c: any) {
