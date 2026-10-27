@@ -97,24 +97,74 @@ const addDays = (s: string, k: number) => { const d = new Date(s + 'T00:00:00Z')
 const dow = (s: string) => (new Date(s + 'T00:00:00Z').getUTCDay() + 6) % 7; // Monday = 0
 const L = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-export function WeekRow({ cal }: { cal: { today: string; read: string[]; freeze: string[] } }) {
+export function WeekRow({ cal }: { cal: { today: string; read: string[] } }) {
   const mon = addDays(cal.today, -dow(cal.today)); const days = Array.from({ length: 7 }, (_, i) => addDays(mon, i));
-  return <ol className="week" aria-label="This week">{days.map((d, i) => { const r = cal.read.includes(d), f = cal.freeze.includes(d), t = d === cal.today, fut = d > cal.today;
+  return <ol className="week" aria-label="This week">{days.map((d, i) => { const r = cal.read.includes(d), f = false, t = d === cal.today, fut = d > cal.today;
     return <li key={d} className={(r ? 'r ' : '') + (f ? 'f ' : '') + (t ? 't ' : '') + (fut ? 'fut' : '')}><span className="dl mono">{L[i]}</span><span className="dot" aria-label={`${d}${r ? ', read' : f ? ', covered by a freeze' : t ? ', today' : fut ? ', upcoming' : ', no read'}`}>{r ? <svg viewBox="0 0 24 24" width="16" height="16" fill="var(--bg)" aria-hidden="true">{G.animals}</svg> : f ? <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--amber)" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M12 3v18M4 7.500l16 9M20 7.500l-16 9" /></svg> : null}</span></li>; })}</ol>;
 }
 
-export function MonthCalendar({ cal }: { cal: { today: string; read: string[]; freeze: string[] } }) {
+export function MonthCalendar({ cal }: { cal: { today: string; read: string[] } }) {
   const [ym, setYm] = React.useState(cal.today.slice(0, 7));
   const first = ym + '-01'; const y = +ym.slice(0, 4), m = +ym.slice(5, 7); const n = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const cells: (string | null)[] = [...Array(dow(first)).fill(null), ...Array.from({ length: n }, (_, i) => `${ym}-${String(i + 1).padStart(2, '0')}`)];
   const shift = (k: number) => setYm(iso(new Date(Date.UTC(y, m - 1 + k, 1))).slice(0, 7));
   const isNow = ym === cal.today.slice(0, 7);
   const name = new Date(first + 'T00:00:00Z').toLocaleString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-  const reads = cal.read.filter((d) => d.startsWith(ym)).length, frz = cal.freeze.filter((d) => d.startsWith(ym)).length;
+  const reads = cal.read.filter((d) => d.startsWith(ym)).length;
   return <div className="cal"><div className="calhead"><h3 className="serif">{name}</h3><span><button type="button" className="sq" aria-label="Previous month" onClick={() => shift(-1)}>‹</button><button type="button" className="sq" aria-label="Next month" disabled={isNow} onClick={() => shift(1)}>›</button></span></div>
-    <p className="mono-note">{reads} {reads === 1 ? 'day' : 'days'} read{frz ? ` · ${frz} covered by a freeze` : ''}</p>
+    <p className="mono-note">{reads} {reads === 1 ? 'day' : 'days'} read</p>
     <div className="grid" role="grid" aria-label={name}>{L.map((l, i) => <span key={i} className="dh mono" role="columnheader">{l}</span>)}
-      {cells.map((d, i) => d === null ? <span key={'e' + i} /> : <span key={d} role="gridcell" className={'c' + (cal.read.includes(d) ? ' r' : '') + (cal.freeze.includes(d) ? ' f' : '') + (d === cal.today ? ' t' : '')} aria-label={`${d}${cal.read.includes(d) ? ', read' : cal.freeze.includes(d) ? ', covered by a freeze' : ''}`}>{+d.slice(8)}</span>)}</div>
-    <p className="legend mono-note"><i className="k r" /> read <i className="k f" /> covered by a freeze <i className="k t" /> today</p>
-    <p className="fine">Only days you finished a story are marked. Days before your current streak are left blank, not counted as misses.</p></div>;
+      {cells.map((d, i) => d === null ? <span key={'e' + i} /> : <span key={d} role="gridcell" className={'c' + (cal.read.includes(d) ? ' r' : '') + '' + (d === cal.today ? ' t' : '')} aria-label={`${d}${cal.read.includes(d) ? ', read' : ''}`}>{+d.slice(8)}</span>)}</div>
+    <p className="legend mono-note"><i className="k r" /> read <i className="k t" /> today</p>
+    <p className="fine">A day is marked when you finished that day's story. Unmarked days are just blank, not misses. Freeze days aren't recorded, so they aren't shown here.</p></div>;
+}
+
+// ---- Forest world: trees, and two small scenes. Decorative; the text beside them carries the meaning. ----
+const Pine = ({ x, y, s = 1, near = false }: { x: number; y: number; s?: number; near?: boolean }) => (
+  <g transform={`translate(${x} ${y}) scale(${s})`} fill={near ? 'rgba(168,198,134,.16)' : 'var(--bg2)'} stroke={near ? 'var(--moss)' : 'var(--ctl)'} strokeWidth="1.4" strokeLinejoin="round">
+    <path d="M0 -62 L16 -34 H7 L22 -10 H9 L26 16 H-26 L-9 -10 H-22 L-7 -34 H-16 z" /><path d="M0 16 V30" strokeLinecap="round" fill="none" />
+  </g>);
+const Round = ({ x, y, s = 1, near = false }: { x: number; y: number; s?: number; near?: boolean }) => (
+  <g transform={`translate(${x} ${y}) scale(${s})`} fill={near ? 'rgba(168,198,134,.16)' : 'var(--bg2)'} stroke={near ? 'var(--moss)' : 'var(--ctl)'} strokeWidth="1.4">
+    <circle cx="0" cy="-26" r="24" /><path d="M0 -2 V28" fill="none" strokeLinecap="round" /><path d="M0 14 l9 -10" fill="none" strokeLinecap="round" />
+  </g>);
+
+export function Treeline() {
+  return <svg className="treeline" viewBox="0 0 640 70" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
+    <path d="M0 62H640" stroke="var(--line)" strokeWidth="1.2" />
+    {[20, 90, 150, 230, 300, 380, 450, 520, 590].map((x, i) => i % 3 === 1 ? <Round key={x} x={x} y={52} s={.55 + (i % 2) * .15} near={i % 2 === 0} /> : <Pine key={x} x={x} y={46} s={.5 + (i % 3) * .12} near={i % 2 === 0} />)}
+  </svg>;
+}
+
+function Bunny({ x, y, eat = false, peek = false }: { x: number; y: number; eat?: boolean; peek?: boolean }) {
+  const ink = '#3b2a20';
+  return <g transform={`translate(${x} ${y})`} className={eat ? 'bunny eat' : 'bunny'}>
+    <g className="rears"><ellipse cx="-11" cy="-62" rx="7" ry="20" fill="#f1ebdd" /><ellipse cx="-11" cy="-60" rx="3" ry="12" fill="#d98e7b" /><ellipse cx="11" cy="-62" rx="7" ry="20" fill="#f1ebdd" /><ellipse cx="11" cy="-60" rx="3" ry="12" fill="#d98e7b" /></g>
+    {!peek && <ellipse cx="0" cy="-8" rx="34" ry="28" fill="#f1ebdd" />}
+    <g className="rhead"><circle cx="0" cy="-34" r="24" fill="#f1ebdd" /><circle cx="-9" cy="-37" r="2.8" fill={ink} /><circle cx="9" cy="-37" r="2.8" fill={ink} /><circle cx="-17" cy="-28" r="4" fill="#d98e7b" opacity=".7" /><circle cx="17" cy="-28" r="4" fill="#d98e7b" opacity=".7" /><ellipse cx="0" cy="-30" rx="2.4" ry="1.8" fill="#d98e7b" /><path d="M-5 -26 Q0 -21 5 -26" stroke={ink} strokeWidth="1.8" fill="none" strokeLinecap="round" /></g>
+  </g>;
+}
+
+export function ForestScene({ kind }: { kind: 'carrot' | 'fox' }) {
+  const label = kind === 'carrot' ? 'The rabbit sits among the trees, happily eating a carrot.' : 'A red fox trots past the trees while the rabbit watches safely from its burrow.';
+  return <svg className={'scene ' + kind} viewBox="0 0 320 190" role="img" aria-label={label}>
+    <Pine x={30} y={128} s={1.1} /><Pine x={288} y={126} s={1.2} /><Round x={76} y={132} s={.9} /><Pine x={250} y={132} s={.8} />
+    <path d="M0 150c60-10 120-8 160-2s110 6 160-4V190H0z" fill="var(--bg2)" /><path d="M0 152c60-10 120-8 160-2s110 6 160-4" fill="none" stroke="var(--line)" strokeWidth="1.2" />
+    <Pine x={14} y={150} s={1.5} near /><Round x={306} y={152} s={1.3} near />
+    {kind === 'carrot' ? <>
+      <Bunny x={160} y={150} eat />
+      <g transform="translate(160 134)"><g className="carrot"><path d="M-14 -10 L6 -6 L-8 22 z" fill="#e9b96e" /><path d="M-9 -6 l4 1 M-6 3 l4 1" stroke="var(--bg)" strokeWidth="1" opacity=".5" /><path d="M-16 -12 l-4 -9 M-14 -10 l-8 -4 M-12 -8 l-9 1" stroke="var(--moss)" strokeWidth="2.4" strokeLinecap="round" /></g></g>
+      <g className="crumbs" fill="#e9b96e"><circle cx="138" cy="146" r="1.8" /><circle cx="184" cy="150" r="1.6" /><circle cx="130" cy="138" r="1.4" /></g>
+    </> : <>
+      <path d="M232 168 c0-26 56-26 56 0z" fill="var(--bg)" stroke="var(--ctl)" strokeWidth="1.4" />
+      <Bunny x={260} y={176} peek />
+      <path d="M232 168 c0-26 56-26 56 0z" fill="var(--bg)" stroke="var(--ctl)" strokeWidth="1.4" />
+      <g className="foxg"><g transform="translate(70 150)">
+        <g className="tail"><path d="M-8 -10 C-44 -26 -52 -2 -34 8 C-24 12 -14 6 -8 -4z" fill="#d98e7b" /><path d="M-34 8 C-42 2 -46 -8 -40 -14 C-50 -6 -46 6 -34 8z" fill="#f1ebdd" /></g>
+        <ellipse cx="12" cy="-12" rx="28" ry="15" fill="#d98e7b" /><path d="M-4 0 v14 M22 0 v14 M8 0 v14" stroke="#3b2a20" strokeWidth="4" strokeLinecap="round" />
+        <path d="M32 -22 L38 -42 L48 -26z" fill="#d98e7b" /><path d="M38 -22 L48 -40 L52 -22z" fill="#d98e7b" />
+        <path d="M30 -24 C36 -34 56 -34 66 -22 L72 -16 L58 -8 C46 -6 34 -10 30 -24z" fill="#d98e7b" /><path d="M58 -8 L72 -16 L64 -4z" fill="#f1ebdd" /><circle cx="73" cy="-16" r="2.4" fill="#3b2a20" /><circle cx="52" cy="-22" r="2" fill="#3b2a20" />
+      </g></g>
+    </>}
+  </svg>;
 }

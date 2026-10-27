@@ -3,7 +3,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { SEED, TOPIC_TAGS, FORMATS, WHY_READ, COUNTRIES, COUNTRIES_WITH_STORIES } from '../content/seed';
 import { PLANS } from '../shared/config';
 import { accessFor, finderUsesAllowed, type Account } from '../shared/entitlements';
-import { recordRead, displayStreak, dayDiff, localDay, type StreakState } from '../shared/streak';
+import { recordRead, displayStreak, localDay, type StreakState } from '../shared/streak';
 import { pickTopic, type ReadEvent } from '../shared/recommend';
 import { verifyWebhook } from './webhook';
 import { mapSubscriptionEvent } from './billing';
@@ -300,15 +300,12 @@ app.get('/api/history', async (c) => {
   return c.json({ items, recorded: { reads: ev?.n ?? 0, completed: ev?.done ?? 0, seconds: ev?.secs ?? 0 } });
 });
 app.get('/api/calendar', async (c) => {
-  const { u, s } = await loadAll(c);
+  const { u } = await loadAll(c);
   const today = localDay(new Date(), u.timezone);
-  const r = await c.env.DB.prepare('SELECT DISTINCT day FROM read_events WHERE user_id=? AND completed=1 ORDER BY day DESC LIMIT 400').bind(u.id).all();
-  const read = (r.results as any[]).map((x) => x.day as string);
-  // Freeze days are not stored. Inside the current streak run, a gap between two completed days is a day a freeze covered (that is the only way the run can continue). Earlier gaps are left unmarked.
-  const run = displayStreak({ current: s.current, longest: s.longest, lastReadDay: s.last_read_day, freezesLeft: s.freezes_left }, today) > 0 ? read.slice(0, s.current) : [];
-  const freeze: string[] = [];
-  for (let i = 0; i + 1 < run.length; i++) { const gap = dayDiff(run[i + 1], run[i]); for (let g = 1; g < gap; g++) { const d = new Date(Date.UTC(+run[i + 1].slice(0, 4), +run[i + 1].slice(5, 7) - 1, +run[i + 1].slice(8, 10) + g)); freeze.push(d.toISOString().slice(0, 10)); } }
-  return c.json({ today, read, freeze });
+  // A day is marked when she finished that same day's story. Re-reading an older story does not mark a day.
+  const r = await c.env.DB.prepare('SELECT DISTINCT re.day FROM read_events re JOIN rabbit_holes rh ON rh.id=re.hole_id AND rh.day=re.day WHERE re.user_id=? AND re.completed=1 ORDER BY re.day DESC LIMIT 400').bind(u.id).all();
+  // Freeze-day history is not recorded, so no freeze days are returned.
+  return c.json({ today, read: (r.results as any[]).map((x) => x.day as string) });
 });
 app.get('/api/saved', async (c) => {
   const { u } = await loadAll(c);

@@ -124,3 +124,15 @@ h1:focus{outline:none}
 .cal .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:10px 0;text-align:center}.cal .dh{font-size:.75rem;color:var(--soft)}.cal .c{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:50%;font-family:var(--mono);font-size:.82rem;color:var(--soft);background:var(--bg2)}.cal .c.r{background:var(--moss);color:var(--bg);font-weight:600}.cal .c.f{background:transparent;box-shadow:inset 0 0 0 1.6px var(--amber);color:var(--amber)}.cal .c.t{outline:1.5px solid var(--ink);outline-offset:2px}
 .legend{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.legend .k{display:inline-block;width:12px;height:12px;border-radius:50%;margin-left:10px}.legend .k.r{background:var(--moss)}.legend .k.f{box-shadow:inset 0 0 0 1.6px var(--amber)}.legend .k.t{outline:1.5px solid var(--ink);outline-offset:1px}
 @media (max-width:700px){.plate{max-width:230px}}
+
+.treeline{display:block;width:100%;height:56px;margin:28px 0 0;opacity:.95}
+.scene{display:block;width:100%;max-width:440px;height:auto;margin:6px auto}
+.scene .carrot,.scene .bunny,.scene .rhead,.scene .foxg,.scene .tail,.scene .rears,.scene .crumbs{transform-box:fill-box}
+.scene.carrot .carrot{animation:nib 1.8s ease-in-out infinite;transform-origin:70% 20%}.scene.carrot .rhead{animation:chew 1.8s ease-in-out infinite;transform-origin:50% 90%}.scene.carrot .crumbs{animation:crumb 1.8s ease-out infinite}
+.scene.fox .foxg{animation:trot 9s ease-in-out infinite}.scene.fox .tail{animation:swish 1.6s ease-in-out infinite;transform-origin:100% 70%}.scene.fox .rears{animation:twitch 3.2s ease-in-out infinite;transform-origin:50% 100%}
+@keyframes nib{50%{transform:translateY(3px) rotate(-6deg)}}@keyframes chew{50%{transform:translateY(2px) rotate(2deg)}}@keyframes crumb{0%{opacity:0}30%{opacity:1}100%{opacity:0;transform:translateY(8px)}}
+@keyframes trot{0%{transform:translateX(-90px)}35%,65%{transform:translateX(40px)}100%{transform:translateX(-90px)}}@keyframes swish{50%{transform:rotate(-10deg)}}@keyframes twitch{85%{transform:none}90%{transform:rotate(-8deg)}95%{transform:rotate(6deg)}}
+@media (prefers-reduced-motion:reduce){.scene *{animation:none!important}.scene.fox .foxg{transform:translateX(20px)}}
+.sceneblock{border-top:1px solid var(--line);padding-top:10px;margin-top:18px}.sceneblock .serif{margin:.3em 0}
+details.scenes{margin:18px 0;border-top:1px solid var(--line);padding-top:12px}details.scenes summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-family:var(--serif);font-size:1.1rem}details.scenes summary:focus-visible{outline:2px solid var(--moss);outline-offset:3px}
+.pair-scenes{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.pair-scenes figure{margin:0}
