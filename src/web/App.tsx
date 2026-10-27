@@ -1,4 +1,4 @@
-import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, LabArt } from './visuals';
+import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, LabArt, Emblem, NextMark, WeekRow, MonthCalendar } from './visuals';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { Mascot, useMascot } from './Mascot';
@@ -224,8 +224,9 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
       {again && <article className="reading inline"><Story hole={h} /><Related hole={h} /><Sources hole={h} /></article>}
     </section>
       : <section className="detour"><Peek /><p className="kicker">Today's detour</p><h1 className="story-title">{h.title}</h1><p className="deck">{h.hook}</p>
-        <Plate tags={h.tags} /><p className="mono-note">{h.tags.join(' · ')} · about {h.minutes} min read</p><p className="note">{h.why}</p>
-        <p><button type="button" className="go" onClick={start}>Go down this rabbit hole</button></p></section>}
+        <p className="mono-note">{h.tags.join(' · ')} · about {h.minutes} min read</p>
+        <p><button type="button" className="go" onClick={start}>Go down this rabbit hole</button></p>
+        <Plate tags={h.tags} /><p className="note">{h.why}</p></section>}
     {done && me.streak.bonusHoles > 0 && <section className="strip"><p className="kicker">Another trail</p><p>You have {me.streak.bonusHoles} extra.</p><button type="button" className="ghost" onClick={openBonus}>One tiny detour?</button>{bmsg && <p className="note" role="status">{bmsg}</p>}</section>}
     <section className="strip"><p className="kicker">Connections</p><p className="serif">Two words. One strange bridge.</p><p className="note">Try "moon" and "cheese". The rabbit looks for a link both Wikipedia pages mention. It's an early version.</p><button type="button" className="ghost" onClick={() => goTab('connections')}>Open the lab</button></section>
     <section className="strip row"><div><p className="kicker">Trail</p><Paws n={me.streak.current} /><p className="mono-note">day {me.streak.current}</p></div><div><p className="kicker">Saved</p><button type="button" className="ghost" onClick={() => goTab('you')}>{savedN === null ? 'Saved discoveries' : savedN ? `${savedN} saved` : 'Nothing saved yet'}</button></div></section>
@@ -312,17 +313,19 @@ function Finder({ me, send }: { me: Me; send: Send }) {
 }
 
 function Trail({ me, onOpen }: { me: Me; onOpen: (id: string) => void }) {
-  const [board, setBoard] = useState<any[]>([]); const [code, setCode] = useState(''); const [join, setJoin] = useState(''); const [msg, setMsg] = useState(''); const [hist, setHist] = useState<any>(null);
+  const [board, setBoard] = useState<any[]>([]); const [code, setCode] = useState(''); const [join, setJoin] = useState(''); const [msg, setMsg] = useState(''); const [hist, setHist] = useState<any>(null); const [cal, setCal] = useState<any>(null);
   const load = () => api('/leaderboard').then((r) => setBoard(r.data.board || []));
-  useEffect(() => { load(); api('/history').then((r) => r.ok && setHist(r.data)); }, []);
+  useEffect(() => { load(); api('/history').then((r) => r.ok && setHist(r.data)); api('/calendar').then((r) => r.ok && setCal(r.data)); }, []);
   const marks = [3, 7, 30];
   return <section>
     <p className="kicker">Trail</p><h1 className="story-title">{me.streak.current ? `Day ${me.streak.current} on the trail.` : 'The trail starts with one detour.'}</h1>
-    <TrailPath n={me.streak.current} />
-    <p className="mono-note">best {me.streak.longest} · freezes {me.streak.freezesLeft} · extra trails {me.streak.bonusHoles}</p>
-    <p className="note">You don't have to read every day. A freeze covers a missed day. No pressure. Curiosity isn't homework.</p>
-    <MilestoneLine best={me.streak.longest} marks={marks} /><div className="marks" aria-label="Milestones">{marks.map((n) => <span key={n} className={me.streak.longest >= n ? 'on' : ''}>{n} days{me.streak.longest >= n ? ' ·  reached' : ''}</span>)}</div>
-    <p className="note">Milestones are marks on your trail. There are no prizes behind them yet.</p>
+    <Emblem n={me.streak.current} best={me.streak.longest} />
+    <NextMark n={me.streak.current} marks={marks} />
+    {cal && <WeekRow cal={cal} />}
+    <p className="mono-note">freezes saved {me.streak.freezesLeft} · extra trails {me.streak.bonusHoles}</p>
+    <p className="note">No need to read every day. A freeze covers a missed day. Curiosity isn't homework.</p>
+    {cal && <MonthCalendar cal={cal} />}
+    <p className="note">Marks are only marks on your trail. There are no prizes behind them yet.</p>
     <h2 className="serif">What you've wandered through</h2>
     {hist && hist.items.length > 0 && <InterestBars items={hist.items} />}
     {!hist ? <p className="note" role="status">Reading the journal…</p> : hist.items.length === 0 ? <p className="note">Nothing yet. Your first detour will show up here.</p>

@@ -72,3 +72,49 @@ export function BridgeViz({ a, b, via }: { a: string; b: string; via: string }) 
 export function LabArt() {
   return <svg className="labart" viewBox="0 0 320 90" aria-hidden="true" focusable="false"><circle cx="50" cy="60" r="14" fill="none" stroke="var(--amber)" strokeWidth="1.5" /><circle cx="270" cy="60" r="14" fill="none" stroke="var(--coral)" strokeWidth="1.5" /><path d="M64 56C110 0 210 0 256 56" fill="none" stroke="var(--ctl)" strokeWidth="1.5" strokeDasharray="3 6" strokeLinecap="round" /><text x="160" y="34" textAnchor="middle" className="svgt big">?</text></svg>;
 }
+
+// ---- Trail centrepiece, week row, next mark, month calendar. All from her real read days. ----
+export function Emblem({ n, best }: { n: number; best: number }) {
+  const k = Math.min(n, 7); const R = 74;
+  return <figure className="emblem"><svg viewBox="0 0 200 200" role="img" aria-label={`${n} day streak. Personal best ${best}.`}>
+    <circle cx="100" cy="100" r="90" fill="var(--bg2)" stroke="var(--line)" strokeWidth="1.2" />
+    <path d="M52 150a48 48 0 0 1 96 0z" fill="var(--bg)" stroke="var(--ctl)" strokeWidth="1.4" />
+    {Array.from({ length: 7 }, (_, i) => { const a = (-90 + i * (360 / 7)) * Math.PI / 180; const x = 100 + R * Math.cos(a), y = 100 + R * Math.sin(a); const on = i < k;
+      return <g key={i} transform={`translate(${x - 9} ${y - 9}) scale(.75)`} fill={on ? 'var(--moss)' : 'none'} stroke={on ? 'var(--moss)' : 'var(--ctl)'} strokeWidth="1.5">{G.animals}</g>; })}
+    <text x="100" y="128" textAnchor="middle" className="emn">{n}</text>
+  </svg><figcaption className="mono-note">{n === 1 ? 'day' : 'days'} on the trail · best {best}</figcaption></figure>;
+}
+
+export function NextMark({ n, marks }: { n: number; marks: number[] }) {
+  const next = marks.find((m) => m > n); const prev = [...marks].reverse().find((m) => m <= n) ?? 0;
+  if (!next) return <p className="note">You have reached every mark on the trail so far.</p>;
+  const pct = ((n - prev) / (next - prev)) * 100;
+  return <div className="nextmark"><div className="track" role="img" aria-label={`${n} of ${next} days to the next mark`}><i style={{ width: `${Math.max(2, pct)}%` }} /><svg className="pin" width="22" height="26" viewBox="0 0 22 26" aria-hidden="true"><path d="M6 3v21" stroke="var(--ink)" strokeWidth="1.6" strokeLinecap="round" /><path d="M6 4c4-2 6 2 10 0v8c-4 2-6-2-10 0z" fill="var(--amber)" /></svg></div><p className="mono-note">Next mark: {next} days · {next - n} to go</p></div>;
+}
+
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+const addDays = (s: string, k: number) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + k); return iso(d); };
+const dow = (s: string) => (new Date(s + 'T00:00:00Z').getUTCDay() + 6) % 7; // Monday = 0
+const L = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+export function WeekRow({ cal }: { cal: { today: string; read: string[]; freeze: string[] } }) {
+  const mon = addDays(cal.today, -dow(cal.today)); const days = Array.from({ length: 7 }, (_, i) => addDays(mon, i));
+  return <ol className="week" aria-label="This week">{days.map((d, i) => { const r = cal.read.includes(d), f = cal.freeze.includes(d), t = d === cal.today, fut = d > cal.today;
+    return <li key={d} className={(r ? 'r ' : '') + (f ? 'f ' : '') + (t ? 't ' : '') + (fut ? 'fut' : '')}><span className="dl mono">{L[i]}</span><span className="dot" aria-label={`${d}${r ? ', read' : f ? ', covered by a freeze' : t ? ', today' : fut ? ', upcoming' : ', no read'}`}>{r ? <svg viewBox="0 0 24 24" width="16" height="16" fill="var(--bg)" aria-hidden="true">{G.animals}</svg> : f ? <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--amber)" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M12 3v18M4 7.500l16 9M20 7.500l-16 9" /></svg> : null}</span></li>; })}</ol>;
+}
+
+export function MonthCalendar({ cal }: { cal: { today: string; read: string[]; freeze: string[] } }) {
+  const [ym, setYm] = React.useState(cal.today.slice(0, 7));
+  const first = ym + '-01'; const y = +ym.slice(0, 4), m = +ym.slice(5, 7); const n = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const cells: (string | null)[] = [...Array(dow(first)).fill(null), ...Array.from({ length: n }, (_, i) => `${ym}-${String(i + 1).padStart(2, '0')}`)];
+  const shift = (k: number) => setYm(iso(new Date(Date.UTC(y, m - 1 + k, 1))).slice(0, 7));
+  const isNow = ym === cal.today.slice(0, 7);
+  const name = new Date(first + 'T00:00:00Z').toLocaleString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const reads = cal.read.filter((d) => d.startsWith(ym)).length, frz = cal.freeze.filter((d) => d.startsWith(ym)).length;
+  return <div className="cal"><div className="calhead"><h3 className="serif">{name}</h3><span><button type="button" className="sq" aria-label="Previous month" onClick={() => shift(-1)}>‹</button><button type="button" className="sq" aria-label="Next month" disabled={isNow} onClick={() => shift(1)}>›</button></span></div>
+    <p className="mono-note">{reads} {reads === 1 ? 'day' : 'days'} read{frz ? ` · ${frz} covered by a freeze` : ''}</p>
+    <div className="grid" role="grid" aria-label={name}>{L.map((l, i) => <span key={i} className="dh mono" role="columnheader">{l}</span>)}
+      {cells.map((d, i) => d === null ? <span key={'e' + i} /> : <span key={d} role="gridcell" className={'c' + (cal.read.includes(d) ? ' r' : '') + (cal.freeze.includes(d) ? ' f' : '') + (d === cal.today ? ' t' : '')} aria-label={`${d}${cal.read.includes(d) ? ', read' : cal.freeze.includes(d) ? ', covered by a freeze' : ''}`}>{+d.slice(8)}</span>)}</div>
+    <p className="legend mono-note"><i className="k r" /> read <i className="k f" /> covered by a freeze <i className="k t" /> today</p>
+    <p className="fine">Only days you finished a story are marked. Days before your current streak are left blank, not counted as misses.</p></div>;
+}

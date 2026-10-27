@@ -3,7 +3,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { SEED, TOPIC_TAGS, FORMATS, WHY_READ, COUNTRIES, COUNTRIES_WITH_STORIES } from '../content/seed';
 import { PLANS } from '../shared/config';
 import { accessFor, finderUsesAllowed, type Account } from '../shared/entitlements';
-import { recordRead, displayStreak, localDay, type StreakState } from '../shared/streak';
+import { recordRead, displayStreak, dayDiff, localDay, type StreakState } from '../shared/streak';
 import { pickTopic, type ReadEvent } from '../shared/recommend';
 import { verifyWebhook } from './webhook';
 import { mapSubscriptionEvent } from './billing';
@@ -298,6 +298,17 @@ app.get('/api/history', async (c) => {
   const items = (r.results as any[]).map((x) => { const t = SEED.find((s) => s.id === x.topic_id); return t ? { day: x.day, topicId: t.id, title: t.title, tags: t.tags, done: !!x.done } : null; }).filter(Boolean);
   const ev: any = await c.env.DB.prepare('SELECT COUNT(*) n, COALESCE(SUM(completed),0) done, COALESCE(SUM(seconds_read),0) secs FROM read_events WHERE user_id=?').bind(u.id).first();
   return c.json({ items, recorded: { reads: ev?.n ?? 0, completed: ev?.done ?? 0, seconds: ev?.secs ?? 0 } });
+});
+app.get('/api/calendar', async (c) => {
+  const { u, s } = await loadAll(c);
+  const today = localDay(new Date(), u.timezone);
+  const r = await c.env.DB.prepare('SELECT DISTINCT day FROM read_events WHERE user_id=? AND completed=1 ORDER BY day DESC LIMIT 400').bind(u.id).all();
+  const read = (r.results as any[]).map((x) => x.day as string);
+  // Freeze days are not stored. Inside the current streak run, a gap between two completed days is a day a freeze covered (that is the only way the run can continue). Earlier gaps are left unmarked.
+  const run = displayStreak({ current: s.current, longest: s.longest, lastReadDay: s.last_read_day, freezesLeft: s.freezes_left }, today) > 0 ? read.slice(0, s.current) : [];
+  const freeze: string[] = [];
+  for (let i = 0; i + 1 < run.length; i++) { const gap = dayDiff(run[i + 1], run[i]); for (let g = 1; g < gap; g++) { const d = new Date(Date.UTC(+run[i + 1].slice(0, 4), +run[i + 1].slice(5, 7) - 1, +run[i + 1].slice(8, 10) + g)); freeze.push(d.toISOString().slice(0, 10)); } }
+  return c.json({ today, read, freeze });
 });
 app.get('/api/saved', async (c) => {
   const { u } = await loadAll(c);
