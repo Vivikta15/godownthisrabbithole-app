@@ -26,7 +26,8 @@ ok('read of someone elses/unknown hole 404', (await a.call('/read', { holeId: 'n
 me = (await a.call('/me')).data; ok('me shows readToday + streak 1', me.streak.readToday && me.streak.current === 1);
 const f = await a.call('/finder', { a: 'moon', b: 'cheese' }); ok('finder honestly reports generator not connected', f.status === 503 && f.data.error === 'generator_not_connected');
 ok('finder needs two words', (await a.call('/finder', { a: 'moon', b: '' })).status === 400);
-ok('checkout not configured', (await a.call('/checkout', {})).status === 501);
+ok('checkout rejects a missing plan', (await a.call('/checkout', {})).status === 400);
+ok('checkout not configured (no key, not enabled)', (await a.call('/checkout', { plan: 'plan3' })).status === 501);
 await b.call('/signup', { email: `b${tag}@t.co`, password: 'password1', name: 'Bo' });
 const inv = (await a.call('/invite', {})).data.code; ok('invite code', typeof inv === 'string' && inv.length === 8);
 ok('join bad code', (await b.call('/join', { code: 'zzzzzzzz' })).status === 400);
@@ -57,5 +58,17 @@ ok('correct login works', (await new Client().call('/login', { email: `b${tag}@t
 let last = 0; for (let i = 0; i < 9; i++) last = (await new Client().call('/login', { email: `b${tag}@t.co`, password: 'wrongwrong' })).status;
 ok('login throttled after repeated failures', last === 429, String(last));
 ok('long display name is capped', ((await (async () => { const c = new Client(); await c.call('/signup', { email: `c${tag}@t.co`, password: 'password1', name: 'x'.repeat(500) }); return (await c.call('/me')).data; })()).user.name || '').length <= 40);
+
+// bonus redemption (server started with --var BONUS_CHANCE:1)
+const meC = (await cc.call('/me')).data; ok('bonus earned once (3 parallel reads counted once)', meC.streak.bonusHoles === 1, JSON.stringify(meC.streak));
+const red = await Promise.all([1, 2, 3].map(() => cc.call('/bonus/redeem', {})));
+ok('3 parallel redeems with 1 bonus: exactly one succeeds', red.filter((x) => x.status === 200).length === 1 && red.filter((x) => x.status === 409).length === 2, JSON.stringify(red.map((x) => x.status)));
+const bh = red.find((x) => x.status === 200).data.hole;
+ok('bonus hole is a different, unseen story', bh.bonus === true && bh.id !== hid && bh.beats.length > 0);
+ok('bonus balance is now 0', (await cc.call('/me')).data.streak.bonusHoles === 0);
+const br = await cc.call('/read', { holeId: bh.id, seconds: 60, completed: true });
+ok('reading a bonus hole does not extend the streak', br.data.alreadyCounted === true && (await cc.call('/me')).data.streak.current === meC.streak.current);
+ok('redeem with none left is 409', (await cc.call('/bonus/redeem', {})).status === 409);
+ok('redeem needs login', (await new Client().call('/bonus/redeem', {})).status === 401);
 await a.call('/logout', {}); ok('logout invalidates session', (await a.call('/me')).status === 401);
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED'); process.exit(fails ? 1 : 0);

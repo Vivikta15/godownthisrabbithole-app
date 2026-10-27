@@ -21,7 +21,7 @@ for (const w of [320, 390]) {
   let t = await text();
   ok(`${w}: today shows a why-line`, /Because you like|fresh corner/.test(t), t.slice(0, 200));
   await wait(600); await click('Jump in'); await page.waitForSelector('article', { timeout: 8000 }); await wait(300);
-  t = await text(); ok(`${w}: reader says sources not checked yet`, /have not been checked/i.test(t), t.slice(0, 300));
+  t = await text(); ok(`${w}: reader labels source check honestly (hand-compared, not 'verified')`, /compared by hand|have not been checked/i.test(t), t.slice(0, 300));
   ok(`${w}: reader open, no overflow`, await noOverflow());
   await click('Connect'); await page.waitForSelector('input[placeholder=moon]', { timeout: 8000 }); await page.type('input[placeholder=moon]', 'moon'); await page.type('input[placeholder=cheese]', 'cheese'); await click('Find the link'); await page.waitForFunction(() => /not switched on|fact engine|try|left/i.test(document.body.innerText) && !/Type two/.test(document.body.innerText.split('Find the link')[1] || ''), { timeout: 5000 }).catch(() => {}); await wait(300);
   t = await text(); ok(`${w}: finder says engine not on, invents nothing`, /not switched on|needs the fact engine/i.test(t), t.slice(0, 200));

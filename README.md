@@ -46,5 +46,11 @@ Dodo stays in test mode until the owner approves going live.
 
 ## What works today (local only) vs not
 Works (real Worker + D1, local): email/password accounts with sessions; one-time quiz (topics, story style, length); daily pick chosen by an explainable score (quiz + read history + exploration); reader with honest "sources not checked" label; streaks with freezes (2 in trial, 5 on $5, $3 undecided) and a friends leaderboard via invite codes; trial/entitlement rules; Dodo webhook verification and subscription mapping (unit-tested against documented shapes only); no-spend AI guard (not connected); Wikipedia source fetcher (stub-tested; not run live); mascot with animations in its own bottom strip.
-Not working / stubbed: no real story generation, no source verification run, Connection Finder refuses (503), checkout (501), bonus holes not redeemable, no email verification/password reset, no IP rate limiting, not deployed, not pushed.
+Not working / stubbed: no real story generation, Connection Finder refuses (503), no email verification/password reset, no IP rate limiting, not deployed, not pushed.
 Accessibility checked (script audit at 390px): lang, page title, main landmark, every input labelled, no unnamed buttons, focus outline. Not checked: colour contrast, screen reader run, reduced-motion in a browser.
+
+## Update 2026-10-27 (later)
+- Source check: all six sample stories were compared claim by claim against fetched en.wikipedia.org text; revision ids are in src/content/seed.ts (`checked`). Four stories had claims the source did not support (wombat, octopus, emu war, oxford); fixed. The UI says "compared by hand ... one source, not independent verification". It is not called verified.
+- Checkout: src/worker/checkout.ts creates a Dodo checkout session (test endpoint only). Needs CHECKOUT_ENABLED=true, DODO_API_KEY, DODO_PRODUCT_MAP, APP_URL. Refuses live mode. Sends no trial period (undecided). Never run against Dodo yet; unit-tested with a fake fetch.
+- Bonus holes: env BONUS_CHANCE (0..1) decides earning; unset = nobody earns (undecided rule). Redeem is atomic (/api/bonus/redeem) and does not extend streaks.
+- Contrast: computed WCAG ratios. White text on the orange button was 2.35:1, now dark text (5.0:1); note text darkened to 5.5:1; focus ring darkened to 4.95:1. Accessibility tree checked for the sign-up and quiz screens only.

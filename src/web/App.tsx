@@ -4,7 +4,7 @@ import { Mascot, useMascot } from './Mascot';
 import type { MascotEvent } from '../shared/mascot';
 
 type Me = { user: { email: string; name: string | null; onboarded: boolean }; access: { plan: string; rabbitHoles: boolean; finderQuota: { period: string; limit: number } | null; trialEndsAt: string }; streak: { current: number; longest: number; freezesLeft: number; bonusHoles: number; readToday: boolean }; prefs: any };
-type Cfg = { topics: string[]; formats: { id: string; label: string }[]; plans: any };
+type Cfg = { topics: string[]; formats: { id: string; label: string }[]; plans: any; payments?: string };
 type Send = (e: MascotEvent) => void;
 
 export function App() {
@@ -76,7 +76,9 @@ function Main({ me, cfg, refresh, send }: { me: Me; cfg: Cfg; refresh: () => voi
 
 function Today({ me, refresh, send }: { me: Me; refresh: () => void; send: Send }) {
   const [d, setD] = useState<any>(null); const [err, setErr] = useState(''); const [reading, setReading] = useState(false); const [res, setRes] = useState<any>(null);
-  const t0 = useRef(0);
+  const t0 = useRef(0); const [extra, setExtra] = useState<any>(null); const [bmsg, setBmsg] = useState('');
+  async function openBonus() { const r = await api('/bonus/redeem', {}); if (r.ok) { setExtra(r.data.hole); t0.current = Date.now(); refresh(); window.scrollTo({ top: 0 }); } else setBmsg(r.data.message || r.data.error); }
+  async function closeBonus() { await api('/read', { holeId: extra.id, seconds: Math.round((Date.now() - t0.current) / 1000), completed: true }); setExtra(null); refresh(); }
   useEffect(() => { api('/today').then((r) => (r.ok ? setD(r.data) : setErr(r.data.message || r.data.error))); }, []);
   const start = () => { t0.current = Date.now(); setReading(true); send('read_start'); window.scrollTo({ top: 0 }); };
   async function finish() {
@@ -87,12 +89,15 @@ function Today({ me, refresh, send }: { me: Me; refresh: () => void; send: Send 
   if (err) return <div className="card"><h2>Hold on</h2><p>{err}</p><p className="note">Plans start on the Plan tab. Payments are not switched on yet.</p></div>;
   if (!d) return <p className="note">Digging up today's rabbit hole…</p>;
   const h = d.hole;
+  if (extra) return <article className="card"><p className="note">Bonus rabbit hole</p><Story hole={extra} /><p><button onClick={closeBonus}>I'm done reading</button></p><p className="note">{extra.sourceCheck === 'manual' ? `Sample story. Compared by hand against the source text on ${extra.checked.date} (one source, not independent verification). Source: ` : 'Sample story. Its sources have not been checked by the app yet: '}{extra.sources.map((x: any, i: number) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a>{i < extra.sources.length - 1 ? ', ' : ''}</span>)}</p></article>;
   if (res || d.readToday) return <div className="card">
     <h2>That's today's rabbit hole</h2>
     <p>{res?.alreadyCounted ? 'Already counted for today.' : res ? `Streak: ${res.streak} day${res.streak === 1 ? '' : 's'}.` : `You've already read today. Streak: ${me.streak.current}.`}</p>
     {res?.freezesUsed > 0 && <p className="note">A streak freeze covered {res.freezesUsed} missed day{res.freezesUsed > 1 ? 's' : ''}.</p>}
     {res?.reset && <p className="note">A fresh start today. Streaks are meant to be cozy, not scary.</p>}
-    {res?.bonusEarned && <p className="ok">You found a bonus rabbit hole! (Redeeming bonuses is coming soon.)</p>}
+    {res?.bonusEarned && <p className="ok">You earned a bonus rabbit hole!</p>}
+    {me.streak.bonusHoles > 0 && <p><button onClick={openBonus}>Open a bonus rabbit hole ({me.streak.bonusHoles})</button></p>}
+    {bmsg && <p className="note" role="status">{bmsg}</p>}
     <p className="note">That's all for today. Nothing else to scroll. See you tomorrow!</p>
   </div>;
   return <div>
@@ -101,7 +106,7 @@ function Today({ me, refresh, send }: { me: Me; refresh: () => void; send: Send 
       {!reading && <button onClick={start}>Jump in</button>}
     </div>
     {reading && <article className="card"><Story hole={h} /><p><button onClick={finish}>I'm done reading</button></p>
-      <p className="note">Sample story. Its sources have not been checked by the app yet: {h.sources.map((s: any, i: number) => <span key={i}><a href={s.url} target="_blank" rel="noreferrer">{s.label}</a>{i < h.sources.length - 1 ? ', ' : ''}</span>)}</p></article>}
+      <p className="note">{h.sourceCheck === 'manual' ? `Sample story. Compared by hand against the source text on ${h.checked.date} (one source, not independent verification). Source: ` : 'Sample story. Its sources have not been checked by the app yet: '}{h.sources.map((s: any, i: number) => <span key={i}><a href={s.url} target="_blank" rel="noreferrer">{s.label}</a>{i < h.sources.length - 1 ? ', ' : ''}</span>)}</p></article>}
   </div>;
 }
 
@@ -150,12 +155,14 @@ function Streaks({ me }: { me: Me }) {
 
 function Plan({ me, cfg }: { me: Me; cfg: Cfg }) {
   const p = cfg.plans; const fz = (n: number | null) => (n === null ? 'to be decided' : n);
-  const fq = (x: any) => `${x.limit}/${x.period}`;
+  const fq = (x: any) => `${x.limit}/${x.period}`; const [msg, setMsg] = useState('');
+  async function buy(plan: string) { const r = await api('/checkout', { plan }); if (r.ok && r.data.url) window.location.href = r.data.url; else setMsg(r.data.message || 'Could not start checkout.'); }
   return <div>
     <h1>Your plan</h1>
     <div className="card"><p>Now: <strong>{me.access.plan === 'trial' ? 'Free trial' : me.access.plan}</strong>{me.access.plan === 'trial' && <> · ends {new Date(me.access.trialEndsAt).toLocaleString()}</>}</p></div>
     {([['plan3', '$3 plan'], ['plan5', '$5 plan']] as const).map(([k, l]) => <div className="card" key={k}><h2>{l}</h2>
       <p>Rabbit holes · Connection finder {fq(p[k].connection_finder)} · Streak freezes: {fz(p[k].streak_freezes)}</p>
-      <p className="note">Billing period: {p[k].billing ?? 'to be decided'}</p><button disabled>Payments not switched on yet</button></div>)}
+      <p className="note">Billing period: {p[k].billing ?? 'to be decided'}</p>{cfg.payments === 'test_mode' ? <button onClick={() => buy(k)}>Start {l} (test mode, no real charge)</button> : <button disabled>Payments not switched on yet</button>}</div>)}
+    {msg && <p className="note" role="status">{msg}</p>}
   </div>;
 }

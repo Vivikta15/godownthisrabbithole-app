@@ -7,9 +7,10 @@ import { recordRead, displayStreak, localDay, type StreakState } from '../shared
 import { pickTopic, type ReadEvent } from '../shared/recommend';
 import { verifyWebhook } from './webhook';
 import { mapSubscriptionEvent } from './billing';
+import { createCheckout } from './checkout';
 import { shapeBeats } from '../shared/shape';
 
-type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; ENABLE_BONUS_CHANCE?: string };
+type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; BONUS_CHANCE?: string; DODO_API_KEY?: string; DODO_ENV?: string; APP_URL?: string; CHECKOUT_ENABLED?: string };
 type Vars = { uid: string };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
@@ -20,8 +21,8 @@ async function hashPw(pw: string, salt: string) {
   const k = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveBits']);
   return hex(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: enc.encode(salt), iterations: 100000, hash: 'SHA-256' }, k, 256));
 }
-// PLACEHOLDER (undecided product choice): chance of a bonus rabbit hole after a completed read.
-const BONUS_CHANCE = 0.1;
+// UNDECIDED product rule: the chance of earning a bonus rabbit hole after a completed read. Set env BONUS_CHANCE (0..1). Unset = 0 = nobody earns bonuses.
+const bonusChance = (v?: string) => { const n = Number(v); return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0; };
 const ctEq = (a: string, b: string) => { if (a.length !== b.length) return false; let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i); return r === 0; };
 
 app.use('*', async (c, next) => {
@@ -59,7 +60,7 @@ async function startSession(c: any, uid: string) {
   setCookie(c, 'sid', sid, { httpOnly: true, secure: new URL(c.req.url).protocol === 'https:', sameSite: 'Lax', path: '/', maxAge: 30 * 86400 });
 }
 
-app.get('/api/config', (c) => c.json({ topics: TOPIC_TAGS, formats: FORMATS, plans: PLANS, finderGenerator: false, payments: 'not_configured' }));
+app.get('/api/config', (c) => c.json({ topics: TOPIC_TAGS, formats: FORMATS, plans: PLANS, finderGenerator: false, payments: c.env.CHECKOUT_ENABLED === 'true' && c.env.DODO_API_KEY && c.env.DODO_ENV !== 'live_mode' ? 'test_mode' : 'not_configured' }));
 
 app.post('/api/signup', async (c) => {
   const b = await c.req.json<{ email: string; password: string; name?: string; timezone?: string }>();
@@ -162,7 +163,7 @@ app.get('/api/today', async (c) => {
   const seed = SEED.find((t) => t.id === row.topic_id)!;
   const matched = seed.tags.filter((t) => profile.interestTags.includes(t));
   why = matched.length ? `Because you like ${matched.join(' and ')}.` : 'A fresh corner to explore, to keep things from getting samey.';
-  return c.json({ hole: { id: row.id, title: seed.title, format: row.format, hook: seed.hook, beats: shapeBeats(seed.beats, pref.length_pref, seed.shortKeep), length: pref.length_pref ?? 'medium', sources: seed.sources, why, sourceCheck: 'pending' }, readToday: s.last_read_day === day });
+  return c.json({ hole: { id: row.id, title: seed.title, format: row.format, hook: seed.hook, beats: shapeBeats(seed.beats, pref.length_pref, seed.shortKeep), length: pref.length_pref ?? 'medium', sources: seed.sources, why, sourceCheck: seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null }, readToday: s.last_read_day === day });
 });
 
 app.post('/api/read', async (c) => {
@@ -181,12 +182,32 @@ app.post('/api/read', async (c) => {
   const prev: StreakState = { current: s.current, longest: s.longest, lastReadDay: s.last_read_day, freezesLeft: s.freezes_left };
   const r = recordRead(prev, day);
   let bonus = 0;
-  if (!r.alreadyCounted && Math.random() < BONUS_CHANCE) bonus = 1;
+  if (!r.alreadyCounted && Math.random() < bonusChance(c.env.BONUS_CHANCE)) bonus = 1;
   // compare-and-set on the previous last_read_day: of two concurrent completions only one updates the streak
   const upd = await c.env.DB.prepare('UPDATE streaks SET current=?,longest=?,last_read_day=?,freezes_left=?,bonus_holes=bonus_holes+? WHERE user_id=? AND last_read_day IS ?')
     .bind(r.state.current, r.state.longest, r.state.lastReadDay, r.state.freezesLeft, bonus, u.id, s.last_read_day).run();
   if (!upd.meta.changes && !r.alreadyCounted) return c.json({ ok: true, alreadyCounted: true });
   return c.json({ ok: true, streak: r.state.current, freezesUsed: r.freezesUsed, reset: r.reset, alreadyCounted: r.alreadyCounted, bonusEarned: bonus === 1 });
+});
+
+
+// Redeem one earned bonus hole: an extra story on a topic not yet seen. Never extends the streak (only today's main hole does).
+app.post('/api/bonus/redeem', async (c) => {
+  const { u, sub, pref } = await loadAll(c);
+  if (!pref) return c.json({ error: 'onboarding' }, 409);
+  if (!accessOf(u, sub).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
+  const day = localDay(new Date(), u.timezone);
+  const seen = ((await c.env.DB.prepare('SELECT topic_id FROM rabbit_holes WHERE user_id=?').bind(u.id).all()).results as any[]).map((r) => r.topic_id);
+  const profile = { interestTags: JSON.parse(pref.interest_tags), formats: JSON.parse(pref.formats) };
+  const pick = pickTopic(SEED.map((t) => ({ id: t.id, tags: t.tags, formats: FORMATS.map((f) => f.id) })), seen, await recentEvents(c, u.id), profile);
+  if (!pick) return c.json({ error: 'no_new_content', message: 'You have seen every story we have for now. Your bonus is kept.' }, 409);
+  // atomic spend: only succeeds while a bonus is left, so two taps cannot spend one bonus twice
+  const spend = await c.env.DB.prepare('UPDATE streaks SET bonus_holes=bonus_holes-1 WHERE user_id=? AND bonus_holes>0').bind(u.id).run();
+  if (!spend.meta.changes) return c.json({ error: 'no_bonus', message: 'No bonus rabbit holes to open.' }, 409);
+  const seed = SEED.find((t) => t.id === pick.topic.id)!; const id = rid();
+  await c.env.DB.prepare('INSERT INTO rabbit_holes (id,user_id,day,topic_id,format,title,body,sources,verified) VALUES (?,?,?,?,?,?,?,?,0)')
+    .bind(id, u.id, `${day}#bonus-${id.slice(0, 6)}`, seed.id, pick.format, seed.title, JSON.stringify({ hook: seed.hook, beats: seed.beats }), JSON.stringify(seed.sources)).run();
+  return c.json({ hole: { id, title: seed.title, format: pick.format, hook: seed.hook, beats: shapeBeats(seed.beats, pref.length_pref, seed.shortKeep), length: pref.length_pref ?? 'medium', sources: seed.sources, why: 'A bonus rabbit hole you earned.', sourceCheck: seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null, bonus: true } });
 });
 
 app.post('/api/finder', async (c) => {
@@ -225,7 +246,11 @@ app.get('/api/leaderboard', async (c) => {
 });
 
 // Billing: not live. Checkout is not wired; the webhook endpoint verifies signatures and logs events only.
-app.post('/api/checkout', (c) => c.json({ error: 'payments_not_configured', message: 'Payments are not switched on yet.' }, 501));
+app.post('/api/checkout', async (c) => {
+  const b = await c.req.json<{ plan: string }>().catch(() => ({ plan: '' }));
+  const r = await createCheckout(c.env, { id: c.get('uid') }, b.plan);
+  return r.ok ? c.json({ url: r.url }) : c.json({ error: r.error, message: r.message }, r.status as any);
+});
 app.post('/api/webhooks/dodo', async (c) => {
   const secret = c.env.DODO_WEBHOOK_SECRET; if (!secret) return c.json({ error: 'not configured' }, 501);
   const body = await c.req.text();
