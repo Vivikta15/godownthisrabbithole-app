@@ -43,3 +43,8 @@ Dodo stays in test mode until the owner approves going live.
 - Length preference is stored but not applied to sample stories (only topic and format adapt).
 - GitHub push: vault item "GitHub push token" held a value GitHub rejected at 13:17; a fresh vault link was issued. Push by URL, not by editing remotes: `git push https://github.com/Vivikta15/godownthisrabbithole-app.git master:main` with the token supplied through GIT_CONFIG_* http.extraheader from the vault file; never print the value.
 - Sample story content is hand-written and unverified; sources are not fetched.
+
+## What works today (local only) vs not
+Works (real Worker + D1, local): email/password accounts with sessions; one-time quiz (topics, story style, length); daily pick chosen by an explainable score (quiz + read history + exploration); reader with honest "sources not checked" label; streaks with freezes (2 in trial, 5 on $5, $3 undecided) and a friends leaderboard via invite codes; trial/entitlement rules; Dodo webhook verification and subscription mapping (unit-tested against documented shapes only); no-spend AI guard (not connected); Wikipedia source fetcher (stub-tested; not run live); mascot with animations in its own bottom strip.
+Not working / stubbed: no real story generation, no source verification run, Connection Finder refuses (503), checkout (501), bonus holes not redeemable, no email verification/password reset, no IP rate limiting, not deployed, not pushed.
+Accessibility checked (script audit at 390px): lang, page title, main landmark, every input labelled, no unnamed buttons, focus outline. Not checked: colour contrast, screen reader run, reduced-motion in a browser.
