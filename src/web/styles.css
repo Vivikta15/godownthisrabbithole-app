@@ -21,7 +21,9 @@ ol.steps{padding-left:1.3em}ol.steps li{margin:.6em 0}
 .streak{font-size:3rem;font-weight:800;color:var(--carrot-d)}
 .row{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}.row.me{font-weight:800}
 /* mascot: fixed bottom-right, never blocks taps */
-.mascot{position:fixed;right:10px;bottom:10px;width:104px;height:114px;pointer-events:none;z-index:20;transform-origin:50% 100%}
+.dock{position:fixed;left:0;right:0;bottom:0;height:96px;background:var(--cream);border-top:1px solid var(--sand);z-index:19;pointer-events:none}
+.mascot{position:fixed;right:10px;bottom:2px;width:88px;height:92px;pointer-events:none;z-index:20;transform-origin:50% 100%}
+main{padding-bottom:112px!important}
 .mascot .rabbit{transform-box:fill-box;transform-origin:50% 100%}
 .m-idle .rabbit{animation:bob 3.2s ease-in-out infinite}.m-idle .eye{animation:blink 5s infinite;transform-box:fill-box;transform-origin:center}
 .m-greet .rabbit,.m-explain_quiz .rabbit{animation:bob 1.6s ease-in-out infinite}.m-greet .paw,.m-cheer .paw{animation:wave .5s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:50% 100%}

@@ -19,7 +19,7 @@ export function App() {
   else if (me === null) body = <Auth onDone={refresh} send={send} />;
   else if (!me.user.onboarded) body = <Quiz cfg={cfg} onDone={refresh} send={send} />;
   else body = <Main me={me} cfg={cfg} refresh={refresh} send={send} />;
-  return <><main>{body}</main><Mascot state={mascot} /></>;
+  return <><main>{body}</main><div className="dock" aria-hidden="true" /><Mascot state={mascot} /></>;
 }
 
 function Auth({ onDone, send }: { onDone: () => void; send: Send }) {
