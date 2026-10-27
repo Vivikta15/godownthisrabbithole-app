@@ -1,4 +1,4 @@
-// NOTE: needs a temporary /api/_bench endpoint (guarded by a random Worker secret) that calls judge(); it was removed after the 2026-10-27 run. Re-add it from git history (commit "Judge bench") to rerun.
+// NOTE: needs a temporary POST /api/_bench endpoint (guarded by a random Worker secret BENCH_KEY, header x-bench-key) that returns {v: await judge(env, model, source, claim), reservedBefore: neurons in ai_usage}. It was removed after the 2026-10-27 run; re-add it to rerun.
 // Runs the judge on scripts/judge-pairs.json via the temporary /api/_bench endpoint. Prints accuracy and the reserved-neuron delta.
 import fs from 'node:fs'; const { sources, pairs } = JSON.parse(fs.readFileSync(new URL('./judge-pairs.json', import.meta.url)));
 const call = async (model, p) => { const r = await fetch(process.env.BASE + '/api/_bench', { method: 'POST', headers: { 'content-type': 'application/json', 'x-bench-key': fs.readFileSync(process.env.KEYFILE, 'utf8').trim() }, body: JSON.stringify({ model, source: sources[p.source], claim: p.claim }) }); return r.json(); };
