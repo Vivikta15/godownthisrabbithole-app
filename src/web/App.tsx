@@ -6,22 +6,42 @@ import type { MascotEvent } from '../shared/mascot';
 type Me = { user: { email: string; name: string | null; onboarded: boolean }; access: { plan: string; rabbitHoles: boolean; finderQuota: { period: string; limit: number } | null; trialEndsAt: string }; streak: { current: number; longest: number; freezesLeft: number; bonusHoles: number; readToday: boolean }; prefs: any };
 type Cfg = { topics: string[]; formats: { id: string; label: string }[]; plans: any; payments?: string; emailRecovery?: boolean; whyRead?: { id: string; label: string }[]; countries?: { code: string; name: string }[]; countriesWithStories?: string[] };
 type Send = (e: MascotEvent) => void;
+type Tab = 'explore' | 'connections' | 'trail' | 'you';
 
 export function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [cfg, setCfg] = useState<Cfg | null>(null);
-  const [mascot, send] = useMascot(); const [redo, setRedo] = useState(false);
+  const [mascot, send] = useMascot(); const [redo, setRedo] = useState(false); const [stage, setStage] = useState<'welcome' | 'auth'>('welcome'); const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
   const refresh = useCallback(async () => { const r = await api('/me'); setMe(r.ok ? r.data : null); }, []);
   useEffect(() => { refresh(); api('/config').then((r) => setCfg(r.data)); }, [refresh]);
 
   const q = new URLSearchParams(window.location.search); const rt = q.get('reset'), vt = q.get('verify');
-  let body: React.ReactNode;
+  let body: React.ReactNode; let nav = false;
   if (rt || vt) body = <TokenScreen kind={rt ? 'reset' : 'verify'} token={(rt || vt) as string} />;
-  else if (me === undefined || !cfg) body = <p className="note">Waking the rabbit…</p>;
-  else if (me === null) body = <Auth onDone={refresh} send={send} recovery={!!cfg.emailRecovery} />;
-  else if (!me.user.onboarded || redo) body = <Quiz cfg={cfg} onDone={() => { setRedo(false); refresh(); }} send={send} />;
-  else body = <Main me={me} cfg={cfg} refresh={refresh} send={send} onRedo={() => setRedo(true)} />;
-  return <><main>{body}</main><div className="dock" aria-hidden="true" /><Mascot state={mascot} /></>;
+  else if (me === undefined || !cfg) body = <p className="note" role="status">Waking the rabbit…</p>;
+  else if (me === null) body = stage === 'welcome' ? <Welcome send={send} onStart={() => { setAuthMode('signup'); setStage('auth'); }} onLogin={() => { setAuthMode('login'); setStage('auth'); }} /> : <Auth initial={authMode} onDone={refresh} send={send} recovery={!!cfg.emailRecovery} onBack={() => setStage('welcome')} />;
+  else if (!me.user.onboarded || redo) body = <Quiz cfg={cfg} me={me} redo={redo} onDone={() => { setRedo(false); refresh(); }} onCancel={redo ? () => setRedo(false) : undefined} send={send} />;
+  else { nav = true; body = <Main me={me} cfg={cfg} refresh={refresh} send={send} onRedo={() => setRedo(true)} />; }
+  return <div className={nav ? 'shell has-nav' : 'shell'}>{body}<div className="dock" aria-hidden="true" /><Mascot state={mascot} /></div>;
+}
+
+function Welcome({ onStart, onLogin, send }: { onStart: () => void; onLogin: () => void; send: Send }) {
+  useEffect(() => { send('onboarding_start'); }, [send]);
+  return <main className="welcome">
+    <svg className="foliage" viewBox="0 0 400 120" aria-hidden="true" preserveAspectRatio="xMidYMax slice">
+      <g fill="none" stroke="#2c3a2a" strokeWidth="1.6" strokeLinecap="round">
+        <path d="M20 120C24 90 18 60 40 30M40 30c-12 4-20 14-22 28M40 30c10 0 20 8 22 18M28 82c-10-2-18 4-22 14M30 70c9-4 18-2 24 6" />
+        <path d="M360 120c-4-34 4-60-14-88M346 32c12 2 20 12 22 26M346 32c-10 2-18 10-20 22M352 84c10-4 18 0 22 10" />
+        <path d="M120 120c2-20-4-34 6-52M126 68c-9 0-14 7-16 15M126 68c8 1 13 6 15 14" opacity=".7" />
+      </g>
+    </svg>
+    <p className="kicker">godownthisrabbithole</p>
+    <h1 className="display">Curiosity looks good on you.</h1>
+    <p className="deck">Leave the scroll behind. Follow something interesting.</p>
+    <p><button type="button" className="go" onClick={onStart}>Let's wander</button></p>
+    <p className="note"><a href="#" onClick={(e) => { e.preventDefault(); onLogin(); }}>I already have an account</a></p>
+    <p className="fine">One rabbit hole a day. No endless feed. Free for 3 days.</p>
+  </main>;
 }
 
 function TokenScreen({ kind, token }: { kind: 'reset' | 'verify'; token: string }) {
@@ -29,14 +49,14 @@ function TokenScreen({ kind, token }: { kind: 'reset' | 'verify'; token: string 
   useEffect(() => { window.history.replaceState({}, '', '/'); }, []);
   useEffect(() => { if (kind === 'verify') api('/email/verify', { token }).then((r) => { setMsg(r.ok ? 'Your email is verified. Thank you!' : r.data.error); setDone(r.ok); }); }, [kind, token]);
   async function reset(e: React.FormEvent) { e.preventDefault(); const r = await api('/password/reset', { token, password: pw }); setMsg(r.ok ? 'Password changed. You are logged out everywhere; log in with the new one.' : r.data.error); setDone(r.ok); }
-  return <div className="card"><h1>{kind === 'reset' ? 'Choose a new password' : 'Email check'}</h1>
+  return <main><h1>{kind === 'reset' ? 'Choose a new password' : 'Email check'}</h1>
     {kind === 'reset' && !done && <form onSubmit={reset}><input type="password" aria-label="New password" placeholder="New password (8+ characters)" minLength={8} required value={pw} onChange={(e) => setPw(e.target.value)} /><p><button type="submit">Save new password</button></p></form>}
     {msg && <p role="status">{msg}</p>}
-    <p className="note"><a href="/">Back to the app</a></p></div>;
+    <p className="note"><a href="/">Back to the app</a></p></main>;
 }
 
-function Auth({ onDone, send, recovery }: { onDone: () => void; send: Send; recovery: boolean }) {
-  const [mode, setMode] = useState<'signup' | 'login' | 'forgot'>('signup'); const [note, setNote] = useState('');
+function Auth({ onDone, send, recovery, initial, onBack }: { onDone: () => void; send: Send; recovery: boolean; initial: 'signup' | 'login'; onBack: () => void }) {
+  const [mode, setMode] = useState<'signup' | 'login' | 'forgot'>(initial); const [note, setNote] = useState('');
   const [f, setF] = useState({ name: '', email: '', password: '' }); const [err, setErr] = useState('');
   useEffect(() => { send('onboarding_start'); }, [send]);
   async function go(e: React.FormEvent) {
@@ -45,123 +65,201 @@ function Auth({ onDone, send, recovery }: { onDone: () => void; send: Send; reco
     const r = await api(mode === 'signup' ? '/signup' : '/login', { ...f, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
     if (r.ok) onDone(); else setErr(r.data.error || 'Something went sideways. Try again?');
   }
-  return <form onSubmit={go}>
-    <h1>go down this rabbit hole</h1>
-    <div className="bubble">{mode === 'signup' ? "Hi, hi! Come on in and make yourself at home. Let's get you a cozy little account first." : 'Welcome back! The kettle is on.'}</div>
-    {mode === 'signup' && <input type="text" placeholder="What should I call you?" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} aria-label="Name" />}
-    {!(mode === 'forgot' && !recovery) && <input type="email" placeholder="Email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} aria-label="Email" />}
-    {mode === 'forgot' && !recovery && <p role="status">Password reset by email isn't available yet in this preview. If you can't log in, tap "I need an account" below to start fresh with a new email or password.</p>}
-    {mode !== 'forgot' && <input type="password" placeholder="Password (8+ characters)" required minLength={8} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} aria-label="Password" />}
+  return <main><form onSubmit={go} className="auth">
+    <p className="kicker"><a href="#" onClick={(e) => { e.preventDefault(); onBack(); }}>back</a></p>
+    <h1>{mode === 'signup' ? 'First, a little burrow of your own.' : mode === 'forgot' ? 'Lost the way back?' : 'Welcome back. The kettle is on.'}</h1>
+    {mode === 'signup' && <label>What should I call you?<input type="text" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} autoComplete="given-name" /></label>}
+    {!(mode === 'forgot' && !recovery) && <label>Email<input type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} autoComplete="email" /></label>}
+    {mode === 'forgot' && !recovery && <p role="status">Password reset by email isn't available yet in this preview. If you can't log in, choose "I need an account" below to start fresh with a new email or password.</p>}
+    {mode !== 'forgot' && <label>Password (8+ characters)<input type="password" required minLength={8} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} /></label>}
     {note && <p role="status">{note}</p>}
     {err && <p className="err" role="alert">{err}</p>}
-    <p className="note">Preview build: there is no email verification or password reset yet, so please don't reuse an important password.</p>
-    {!(mode === 'forgot' && !recovery) && <p><button type="submit">{mode === 'signup' ? 'Start my 3 free days' : mode === 'forgot' ? 'Send reset link' : 'Log in'}</button></p>}
+    <p className="note">Preview build: no email verification or password reset yet, so please don't reuse an important password.</p>
+    {!(mode === 'forgot' && !recovery) && <p><button type="submit" className="go">{mode === 'signup' ? 'Start my 3 free days' : mode === 'forgot' ? 'Send reset link' : 'Log in'}</button></p>}
     <p className="note"><a href="#" onClick={(e) => { e.preventDefault(); setMode(mode === 'signup' ? 'login' : 'signup'); }}>{mode === 'signup' ? 'I already have an account' : 'I need an account'}</a>{mode === 'login' && <> · <a href="#" onClick={(e) => { e.preventDefault(); setMode('forgot'); }}>Forgot password?</a></>}</p>
-  </form>;
+  </form></main>;
 }
 
 const TZ_COUNTRY: Record<string, string> = { 'Asia/Calcutta': 'IN', 'Asia/Kolkata': 'IN', 'America/New_York': 'US', 'America/Chicago': 'US', 'America/Los_Angeles': 'US', 'Europe/London': 'GB', 'Australia/Sydney': 'AU', 'Australia/Melbourne': 'AU', 'America/Toronto': 'CA', 'Asia/Singapore': 'SG', 'Asia/Dubai': 'AE', 'Europe/Berlin': 'DE', 'Europe/Paris': 'FR', 'Africa/Lagos': 'NG', 'Africa/Nairobi': 'KE', 'Africa/Johannesburg': 'ZA', 'America/Sao_Paulo': 'BR', 'Asia/Karachi': 'PK', 'Asia/Dhaka': 'BD', 'Asia/Colombo': 'LK', 'Asia/Kathmandu': 'NP', 'Asia/Tokyo': 'JP', 'Asia/Seoul': 'KR', 'Pacific/Auckland': 'NZ' };
-function Quiz({ cfg, onDone, send }: { cfg: Cfg; onDone: () => void; send: Send }) {
+function Quiz({ cfg, me, redo, onDone, onCancel, send }: { cfg: Cfg; me: Me; redo: boolean; onDone: () => void; onCancel?: () => void; send: Send }) {
+  const pf = redo ? me.prefs : null;
   const guess = TZ_COUNTRY[Intl.DateTimeFormat().resolvedOptions().timeZone] ?? '';
-  const [step, setStep] = useState(0); const [country, setCountry] = useState(guess);
-  const [tags, setTags] = useState<string[]>([]); const [why, setWhy] = useState<string[]>([]); const [fmts, setFmts] = useState<string[]>([]); const [len, setLen] = useState('medium'); const [curious, setCurious] = useState(''); const [err, setErr] = useState('');
+  const [step, setStep] = useState(0); const [country, setCountry] = useState<string>(pf ? pf.quiz?.country ?? '' : guess);
+  const [tags, setTags] = useState<string[]>(pf?.interestTags ?? []); const [why, setWhy] = useState<string[]>(pf?.quiz?.why ?? []); const [fmts, setFmts] = useState<string[]>(pf?.formats ?? []); const [len, setLen] = useState<string>(pf?.length ?? 'medium'); const [curious, setCurious] = useState<string>(pf?.quiz?.curious ?? ''); const [err, setErr] = useState('');
   useEffect(() => { send('quiz_begin'); }, [send]);
   const tog = (a: string[], s: (x: string[]) => void, v: string) => s(a.includes(v) ? a.filter((x) => x !== v) : [...a, v]);
   const withStories = cfg.countriesWithStories ?? []; const total = 5;
   const next = () => { setErr(''); if (step === 1 && !tags.length) return setErr('Pick at least one so I know where to start.'); if (step === 3 && !fmts.length) return setErr('Pick at least one style.'); setStep(step + 1); };
   const finish = async () => { const r = await api('/quiz', { interestTags: tags, formats: fmts, length: len, country: country || undefined, why, curious }); if (r.ok) onDone(); else setErr(r.data.error); };
-  return <div>
-    <h1>Let's get to know you</h1>
-    <div className="bubble">{['Where are you reading from? I can start with stories close to home.', 'What do you actually wonder about? Pick a few.', 'Why do you want a daily rabbit hole?', 'How should the story feel?', 'Last one, and you can skip it.'][step]}</div>
-    <p className="note" aria-label="Progress">Question {step + 1} of {total}</p>
+  const skippable = step === 0 || step === 2 || step === 4;
+  const asks = ['Where are you reading from? I can start with stories close to home.', 'What do you actually wonder about? Pick a few.', 'Why do you want a daily rabbit hole?', 'How should a story feel?', 'Last one, and you can skip it.'];
+  return <main className="quiz">
+    <p className="kicker">{redo ? 'Your answers' : 'Let\'s get to know you'}</p>
+    <div className="steps-bar" role="progressbar" aria-label="Quiz progress" aria-valuenow={step + 1} aria-valuemin={1} aria-valuemax={total}>{Array.from({ length: total }, (_, i) => <i key={i} className={i <= step ? 'on' : ''} />)}</div>
+    <h1>{asks[step]}</h1>
+    <p className="mono-note">Question {step + 1} of {total}{skippable ? ' · you can skip this one' : ''}</p>
     {step === 0 && <div>
+      <label className="sr">Country</label>
       <select value={country} onChange={(e) => setCountry(e.target.value)} aria-label="Country">
         <option value="">Somewhere else / skip</option>
         {(cfg.countries ?? []).map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
       </select>
-      {guess && country === guess && <p className="note">I guessed this from your device's timezone. Change it if it's wrong.</p>}
+      {!redo && guess && country === guess && <p className="note">I guessed this from your device's timezone. Change it if it's wrong.</p>}
       <p className="note">{country && withStories.includes(country) ? "There are stories written for this country, and they'll come first." : "Local stories for this country aren't written yet, so you'll get general topics for now. Your choice is saved for when they are."}</p>
     </div>}
     {step === 1 && <div>
       <div className="chips">{cfg.topics.map((t) => <button key={t} type="button" className="chip" aria-pressed={tags.includes(t)} onClick={() => tog(tags, setTags, t)}>{t}</button>)}</div>
-      <p className="note">Everyday life and money &amp; tech are about things you meet every day: your chai, your phone payments, your trains.</p>
+      <p className="note">Everyday life and money &amp; tech are about things you meet every day: your chai, your phone payments, your trains. Topics decide which story you get next.</p>
     </div>}
     {step === 2 && <div><div className="chips">{(cfg.whyRead ?? []).map((w) => <button key={w.id} type="button" className="chip" aria-pressed={why.includes(w.id)} onClick={() => tog(why, setWhy, w.id)}>{w.label}</button>)}</div><p className="note">Optional. It adds a "tell someone" line, shows sources as "check it yourself", or nudges your first stories toward everyday life. "Unwind" changes nothing yet.</p></div>}
     {step === 3 && <div>
-      <h2>Style</h2>
+      <h2>Shape</h2>
       <div className="chips">{cfg.formats.map((f) => <button key={f.id} type="button" className="chip" aria-pressed={fmts.includes(f.id)} onClick={() => tog(fmts, setFmts, f.id)}>{f.label}</button>)}</div>
-      <h2>Length</h2>
+      <p className="note">This changes how a story is laid out: a flowing narrative, questions and answers, or steps.</p>
+      <h2>How long</h2>
       <div className="chips">{[['short', 'A quick nibble'], ['medium', 'A good chew']].map(([v, l]) => <button key={v} type="button" className="chip" aria-pressed={len === v} onClick={() => setLen(v)}>{l}</button>)}</div>
+      <p className="note">A quick nibble shows the first two paragraphs of a story. Tone and a time budget are not asked yet, because nothing in the stories could change with them.</p>
     </div>}
     {step === 4 && <div>
-      <input type="text" maxLength={200} placeholder="Something you've been curious about lately (optional)" value={curious} onChange={(e) => setCurious(e.target.value)} aria-label="Something you have been curious about" />
+      <label className="sr" htmlFor="curious">Something you have been curious about</label>
+      <input id="curious" type="text" maxLength={200} placeholder="Something you've been curious about lately" value={curious} onChange={(e) => setCurious(e.target.value)} />
       <p className="note">If a word you write here appears in one of our stories, that story can come early. It is a word match only. I don't treat what you write as fact, and with only a few stories so far a match may not exist.</p>
     </div>}
     {err && <p className="err" role="alert">{err}</p>}
-    <p>{step > 0 && <button type="button" className="chip" onClick={() => setStep(step - 1)}>Back</button>} {step < total - 1 ? <button type="button" onClick={next}>Next</button> : <button type="button" onClick={finish}>All set!</button>}</p>
-  </div>;
+    <p className="row-actions">{step > 0 && <button type="button" className="ghost" onClick={() => setStep(step - 1)}>Back</button>}{step === 0 && onCancel && <button type="button" className="ghost" onClick={onCancel}>Cancel</button>}
+      {skippable && step < total - 1 && <button type="button" className="ghost" onClick={() => setStep(step + 1)}>Skip</button>}
+      {step < total - 1 ? <button type="button" className="go" onClick={next}>Next</button> : <button type="button" className="go" onClick={finish}>{redo ? 'Save my answers' : 'All set'}</button>}</p>
+  </main>;
+}
+
+function Icon({ k }: { k: Tab }) {
+  const p: Record<Tab, React.ReactNode> = {
+    explore: <><circle cx="12" cy="12" r="8.5" /><path d="M15.500 8.500l-2 5-5 2 2-5z" /></>,
+    connections: <><circle cx="6" cy="12" r="2.500" /><circle cx="18" cy="12" r="2.500" /><path d="M8.500 12h7M11 9.800c.6-1.200 1.800-1.200 2.400 0" /></>,
+    trail: <><ellipse cx="8" cy="15.500" rx="2.200" ry="3" /><circle cx="6.500" cy="10" r="1" /><circle cx="9.500" cy="9.500" r="1" /><ellipse cx="16" cy="9" rx="2.200" ry="3" /><circle cx="14.500" cy="3.600" r="1" /><circle cx="17.500" cy="3.600" r="1" /></>,
+    you: <><circle cx="12" cy="8.500" r="3.500" /><path d="M5 20c.8-4 3.500-6 7-6s6.200 2 7 6" /></>,
+  };
+  return <svg className="ico" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{p[k]}</svg>;
+}
+
+function Paws({ n, of = 7 }: { n: number; of?: number }) {
+  return <div className="paws" role="img" aria-label={`${Math.min(n, of)} of ${of} footprints on this trail`}>{Array.from({ length: of }, (_, i) => <svg key={i} className={i < n ? 'on' : ''} width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="16" rx="5" ry="4.200" /><circle cx="6" cy="10.500" r="2" /><circle cx="10" cy="7" r="2" /><circle cx="14.500" cy="7" r="2" /><circle cx="18.500" cy="10.500" r="2" /></svg>)}</div>;
 }
 
 function Main({ me, cfg, refresh, send, onRedo }: { me: Me; cfg: Cfg; refresh: () => void; send: Send; onRedo: () => void }) {
-  const [tab, setTab] = useState<'today' | 'finder' | 'streaks' | 'plan'>('today');
-  const go = (t: typeof tab) => { setTab(t); send(t === 'finder' ? 'tab_change_finder' : 'tab_change_other'); };
-  const names: [typeof tab, string][] = [['today', 'Today'], ['finder', 'Connect'], ['streaks', 'Streaks'], ['plan', 'Plan']];
-  return <div>
-    <nav className="tabs" aria-label="Sections">{names.map(([k, l]) => <button key={k} aria-current={tab === k ? 'page' : undefined} onClick={() => go(k)}><Icon k={k} />{l}</button>)}</nav>
-    <div hidden={tab !== 'today'}><Today me={me} refresh={refresh} send={send} /></div>
-    {tab === 'finder' && <Finder me={me} send={send} />}
-    {tab === 'streaks' && <Streaks me={me} />}
-    {tab === 'streaks' && <p className="note"><button type="button" className="chip" onClick={onRedo}>Update my quiz answers</button></p>}
-    {tab === 'plan' && <Plan me={me} cfg={cfg} />}
-  </div>;
+  const [tab, setTab] = useState<Tab>('explore'); const [open, setOpen] = useState<string | null>(null);
+  const go = (t: Tab) => { setTab(t); setOpen(null); send(t === 'connections' ? 'tab_change_finder' : 'tab_change_other'); window.scrollTo({ top: 0 }); };
+  const names: [Tab, string][] = [['explore', 'Explore'], ['connections', 'Connections'], ['trail', 'Trail'], ['you', 'You']];
+  return <>
+    <nav className="nav" aria-label="Sections"><p className="brand" aria-hidden="true">go down this<br />rabbit hole</p>{names.map(([k, l]) => <button key={k} type="button" aria-current={tab === k ? 'page' : undefined} onClick={() => go(k)}><Icon k={k} /><span>{l}</span></button>)}</nav>
+    <main>
+      {open ? <StoryView topicId={open} onBack={() => setOpen(null)} />
+        : <>
+          <div hidden={tab !== 'explore'}><Explore me={me} refresh={refresh} send={send} goTab={go} /></div>
+          {tab === 'connections' && <Finder me={me} send={send} />}
+          {tab === 'trail' && <Trail me={me} onOpen={setOpen} />}
+          {tab === 'you' && <You me={me} cfg={cfg} onRedo={onRedo} onOpen={setOpen} />}
+        </>}
+    </main>
+  </>;
 }
 
-function Today({ me, refresh, send }: { me: Me; refresh: () => void; send: Send }) {
-  const [d, setD] = useState<any>(null); const [err, setErr] = useState(''); const [reading, setReading] = useState(false); const [res, setRes] = useState<any>(null); const [again, setAgain] = useState(false);
-  const t0 = useRef(0); const [extra, setExtra] = useState<any>(null); const [bmsg, setBmsg] = useState('');
+const SAVE_LABEL = (s: boolean) => (s ? 'Saved' : 'Save for later');
+function SaveButton({ topicId, initial }: { topicId: string; initial: boolean }) {
+  const [saved, setSaved] = useState(initial); const [busy, setBusy] = useState(false);
+  async function toggle() { setBusy(true); const r = await api('/save', { topicId, saved: !saved }); setBusy(false); if (r.ok) setSaved(!saved); }
+  return <button type="button" className="ghost" aria-pressed={saved} disabled={busy} onClick={toggle}>{SAVE_LABEL(saved)}</button>;
+}
+
+function Peek() {
+  return <svg className="peek" width="64" height="40" viewBox="0 0 64 40" aria-hidden="true"><path d="M2 40Q32 14 62 40Z" fill="#1b211b" stroke="#343b32" /><g fill="#f1ebdd" stroke="#a5ada0" strokeWidth=".6"><ellipse cx="26" cy="14" rx="3.200" ry="9" /><ellipse cx="37" cy="14" rx="3.200" ry="9" /></g><g fill="#d98e7b"><ellipse cx="26" cy="15" rx="1.200" ry="6" /><ellipse cx="37" cy="15" rx="1.200" ry="6" /></g><ellipse cx="31.500" cy="30" rx="9" ry="6" fill="#f1ebdd" /><circle cx="28.500" cy="29" r="1" fill="#3b2a20" /><circle cx="34.500" cy="29" r="1" fill="#3b2a20" /></svg>;
+}
+
+function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; send: Send; goTab: (t: Tab) => void }) {
+  const [d, setD] = useState<any>(null); const [err, setErr] = useState<{ status: number; msg: string } | null>(null); const [reading, setReading] = useState(false); const [res, setRes] = useState<any>(null); const [again, setAgain] = useState(false);
+  const t0 = useRef(0); const [extra, setExtra] = useState<any>(null); const [bmsg, setBmsg] = useState(''); const [savedN, setSavedN] = useState<number | null>(null);
   async function openBonus() { const r = await api('/bonus/redeem', {}); if (r.ok) { setExtra(r.data.hole); t0.current = Date.now(); refresh(); window.scrollTo({ top: 0 }); } else setBmsg(r.data.message || r.data.error); }
   async function closeBonus() { await api('/read', { holeId: extra.id, seconds: Math.round((Date.now() - t0.current) / 1000), completed: true }); setExtra(null); refresh(); }
-  useEffect(() => { api('/today').then((r) => (r.ok ? setD(r.data) : setErr(r.data.message || r.data.error))); }, []);
+  const load = useCallback(() => { setErr(null); api('/today').then((r) => (r.ok ? setD(r.data) : setErr({ status: r.status, msg: r.data.message || r.data.error || 'Something went sideways.' }))); }, []);
+  useEffect(() => { load(); api('/saved').then((r) => r.ok && setSavedN(r.data.items.length)); }, [load]);
   const start = () => { t0.current = Date.now(); setReading(true); send('read_start'); window.scrollTo({ top: 0 }); };
   async function finish() {
     const seconds = Math.round((Date.now() - t0.current) / 1000);
     const r = await api('/read', { holeId: d.hole.id, seconds, completed: true });
-    setReading(false); setRes(r.data); send('read_finish'); refresh();
+    setReading(false); setRes(r.data); send('read_finish'); refresh(); window.scrollTo({ top: 0 });
   }
-  if (err) return <div className="card"><h2>Hold on</h2><p>{err}</p><p className="note">Plans start on the Plan tab. Payments are not switched on yet.</p></div>;
-  if (!d) return <p className="note">Digging up today's rabbit hole…</p>;
-  const h = d.hole;
-  if (extra) return <article className="card"><p className="note">Bonus rabbit hole</p><Story hole={extra} /><p><button onClick={closeBonus}>I'm done reading</button></p><p className="note">{extra.sourceCheck === 'manual' ? `Sample story. Compared by hand against the source text on ${extra.checked.date} (one source, not independent verification). Source: ` : 'Sample story. Its sources have not been checked by the app yet: '}{extra.sources.map((x: any, i: number) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a>{i < extra.sources.length - 1 ? ', ' : ''}</span>)}</p></article>;
-  if (res || d.readToday) return <div className="card">
-    <h2>That's today's rabbit hole</h2>
-    <p>{res?.alreadyCounted ? 'Already counted for today.' : res ? `Streak: ${res.streak} day${res.streak === 1 ? '' : 's'}.` : `You've already read today. Streak: ${me.streak.current}.`}</p>
-    {res?.freezesUsed > 0 && <p className="note">A streak freeze covered {res.freezesUsed} missed day{res.freezesUsed > 1 ? 's' : ''}.</p>}
-    {res?.reset && <p className="note">A fresh start today. Streaks are meant to be cozy, not scary.</p>}
-    {res?.bonusEarned && <p className="ok">You earned a bonus rabbit hole!</p>}
-    {me.streak.bonusHoles > 0 && <p><button onClick={openBonus}>Open a bonus rabbit hole ({me.streak.bonusHoles})</button></p>}
-    {bmsg && <p className="note" role="status">{bmsg}</p>}
-    <p><button type="button" onClick={() => setAgain(!again)}>{again ? 'Hide the story' : "Read today's story again"}</button> <span className="note">Re-reading does not change your streak or count again.</span></p>
-    {again && <article className="card"><h3>{h.title}</h3><Story hole={h} /><Related hole={h} /><p className="note">{h.sourceCheck === 'manual' ? `Sample story. Compared by hand against the source text on ${h.checked.date} (one source, not independent verification). Source: ` : 'Sample story. Its sources have not been checked by the app yet: '}{h.sources.map((s: any, i: number) => <span key={i}><a href={s.url} target="_blank" rel="noreferrer">{s.label}</a>{i < h.sources.length - 1 ? ', ' : ''}</span>)}</p></article>}
-    <p className="note">That's all for today. Nothing else to scroll. See you tomorrow!</p>
-  </div>;
-  return <div>
-    <div className="card hero">
-      <p className="eyebrow">Today's rabbit hole</p><h1>{h.title}</h1><p>{h.hook}</p><p className="note">{h.why}</p>
-      {!reading && <button onClick={start}>Jump in</button>}
-    </div>
-    {reading && <article className="card"><ReadProgress /><Story hole={h} /><Related hole={h} />{h.shortened && <p className="note">Short version: some details are left out. The full version is shown when you pick "A good chew" in the quiz (changing it later is not built yet).</p>}<p><button onClick={finish}>I'm done reading</button></p>
-      <p className="note">{h.sourceCheck === 'manual' ? `Sample story. Compared by hand against the source text on ${h.checked.date} (one source, not independent verification). Source: ` : 'Sample story. Its sources have not been checked by the app yet: '}{h.sources.map((s: any, i: number) => <span key={i}><a href={s.url} target="_blank" rel="noreferrer">{s.label}</a>{i < h.sources.length - 1 ? ', ' : ''}</span>)}</p></article>}
+  if (err) return <section>
+    {err.status === 402 ? <><p className="kicker">Your trial</p><h1>The 3 free days are up.</h1><p className="deck">Your streak and your saved stories are still here. Pick a plan whenever you like. No pressure.</p><p><button type="button" className="go" onClick={() => goTab('you')}>See plans</button></p><p className="note">Payments are not switched on yet in this preview.</p></>
+      : <><h1>The rabbit hit a snag.</h1><p className="deck">{err.msg}</p><p><button type="button" className="go" onClick={load}>Try again</button></p></>}
+  </section>;
+  if (!d) return <p className="note" role="status">Digging up today's detour…</p>;
+  const h = d.hole; const done = !!(res || d.readToday);
+  if (extra) return <article className="reading"><p className="kicker">Another trail</p><Story hole={extra} /><Sources hole={extra} /><p><button type="button" className="go" onClick={closeBonus}>I'm back up</button></p></article>;
+  if (reading) return <article className="reading"><ReadProgress /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1>
+    <Story hole={h} /><Related hole={h} />
+    <aside className="takeaway"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside>
+    {h.shortened && <p className="note">Short version: some details are left out. Pick "A good chew" in your answers to read the full story.</p>}
+    <Sources hole={h} />
+    <p className="row-actions"><SaveButton topicId={h.topicId} initial={h.saved} /><button type="button" className="go" onClick={finish}>I'm done reading</button></p>
+  </article>;
+  const greeting = me.user.name ? `Where should we wander today, ${me.user.name}?` : 'Where should we wander today?';
+  return <div className="explore">
+    <p className="greet">{greeting}</p>
+    {done ? <section className="detour"><Peek /><p className="kicker">{res?.alreadyCounted ? 'Already counted' : 'Today\'s detour, found'}</p><h1 className="story-title">Look what your curiosity uncovered.</h1>
+      <p className="deck"><em>{h.title}</em> is in your trail. {res && !res.alreadyCounted ? `Streak: ${res.streak} day${res.streak === 1 ? '' : 's'}.` : `Streak: ${me.streak.current} day${me.streak.current === 1 ? '' : 's'}.`}</p>
+      {res?.freezesUsed > 0 && <p className="note">A streak freeze covered {res.freezesUsed} missed day{res.freezesUsed > 1 ? 's' : ''}.</p>}
+      {res?.reset && <p className="note">A fresh start today. No pressure. Curiosity isn't homework.</p>}
+      {res?.bonusEarned && <p className="ok">Another trail turned up for you.</p>}
+      <p className="row-actions"><button type="button" className="ghost" onClick={() => setAgain(!again)}>{again ? 'Hide the story' : 'Read it again'}</button><SaveButton topicId={h.topicId} initial={h.saved} /></p>
+      <p className="note">Re-reading does not change your streak or count again.</p>
+      {again && <article className="reading inline"><Story hole={h} /><Related hole={h} /><Sources hole={h} /></article>}
+    </section>
+      : <section className="detour"><Peek /><p className="kicker">Today's detour</p><h1 className="story-title">{h.title}</h1><p className="deck">{h.hook}</p>
+        <p className="mono-note">{h.tags.join(' · ')} · about {h.minutes} min read</p><p className="note">{h.why}</p>
+        <p><button type="button" className="go" onClick={start}>Go down this rabbit hole</button></p></section>}
+    {done && me.streak.bonusHoles > 0 && <section className="strip"><p className="kicker">Another trail</p><p>You have {me.streak.bonusHoles} extra.</p><button type="button" className="ghost" onClick={openBonus}>One tiny detour?</button>{bmsg && <p className="note" role="status">{bmsg}</p>}</section>}
+    <section className="strip"><p className="kicker">Connections</p><p className="serif">Two words. One strange bridge.</p><p className="note">Try "moon" and "cheese". The rabbit looks for a link both Wikipedia pages mention. It's an early version.</p><button type="button" className="ghost" onClick={() => goTab('connections')}>Open the lab</button></section>
+    <section className="strip row"><div><p className="kicker">Trail</p><Paws n={me.streak.current} /><p className="mono-note">day {me.streak.current}</p></div><div><p className="kicker">Saved</p><button type="button" className="ghost" onClick={() => goTab('you')}>{savedN === null ? 'Saved discoveries' : savedN ? `${savedN} saved` : 'Nothing saved yet'}</button></div></section>
+    <p className="fine">That's all for today. Nothing else to scroll.</p>
   </div>;
 }
 
-function Icon({ k }: { k: string }) {
-  const d: Record<string, string> = {
-    today: 'M4 18c0-5 3-9 8-9s8 4 8 9M12 9V4M8 6l4-2 4 2',
-    finder: 'M9 12a3 3 0 0 1 3-3h3M15 12a3 3 0 0 1-3 3H9M8 12h8',
-    streaks: 'M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9z',
-    plan: 'M20 14A8 8 0 1 1 10 4a6 6 0 0 0 10 10z',
-  };
-  return <svg className="ico" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d[k]} /></svg>;
+function Sources({ hole }: { hole: any }) {
+  const s: any[] = hole.sources || [];
+  return <p className="note sources">{hole.sourceCheck === 'manual' ? `Sample story. Compared by hand against the source text on ${hole.checked.date} (one source, not independent verification). Source: ` : 'Sample story. Its sources have not been checked by the app yet: '}{s.map((x, i) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a>{i < s.length - 1 ? ', ' : ''}</span>)}</p>;
+}
+
+function StoryView({ topicId, onBack }: { topicId: string; onBack: () => void }) {
+  const [h, setH] = useState<any>(null); const [err, setErr] = useState('');
+  useEffect(() => { api(`/story/${topicId}`).then((r) => (r.ok ? setH(r.data.hole) : setErr(r.data.message || r.data.error))); }, [topicId]);
+  return <article className="reading"><p><button type="button" className="ghost" onClick={onBack}>Back</button></p>
+    {err && <p className="err" role="alert">{err}</p>}{!h && !err && <p className="note" role="status">Finding it again…</p>}
+    {h && <><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Story hole={h} /><aside className="takeaway"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside><Sources hole={h} /><p className="row-actions"><SaveButton topicId={h.topicId} initial={h.saved} /></p><p className="note">Re-reading does not change your streak.</p></>}
+  </article>;
+}
+
+function Related({ hole }: { hole: any }) {
+  const [open, setOpen] = useState<any>(null); const [msg, setMsg] = useState('');
+  if (!hole.related) return null;
+  async function go() { const r = await api(`/related/${hole.related.id}`); if (r.ok) setOpen(r.data.hole); else setMsg(r.data.message || r.data.error || 'Could not open it.'); }
+  return <aside className="connection"><p className="kicker">One tiny detour?</p>
+    <p>Wikipedia links this story to "{hole.related.title}": {hole.related.sentence}</p>
+    {!open && <p><button type="button" className="ghost" onClick={go}>Read "{hole.related.title}"</button> <span className="note">Optional. It does not change tomorrow's story, your streak or what counts as read.</span></p>}
+    {msg && <p className="note" role="status">{msg}</p>}
+    {open && <div><h2 className="serif">{open.title}</h2><Story hole={open} /><Sources hole={open} /><p><button type="button" className="ghost" onClick={() => setOpen(null)}>Close</button></p></div>}
+  </aside>;
+}
+
+function Story({ hole }: { hole: any }) {
+  const paras: string[] = hole.story || [];
+  const beats: { q: string; a: string }[] = hole.beats || [];
+  return <>
+    <div className="story">{paras.map((p, i) => <p key={i}>{p}</p>)}</div>
+    {(hole.whyModes || []).includes('learn') && (hole.sources || []).length > 0 && <aside className="recap"><p className="kicker">Check it yourself</p><p>{(hole.sources as any[]).map((x, i) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a>{i < hole.sources.length - 1 ? ', ' : ''}</span>)}</p></aside>}
+    {hole.format !== 'narrative' && beats.length > 0 && <aside className="recap"><h2 className="serif">{hole.format === 'steps' ? 'The short version, step by step' : 'The short version, as questions'}</h2>
+      {hole.format === 'qa' ? beats.map((b, i) => <div className="beat" key={i}><h3 className="serif">{b.q}</h3><p>{b.a}</p></div>)
+        : <ol className="steps">{beats.map((b, i) => <li key={i}><strong>{b.q}</strong> {b.a}</li>)}</ol>}</aside>}
+  </>;
 }
 
 function ReadProgress() {
@@ -170,92 +268,103 @@ function ReadProgress() {
   return <div className="progress" role="progressbar" aria-label="Reading progress" aria-valuenow={p} aria-valuemin={0} aria-valuemax={100}><i style={{ width: p + '%' }} /></div>;
 }
 
-function Related({ hole }: { hole: any }) {
-  const [open, setOpen] = useState<any>(null); const [msg, setMsg] = useState('');
-  if (!hole.related) return null;
-  async function go() { const r = await api(`/related/${hole.related.id}`); if (r.ok) setOpen(r.data.hole); else setMsg(r.data.message || r.data.error || 'Could not open it.'); }
-  return <div className="recap"><h3>If you want to follow a connection</h3>
-    <p>Wikipedia links this story to "{hole.related.title}": {hole.related.sentence}</p>
-    {!open && <p><button type="button" onClick={go}>Read "{hole.related.title}"</button> <span className="note">Optional. It does not change tomorrow's story, your streak or what counts as read.</span></p>}
-    {msg && <p className="note" role="status">{msg}</p>}
-    {open && <div><h3>{open.title}</h3><Story hole={open} /><p className="note">Sample story. Compared by hand against the source text on {open.checked?.date} (one source, not independent verification). Source: {open.sources.map((x: any, i: number) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a></span>)}</p><p><button type="button" onClick={() => setOpen(null)}>Close</button></p></div>}
-  </div>;
-}
-
-function Story({ hole }: { hole: any }) {
-  const paras: string[] = hole.story || [];
-  const beats: { q: string; a: string }[] = hole.beats || [];
-  return <>
-    <div className="story">{paras.map((p, i) => <p key={i}>{p}</p>)}</div>
-    {(hole.whyModes || []).includes('surprise') && hole.hook && <div className="recap"><h3>Tell someone</h3><p>{hole.hook}</p></div>}
-    {(hole.whyModes || []).includes('learn') && (hole.sources || []).length > 0 && <div className="recap"><h3>Check it yourself</h3><p>{(hole.sources as any[]).map((x, i) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a>{i < hole.sources.length - 1 ? ', ' : ''}</span>)}</p></div>}
-    {hole.format !== 'narrative' && beats.length > 0 && <div className="recap"><h3>{hole.format === 'steps' ? 'The short version, step by step' : 'The short version, as questions'}</h3>
-      {hole.format === 'qa' ? beats.map((b, i) => <div className="beat" key={i}><h3 style={{ color: 'var(--ink)' }}>{b.q}</h3><p>{b.a}</p></div>)
-        : <ol className="steps">{beats.map((b, i) => <li key={i}><strong>{b.q}</strong> {b.a}</li>)}</ol>}</div>}
-  </>;
-}
-
+const PAIRS = [['moon', 'cheese'], ['honey', 'Venus'], ['wombat', 'cube'], ['tea', 'railway'], ['octopus', 'copper'], ['monsoon', 'sailor']];
 function Finder({ me, send }: { me: Me; send: Send }) {
-  const [a, setA] = useState(''); const [b, setB] = useState(''); const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false); const [found, setFound] = useState<any>(null);
+  const [a, setA] = useState(''); const [b, setB] = useState(''); const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false); const [found, setFound] = useState<any>(null); const [copied, setCopied] = useState(false);
   const q = me.access.finderQuota;
   async function go(e: React.FormEvent) {
-    e.preventDefault(); setBusy(true); setMsg(''); setFound(null); send('tab_change_finder');
+    e.preventDefault(); setBusy(true); setMsg(''); setFound(null); setCopied(false); send('tab_change_finder');
     const r = await api('/finder', { a, b }); setBusy(false); if (r.data.ok) { setFound(r.data); send('finder_result'); } else { setMsg(r.data.message || r.data.error || ''); send('tab_change_other'); }
   }
-  return <form onSubmit={go}>
-    <div className="card hero"><p className="eyebrow">Connection finder</p><h1>Two words. A sourced bridge.</h1>
-    <p>Type two things. The rabbit looks for a topic that both Wikipedia pages mention and shows you the sentences. Some pairs have no bridge, and then it says so.</p>
-    <div className="pair"><input type="text" placeholder="moon" value={a} onChange={(e) => setA(e.target.value)} aria-label="First word" /><span aria-hidden="true">↔</span>
-    <input type="text" placeholder="cheese" value={b} onChange={(e) => setB(e.target.value)} aria-label="Second word" /></div>
-    <div className="examples" aria-label="Example pairs">{[['moon', 'cheese'], ['honey', 'Venus'], ['wombat', 'cube']].map(([x, y]) => <button type="button" className="soft" key={x + y} onClick={() => { setA(x); setB(y); }}>{x} + {y}</button>)}</div></div>
-    <p><button disabled={busy || !a.trim() || !b.trim()}>{busy ? 'Thinking…' : 'Find the link'}</button></p>
-    {msg && <div className="bubble" role="status">{msg}</div>}
-    {found && <div className="card hero" role="status"><p className="eyebrow">A sourced bridge</p>
-      <p style={{ fontSize: '1.1rem' }}><strong>{found.a.title}</strong> and <strong>{found.b.title}</strong> both point to <strong>{found.bridge.via}</strong>.</p>
-      <p className="note">Sourced: these sentences are copied from the two Wikipedia pages, and each mentions "{found.bridge.via}".</p>
-      <blockquote style={{ borderLeft: '3px solid var(--amber)', margin: '10px 0', padding: '2px 12px' }}>“{found.bridge.sentA}”<br /><a href={found.a.url} target="_blank" rel="noreferrer">{found.a.title} (Wikipedia)</a></blockquote>
-      <blockquote style={{ borderLeft: '3px solid var(--amber)', margin: '10px 0', padding: '2px 12px' }}>“{found.bridge.sentB}”<br /><a href={found.b.url} target="_blank" rel="noreferrer">{found.b.title} (Wikipedia)</a></blockquote>
+  const random = () => { const p = PAIRS[Math.floor(Math.random() * PAIRS.length)]; setA(p[0]); setB(p[1]); };
+  const line = found ? `${found.a.title} and ${found.b.title} both point to ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}" / "${found.bridge.sentB}").` : '';
+  async function copy() { try { await navigator.clipboard.writeText(line); setCopied(true); } catch { setCopied(false); } }
+  return <section className="lab">
+    <p className="kicker">Connections · early version</p><h1 className="story-title">The curiosity lab.</h1>
+    <p className="deck">Give it two things that have nothing to do with each other. The rabbit looks for a topic that both Wikipedia pages mention and shows you the sentences. Some pairs have no bridge, and then it says so.</p>
+    <form onSubmit={go} className="pair-form">
+      <div className="pair"><label>Thing one<input type="text" placeholder="moon" value={a} onChange={(e) => setA(e.target.value)} /></label>
+        <button type="button" className="swap" aria-label="Swap the two words" onClick={() => { setA(b); setB(a); }}>⇄</button>
+        <label>Thing two<input type="text" placeholder="cheese" value={b} onChange={(e) => setB(e.target.value)} /></label></div>
+      <p className="row-actions"><button type="button" className="ghost" onClick={random}>Surprise me with a pair</button><button className="go" disabled={busy || !a.trim() || !b.trim()}>{busy ? 'Following the thread…' : 'Find the connection'}</button></p>
+    </form>
+    {msg && <p className="note bubble" role="status">{msg}</p>}
+    {found && <article className="bridge" role="status"><p className="kicker">A sourced bridge</p>
+      <h2 className="serif"><em>{found.a.title}</em> and <em>{found.b.title}</em> both point to <em>{found.bridge.via}</em>.</h2>
+      <p className="note">These sentences are copied from the two Wikipedia pages, and each mentions "{found.bridge.via}".</p>
+      <blockquote>“{found.bridge.sentA}”<cite><a href={found.a.url} target="_blank" rel="noreferrer">{found.a.title} (Wikipedia)</a></cite></blockquote>
+      <blockquote>“{found.bridge.sentB}”<cite><a href={found.b.url} target="_blank" rel="noreferrer">{found.b.title} (Wikipedia)</a></cite></blockquote>
       {found.inference && <p><span className="tag">Rabbit's guess, not sourced</span> {found.inference}</p>}
       {found.alternatives?.length > 0 && <p className="note">Other shared topics: {found.alternatives.join(', ')}.</p>}
-      <p className="note">Both pages mentioning a topic is a lead, not proof the two things are closely related.</p></div>}
-    <div className="card"><h3>How this works for now</h3><ul className="ticks"><li>Every bridge shows the sentences it came from, with links, so you can check it.</li><li>If there is no bridge, the rabbit says so instead of making one up.</li><li>This is an early version. A bridge means two pages mention the same topic, not that the two things are closely related.</li><li>The app finds a topic both Wikipedia pages mention and shows the sentences from each. Anything the rabbit adds is labelled as its own guess.</li><li>Tries depend on your plan.</li></ul></div>
-    {q && <p className="note">Your plan: {q.limit} {q.limit === 1 ? 'try' : 'tries'} per {q.period}.</p>}
-  </form>;
+      <p className="note">Both pages mentioning a topic is a lead, not proof the two things are closely related.</p>
+      <p className="row-actions"><a className="ghost btn" href={found.a.url} target="_blank" rel="noreferrer">Tell me more: {found.a.title}</a><a className="ghost btn" href={found.b.url} target="_blank" rel="noreferrer">{found.b.title}</a><button type="button" className="ghost" onClick={copy}>{copied ? 'Copied' : 'Copy a line to share'}</button></p></article>}
+    <aside className="fine-block"><p className="kicker">How this works for now</p><ul className="ticks"><li>Every bridge shows the sentences it came from, with links, so you can check it.</li><li>If there is no bridge, the rabbit says so instead of making one up.</li><li>Anything the rabbit adds is labelled as its own guess.</li></ul>{q && <p className="mono-note">Your plan: {q.limit} {q.limit === 1 ? 'try' : 'tries'} per {q.period}.</p>}</aside>
+  </section>;
 }
 
-function Streaks({ me }: { me: Me }) {
-  const [board, setBoard] = useState<any[]>([]); const [code, setCode] = useState(''); const [join, setJoin] = useState(''); const [msg, setMsg] = useState('');
+function Trail({ me, onOpen }: { me: Me; onOpen: (id: string) => void }) {
+  const [board, setBoard] = useState<any[]>([]); const [code, setCode] = useState(''); const [join, setJoin] = useState(''); const [msg, setMsg] = useState(''); const [hist, setHist] = useState<any>(null);
   const load = () => api('/leaderboard').then((r) => setBoard(r.data.board || []));
-  useEffect(() => { load(); }, []);
-  return <div>
-    <div className="card hero"><p className="eyebrow">Current streak</p><div className="streak"><svg className="flame" width="40" height="40" viewBox="0 0 24 24" fill="#ffb347" aria-hidden="true"><path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-2.500 1.200-4 2.500-5 .2 2 1 3 2 3 0-3-1.500-5 1.500-10z" /></svg> {me.streak.current} <span className="note">day{me.streak.current === 1 ? "" : "s"}</span></div>
-      <div className="pips" aria-label={`Progress toward a 7 day streak: ${Math.min(me.streak.current, 7)} of 7`}>{[1, 2, 3, 4, 5, 6, 7].map((n) => <div key={n} className={'pip' + (me.streak.current >= n ? ' on' : '')}>{n}</div>)}</div>
-      <div className="stat"><div><b>{me.streak.longest}</b>Best</div><div><b>{me.streak.freezesLeft}</b>Freezes</div><div><b>{me.streak.bonusHoles}</b>Bonus holes</div></div>
-      <p className="note">You don't have to read every day. A freeze covers a missed day.</p></div>
-    <div className="card"><h2>Friends</h2>
-      <ol className="board" aria-label="Friends streak leaderboard">{board.map((r, i) => <li key={i} className={'row' + (r.me ? ' me' : '')}><span className="rank">{i + 1}</span><span className="nm">{r.name}{r.me ? ' (you)' : ''}</span><span>{r.streak} day{r.streak === 1 ? '' : 's'}</span></li>)}</ol>
-      <p><button className="soft" onClick={async () => { const r = await api('/invite', {}); setCode(r.data.code); }}>Get an invite code</button></p>
-      {code && <p role="status">Share this code: <strong>{code}</strong></p>}
-      <input type="text" placeholder="Have a friend's code?" value={join} onChange={(e) => setJoin(e.target.value)} aria-label="Friend code" />
-      <button className="soft" onClick={async () => { const r = await api('/join', { code: join }); setMsg(r.ok ? 'Friend added!' : r.data.error); if (r.ok) load(); }}>Add friend</button>
-      {msg && <p className="note" role="status">{msg}</p>}</div>
-  </div>;
+  useEffect(() => { load(); api('/history').then((r) => r.ok && setHist(r.data)); }, []);
+  const marks = [3, 7, 30];
+  return <section>
+    <p className="kicker">Trail</p><h1 className="story-title">{me.streak.current ? `Day ${me.streak.current} on the trail.` : 'The trail starts with one detour.'}</h1>
+    <Paws n={me.streak.current} />
+    <p className="mono-note">best {me.streak.longest} · freezes {me.streak.freezesLeft} · extra trails {me.streak.bonusHoles}</p>
+    <p className="note">You don't have to read every day. A freeze covers a missed day. No pressure. Curiosity isn't homework.</p>
+    <div className="marks" aria-label="Milestones">{marks.map((n) => <span key={n} className={me.streak.longest >= n ? 'on' : ''}>{n} days{me.streak.longest >= n ? ' ·  reached' : ''}</span>)}</div>
+    <p className="note">Milestones are marks on your trail. There are no prizes behind them yet.</p>
+    <h2 className="serif">What you've wandered through</h2>
+    {!hist ? <p className="note" role="status">Reading the journal…</p> : hist.items.length === 0 ? <p className="note">Nothing yet. Your first detour will show up here.</p>
+      : <ol className="journal">{hist.items.map((x: any) => <li key={x.day + x.topicId}><span className="mono">{x.day}</span><button type="button" className="linklike" onClick={() => onOpen(x.topicId)}>{x.title}</button>{!x.done && <span className="mono-note"> opened, not finished</span>}</li>)}</ol>}
+    <h2 className="serif">Friends on the trail</h2>
+    {board.length <= 1 ? <p className="note">It's quiet out here. Invite a friend to walk it with you.</p> : null}
+    <ol className="board" aria-label="Friends streak leaderboard">{board.map((r, i) => <li key={i} className={'row' + (r.me ? ' me' : '')}><span className="rank mono">{i + 1}</span><span className="nm">{r.name}{r.me ? ' (you)' : ''}</span><span className="mono">{r.streak} day{r.streak === 1 ? '' : 's'}</span></li>)}</ol>
+    <p><button type="button" className="ghost" onClick={async () => { const r = await api('/invite', {}); setCode(r.data.code || ''); if (!r.ok) setMsg(r.data.error || r.data.message || ''); }}>Get an invite code</button></p>
+    {code && <p role="status">Share this code: <strong className="mono">{code}</strong></p>}
+    <label>Have a friend's code?<input type="text" value={join} onChange={(e) => setJoin(e.target.value)} /></label>
+    <p><button type="button" className="ghost" onClick={async () => { const r = await api('/join', { code: join }); setMsg(r.ok ? 'Friend added!' : r.data.error); if (r.ok) load(); }}>Add friend</button></p>
+    {msg && <p className="note" role="status">{msg}</p>}
+  </section>;
+}
+
+function You({ me, cfg, onRedo, onOpen }: { me: Me; cfg: Cfg; onRedo: () => void; onOpen: (id: string) => void }) {
+  const [saved, setSaved] = useState<any[] | null>(null); const [hist, setHist] = useState<any>(null);
+  useEffect(() => { api('/saved').then((r) => r.ok && setSaved(r.data.items)); api('/history').then((r) => r.ok && setHist(r.data)); }, []);
+  const p = me.prefs; const fmtName = (id: string) => cfg.formats.find((f) => f.id === id)?.label ?? id;
+  const mins = hist ? Math.round(hist.recorded.seconds / 60) : 0;
+  return <section>
+    <p className="kicker">You</p><h1 className="story-title">{me.user.name ? `${me.user.name}'s corner.` : 'Your corner.'}</h1><p className="mono-note">{me.user.email}</p>
+    <h2 className="serif">How you like your stories</h2>
+    {p ? <dl className="prefs"><dt>Topics</dt><dd>{p.interestTags.join(', ')}</dd><dt>Shape</dt><dd>{p.formats.map(fmtName).join(', ')}</dd><dt>Length</dt><dd>{p.length === 'short' ? 'A quick nibble' : 'A good chew'}</dd>{p.quiz?.country && <><dt>Country</dt><dd>{(cfg.countries ?? []).find((c) => c.code === p.quiz.country)?.name ?? p.quiz.country}</dd></>}</dl> : <p className="note">No answers yet.</p>}
+    <p><button type="button" className="ghost" onClick={onRedo}>Change my answers</button></p>
+    <h2 className="serif">Saved discoveries</h2>
+    {saved === null ? <p className="note" role="status">Checking your shelf…</p> : saved.length === 0 ? <p className="note">Nothing saved yet. Use "Save for later" on a story you want to find again.</p>
+      : <ul className="journal">{saved.map((x) => <li key={x.topicId}><button type="button" className="linklike" onClick={() => onOpen(x.topicId)}>{x.title}</button><span className="note"> {x.hook}</span></li>)}</ul>}
+    <h2 className="serif">Learning history and privacy</h2>
+    <p>What the app keeps about your reading: which story you were shown each day, how long you had it open, and whether you finished. It uses topic tags from stories you finish to choose what comes next, along with your answers above. Time spent is not treated as how much you learned.</p>
+    {hist && <p className="mono-note">{hist.recorded.reads} opened · {hist.recorded.completed} finished · about {mins} min total</p>}
+    <p className="note">Your notes and answers are used only for choosing stories in this app. You can change them any time above. A control to clear your history is not built yet.</p>
+    <h2 className="serif">Notifications</h2>
+    <p className="note">Not available yet. The app sends no reminders, emails or push messages, and has no switches to set.</p>
+    <h2 className="serif">Plan</h2>
+    <Plan me={me} cfg={cfg} />
+  </section>;
 }
 
 function Plan({ me, cfg }: { me: Me; cfg: Cfg }) {
   const p = cfg.plans; const fz = (n: number | null) => (n === null ? 'to be decided' : n);
-  const fq = (x: any) => `${x.limit}/${x.period}`; const [msg, setMsg] = useState('');
+  const [msg, setMsg] = useState('');
   async function buy(plan: string) { const r = await api('/checkout', { plan }); if (r.ok && r.data.url) window.location.href = r.data.url; else setMsg(r.data.message || 'Could not start checkout.'); }
   const per = (x: any) => (x.period === 'day' ? 'a day' : x.period === 'week' ? 'a week' : x.period);
-  return <div>
-    <div className="card hero"><p className="eyebrow">Your plan</p><h1>{me.access.plan === 'trial' ? 'Free 3-day trial' : me.access.plan}</h1>
-      {me.access.plan === 'trial' && <p className="note">Trial ends {new Date(me.access.trialEndsAt).toLocaleString()}</p>}
-      <p className="note">One rabbit hole a day. No endless feed, ever.</p></div>
-    <div className="plans">{([['plan3', 'Little burrow', '$3'], ['plan5', 'Deep warren', '$5']] as const).map(([k, l, pr]) => <div className={'card plan' + (k === 'plan5' ? ' pop' : '')} key={k}>
-      <h2>{l}</h2><div className="price">{pr}<small> / {p[k].billing ?? 'billing period to be decided'}</small></div>
+  return <div className="plan-block">
+    <p>{me.access.plan === 'trial' ? 'You are on the free 3-day trial.' : `Current plan: ${me.access.plan}.`}{me.access.plan === 'trial' && <span className="mono-note"> ends {new Date(me.access.trialEndsAt).toLocaleString()}</span>}</p>
+    <p className="note">One rabbit hole a day. No endless feed, ever. Paid plans are billed monthly in USD. Renewal terms and cancellation will be shown here before anything can be charged.</p>
+    <div className="plans">{([['plan3', 'Little burrow', '$3'], ['plan5', 'Deep warren', '$5']] as const).map(([k, l, pr]) => <div className="plan" key={k}>
+      <h3 className="serif">{l}</h3><p className="price mono">{pr}<small> / {p[k].billing ?? 'billing period to be decided'}</small></p>
       <ul className="ticks"><li>A personalised rabbit hole every day</li><li>Connection finder: {p[k].connection_finder.limit} {p[k].connection_finder.limit === 1 ? 'try' : 'tries'} {per(p[k].connection_finder)}</li><li>Streak freezes: {fz(p[k].streak_freezes)}</li></ul>
-      {cfg.payments === 'test_mode' ? <button onClick={() => buy(k)}>Start {l} (test mode, no real charge)</button> : <button disabled>Payments not switched on yet</button>}</div>)}</div>
+      {cfg.payments === 'test_mode' ? <button type="button" className="ghost" onClick={() => buy(k)}>Start {l} (test mode, no real charge)</button> : <button type="button" className="ghost" disabled>Payments not switched on yet</button>}</div>)}</div>
     {msg && <p className="note" role="status">{msg}</p>}
-    <p className="note">Prices are in USD. Payments are not live; nothing can be charged in this preview.</p>
+    <p className="note">Payments are not live; nothing can be charged in this preview.</p>
   </div>;
 }

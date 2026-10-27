@@ -187,6 +187,8 @@ function poolFor(pref: any, seen: string[]): { pool: typeof SEED; reason: string
   }
   return { pool: SEED, reason: null };
 }
+// Estimate only: words / 200 per minute, rounded up.
+const readMinutes = (paras: string[]) => Math.max(1, Math.ceil(paras.join(' ').split(/\s+/).filter(Boolean).length / 200));
 async function loadAll(c: any) {
   const uid = c.get('uid');
   const u = await c.env.DB.prepare('SELECT id,email,display_name,timezone,signup_at,onboarded_at FROM users WHERE id=?').bind(uid).first();
@@ -210,7 +212,7 @@ app.get('/api/me', async (c) => {
     user: { email: u.email, name: u.display_name, onboarded: !!u.onboarded_at, timezone: u.timezone },
     access: { plan: access.plan, rabbitHoles: access.rabbitHoles, finderQuota: access.finderQuota, trialEndsAt: access.trialEndsAt },
     streak: { current: displayStreak(streak, today), longest: s.longest, freezesLeft: s.freezes_left, bonusHoles: s.bonus_holes, readToday },
-    prefs: pref ? { interestTags: JSON.parse(pref.interest_tags), formats: JSON.parse(pref.formats), length: pref.length_pref } : null,
+    prefs: pref ? { quiz: (() => { try { const q = JSON.parse(pref.quiz_answers || '{}'); return { country: q.country ?? null, why: q.why ?? [], curious: q.curious ?? '' }; } catch { return { country: null, why: [], curious: '' }; } })(), interestTags: JSON.parse(pref.interest_tags), formats: JSON.parse(pref.formats), length: pref.length_pref } : null,
   });
 });
 
@@ -267,7 +269,7 @@ app.get('/api/today', async (c) => {
   let whyModes: string[] = []; try { whyModes = JSON.parse(pref.quiz_answers || '{}').why ?? []; } catch { /* ignore */ }
   why = matched.length ? `Because you like ${matched.join(' and ')}.` : 'A fresh corner to explore, to keep things from getting samey.';
   if (reason) why = reason;
-  return c.json({ hole: { id: row.id, title: seed.title, format: row.format, hook: seed.hook, story: pref.length_pref === 'short' ? seed.story.slice(0, 2) : seed.story, beats: seed.beats, length: pref.length_pref ?? 'medium', sources: seed.sources, why, whyModes, related: seed.related ? (() => { const r = SEED.find((x) => x.id === seed.related!.id); return r ? { id: r.id, title: r.title, sentence: seed.related!.sentence, page: seed.related!.page } : null; })() : null, shortened: pref.length_pref === 'short' && seed.story.length > 2, sourceCheck: seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null }, readToday: s.last_read_day === day });
+  return c.json({ hole: { id: row.id, title: seed.title, format: row.format, hook: seed.hook, story: pref.length_pref === 'short' ? seed.story.slice(0, 2) : seed.story, beats: seed.beats, length: pref.length_pref ?? 'medium', sources: seed.sources, why, whyModes, topicId: seed.id, tags: seed.tags, minutes: readMinutes(pref.length_pref === 'short' ? seed.story.slice(0, 2) : seed.story), saved: !!(await c.env.DB.prepare('SELECT 1 x FROM saved WHERE user_id=? AND topic_id=?').bind(u.id, seed.id).first()), related: seed.related ? (() => { const r = SEED.find((x) => x.id === seed.related!.id); return r ? { id: r.id, title: r.title, sentence: seed.related!.sentence, page: seed.related!.page } : null; })() : null, shortened: pref.length_pref === 'short' && seed.story.length > 2, sourceCheck: seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null }, readToday: s.last_read_day === day });
 });
 
 // Optional, reader-chosen: open the story that today's story points to. Read-only: no streak, read event, or "seen" change.
@@ -280,6 +282,43 @@ app.get('/api/related/:id', async (c) => {
   if (!cur?.related || cur.related.id !== c.req.param('id')) return c.json({ error: 'not found' }, 404);
   const t = SEED.find((x) => x.id === cur.related!.id)!;
   return c.json({ hole: { id: t.id, title: t.title, story: t.story, beats: t.beats, format: 'narrative', sources: t.sources, hook: t.hook, whyModes: [], sourceCheck: t.checked ? 'manual' : 'pending', checked: t.checked ?? null } });
+});
+
+// ---- Saved discoveries, learning history, and reading a story you have already met (read-only; no streak or read events) ----
+async function canOpen(c: any, uid: string, topicId: string, tz: string) {
+  if (await c.env.DB.prepare('SELECT 1 x FROM rabbit_holes WHERE user_id=? AND topic_id=?').bind(uid, topicId).first()) return true;
+  const day = localDay(new Date(), tz);
+  const row: any = await c.env.DB.prepare('SELECT topic_id FROM rabbit_holes WHERE user_id=? AND day=?').bind(uid, day).first();
+  const cur = row && SEED.find((t) => t.id === row.topic_id);
+  return !!cur?.related && cur.related.id === topicId;
+}
+app.get('/api/history', async (c) => {
+  const { u } = await loadAll(c);
+  const r = await c.env.DB.prepare('SELECT rh.day, rh.topic_id, EXISTS(SELECT 1 FROM read_events re WHERE re.hole_id=rh.id AND re.completed=1) AS done FROM rabbit_holes rh WHERE rh.user_id=? ORDER BY rh.day DESC LIMIT 60').bind(u.id).all();
+  const items = (r.results as any[]).map((x) => { const t = SEED.find((s) => s.id === x.topic_id); return t ? { day: x.day, topicId: t.id, title: t.title, tags: t.tags, done: !!x.done } : null; }).filter(Boolean);
+  const ev: any = await c.env.DB.prepare('SELECT COUNT(*) n, COALESCE(SUM(completed),0) done, COALESCE(SUM(seconds_read),0) secs FROM read_events WHERE user_id=?').bind(u.id).first();
+  return c.json({ items, recorded: { reads: ev?.n ?? 0, completed: ev?.done ?? 0, seconds: ev?.secs ?? 0 } });
+});
+app.get('/api/saved', async (c) => {
+  const { u } = await loadAll(c);
+  const r = await c.env.DB.prepare('SELECT topic_id, created_at FROM saved WHERE user_id=? ORDER BY created_at DESC LIMIT 100').bind(u.id).all();
+  return c.json({ items: (r.results as any[]).map((x) => { const t = SEED.find((s) => s.id === x.topic_id); return t ? { topicId: t.id, title: t.title, hook: t.hook, tags: t.tags } : null; }).filter(Boolean) });
+});
+app.post('/api/save', async (c) => {
+  const b = await c.req.json<{ topicId: string; saved: boolean }>();
+  const { u } = await loadAll(c);
+  if (!SEED.some((t) => t.id === b.topicId) || !(await canOpen(c, u.id, b.topicId, u.timezone))) return c.json({ error: 'not found' }, 404);
+  if (b.saved) await c.env.DB.prepare('INSERT OR IGNORE INTO saved (user_id,topic_id,created_at) VALUES (?,?,?)').bind(u.id, b.topicId, Date.now()).run();
+  else await c.env.DB.prepare('DELETE FROM saved WHERE user_id=? AND topic_id=?').bind(u.id, b.topicId).run();
+  return c.json({ ok: true, saved: !!b.saved });
+});
+app.get('/api/story/:id', async (c) => {
+  const { u, sub, pref } = await loadAll(c);
+  if (!accessOf(u, sub).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
+  const t = SEED.find((x) => x.id === c.req.param('id'));
+  if (!t || !(await canOpen(c, u.id, t.id, u.timezone))) return c.json({ error: 'not found' }, 404);
+  const saved = !!(await c.env.DB.prepare('SELECT 1 x FROM saved WHERE user_id=? AND topic_id=?').bind(u.id, t.id).first());
+  return c.json({ hole: { id: t.id, topicId: t.id, title: t.title, story: pref?.length_pref === 'short' ? t.story.slice(0, 2) : t.story, beats: t.beats, format: 'narrative', sources: t.sources, hook: t.hook, tags: t.tags, minutes: readMinutes(t.story), saved, whyModes: [], sourceCheck: t.checked ? 'manual' : 'pending', checked: t.checked ?? null } });
 });
 
 app.post('/api/read', async (c) => {
