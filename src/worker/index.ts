@@ -21,6 +21,17 @@ async function hashPw(pw: string, salt: string) {
 }
 // PLACEHOLDER (undecided product choice): chance of a bonus rabbit hole after a completed read.
 const BONUS_CHANCE = 0.1;
+const ctEq = (a: string, b: string) => { if (a.length !== b.length) return false; let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i); return r === 0; };
+
+// CSRF defence in depth on top of SameSite=Lax: state-changing browser requests must come from our own origin.
+app.use('/api/*', async (c, next) => {
+  const m = c.req.method; const p = new URL(c.req.url).pathname;
+  if (m !== 'GET' && m !== 'HEAD' && p !== '/api/webhooks/dodo') {
+    const o = c.req.header('origin'); if (o && o !== new URL(c.req.url).origin) return c.json({ error: 'bad origin' }, 403);
+  }
+  await next();
+});
+app.onError((e, c) => (e instanceof SyntaxError ? c.json({ error: 'bad json' }, 400) : c.json({ error: 'server' }, 500)));
 
 app.use('/api/*', async (c, next) => {
   const p = new URL(c.req.url).pathname;
@@ -49,7 +60,7 @@ app.post('/api/signup', async (c) => {
   if (exists) return c.json({ error: 'That email already has an account.' }, 409);
   const id = rid(); const salt = rid();
   await c.env.DB.batch([
-    c.env.DB.prepare('INSERT INTO users (id,email,pw_hash,pw_salt,display_name,timezone,signup_at) VALUES (?,?,?,?,?,?,?)').bind(id, email, await hashPw(b.password, salt), salt, b.name || null, b.timezone || 'UTC', Date.now()),
+    c.env.DB.prepare('INSERT INTO users (id,email,pw_hash,pw_salt,display_name,timezone,signup_at) VALUES (?,?,?,?,?,?,?)').bind(id, email, await hashPw(b.password, salt), salt, b.name ? String(b.name).slice(0, 40) : null, b.timezone || 'UTC', Date.now()),
     c.env.DB.prepare('INSERT INTO streaks (user_id,current,longest,last_read_day,freezes_left,bonus_holes) VALUES (?,0,0,NULL,?,0)').bind(id, PLANS.trial.streak_freezes ?? 0),
   ]);
   await startSession(c, id);
@@ -58,8 +69,15 @@ app.post('/api/signup', async (c) => {
 
 app.post('/api/login', async (c) => {
   const b = await c.req.json<{ email: string; password: string }>();
-  const u = await c.env.DB.prepare('SELECT id,pw_hash,pw_salt FROM users WHERE email=?').bind((b.email || '').trim().toLowerCase()).first<any>();
-  if (!u || (await hashPw(b.password || '', u.pw_salt)) !== u.pw_hash) return c.json({ error: 'Email or password did not match.' }, 401);
+  const email = String(b.email || '').trim().toLowerCase().slice(0, 254);
+  // throttle: max 8 failed attempts per email per 15 min (also bounds password guessing)
+  const key = 'e:' + email; const since = Date.now() - 15 * 60000;
+  const n = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE key=? AND at>?').bind(key, since).first<{ n: number }>();
+  if ((n?.n ?? 0) >= 8) return c.json({ error: 'Too many tries. Please wait a few minutes.' }, 429);
+  const u = await c.env.DB.prepare('SELECT id,pw_hash,pw_salt FROM users WHERE email=?').bind(email).first<any>();
+  const good = u ? ctEq(await hashPw(String(b.password || ''), u.pw_salt), u.pw_hash) : (await hashPw(String(b.password || ''), 'x'), false);
+  if (!good) { await c.env.DB.prepare('INSERT INTO login_attempts (key,at) VALUES (?,?)').bind(key, Date.now()).run(); return c.json({ error: 'Email or password did not match.' }, 401); }
+  await c.env.DB.prepare('DELETE FROM login_attempts WHERE key=?').bind(key).run();
   await startSession(c, u.id);
   return c.json({ ok: true });
 });

@@ -33,5 +33,14 @@ ok('join bad code', (await b.call('/join', { code: 'zzzzzzzz' })).status === 400
 ok('join', (await b.call('/join', { code: inv })).status === 200);
 const lb = (await a.call('/leaderboard')).data.board; ok('leaderboard shows both, Ann first with 1', lb.length === 2 && lb[0].name === 'Ann' && lb[0].streak === 1, JSON.stringify(lb));
 ok('webhook without secret configured is 501', (await new Client().call('/webhooks/dodo', {})).status === 501);
+
+// security checks
+const rawPost = (path, body, headers = {}) => fetch(base + '/api' + path, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body });
+ok('malformed JSON is 400 not 500', (await rawPost('/login', '{bad')).status === 400);
+ok('cross-origin POST rejected', (await rawPost('/login', JSON.stringify({ email: 'a', password: 'b' }), { origin: 'https://evil.example' })).status === 403);
+ok('correct login works', (await new Client().call('/login', { email: `b${tag}@t.co`, password: 'password1' })).status === 200);
+let last = 0; for (let i = 0; i < 9; i++) last = (await new Client().call('/login', { email: `b${tag}@t.co`, password: 'wrongwrong' })).status;
+ok('login throttled after repeated failures', last === 429, String(last));
+ok('long display name is capped', ((await (async () => { const c = new Client(); await c.call('/signup', { email: `c${tag}@t.co`, password: 'password1', name: 'x'.repeat(500) }); return (await c.call('/me')).data; })()).user.name || '').length <= 40);
 await a.call('/logout', {}); ok('logout invalidates session', (await a.call('/me')).status === 401);
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED'); process.exit(fails ? 1 : 0);
