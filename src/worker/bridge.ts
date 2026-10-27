@@ -21,6 +21,15 @@ async function wget(f: typeof fetch, u: string): Promise<any> {
   if (!r.ok) throw new Error('wiki ' + r.status);
   return r.json();
 }
+const TTL = 7 * 86400000;
+// Pages are cached in D1 for 7 days (Wikipedia 429s shared Cloudflare IPs under bursts). Cache is best-effort.
+export async function loadPageCached(db: any, word: string, f: typeof fetch = fetch): Promise<Page | null> {
+  const key = 'page:' + word.toLowerCase();
+  try { const row = await db.prepare('SELECT text,fetched_at FROM extract_cache WHERE word=?').bind(key).first(); if (row && Date.now() - row.fetched_at < TTL) { const o = JSON.parse(row.text); return { title: o.title, url: o.url, text: o.text, links: new Set<string>(o.links) }; } } catch { /* ignore */ }
+  const p = await loadPage(word, f);
+  if (p) { try { await db.prepare('INSERT OR REPLACE INTO extract_cache (word,title,url,text,fetched_at) VALUES (?,?,?,?,?)').bind(key, p.title, p.url, JSON.stringify({ title: p.title, url: p.url, text: p.text, links: [...p.links] }), Date.now()).run(); } catch { /* ignore */ } }
+  return p;
+}
 export async function loadPage(word: string, f: typeof fetch = fetch): Promise<Page | null> {
   const s = await wget(f, api('action=query&list=search&srlimit=1&srsearch=' + encodeURIComponent(word)));
   const title: string | undefined = s?.query?.search?.[0]?.title; if (!title) return null;
@@ -57,7 +66,7 @@ export async function findBridge(env: AiEnv & { FINDER_MODEL?: string }, wa: str
   const a0 = cleanWord(wa), b0 = cleanWord(wb);
   if (!a0 || !b0) return { ok: false, reason: 'bad_words', message: 'Use plain words or short names, up to 40 characters each.' };
   let A: Page | null, B: Page | null;
-  try { [A, B] = await Promise.all([loadPage(a0, f), loadPage(b0, f)]); } catch { return { ok: false, reason: 'wiki_error', message: 'Could not reach the source library just now. Try again in a moment.' }; }
+  try { [A, B] = await Promise.all([loadPageCached(env.DB, a0, f), loadPageCached(env.DB, b0, f)]); } catch { return { ok: false, reason: 'wiki_error', message: 'Could not reach the source library just now. Try again in a moment.' }; }
   if (!A || !B) return { ok: false, reason: 'no_page', message: `I could not find a good source page for "${!A ? a0 : b0}". Try a more common name.` };
   const cands = candidates(A, B);
   if (!cands.length) return { ok: false, reason: 'no_bridge', message: `I could not find a specific, sourced bridge between ${A.title} and ${B.title}. Their pages do not point to the same specific topic, and I won't invent one.` };
