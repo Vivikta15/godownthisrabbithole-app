@@ -44,7 +44,7 @@ export async function loadPage(word: string, f: typeof fetch = fetch): Promise<P
   if (text.length < 200) return null;
   return { title, url: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(title.replace(/ /g, '_')), text, links };
 }
-const sentences = (t: string) => t.replace(/=+\s*[^=\n]{1,80}?\s*=+/g, '\n').split(/\n+/).flatMap((para) => para.replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s+(?=[A-Z"“])/)).map((x) => x.trim()).filter((x) => x.length >= 40 && x.length <= 400);
+export const sentences = (t: string) => t.replace(/=+\s*[^=\n]{1,80}?\s*=+/g, '\n').split(/\n+/).flatMap((para) => para.replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s+(?=[A-Z"“])/)).map((x) => x.trim()).filter((x) => x.length >= 40 && x.length <= 400);
 function sentenceWith(text: string, term: string): string | null {
   const re = new RegExp('(^|[^\\p{L}])' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^\\p{L}]|$)', 'iu');
   const hits = sentences(text).filter((s) => re.test(s)); return hits[0] ?? null;
