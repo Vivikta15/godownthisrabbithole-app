@@ -1,3 +1,4 @@
+import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, LabArt } from './visuals';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { Mascot, useMascot } from './Mascot';
@@ -203,7 +204,7 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
   if (!d) return <p className="note" role="status">Digging up today's detour…</p>;
   const h = d.hole; const done = !!(res || d.readToday);
   if (extra) return <article className="reading"><p className="kicker">Another trail</p><Story hole={extra} /><Sources hole={extra} /><p><button type="button" className="go" onClick={closeBonus}>I'm back up</button></p></article>;
-  if (reading) return <article className="reading"><ReadProgress /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1>
+  if (reading) return <article className="reading"><ReadProgress /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Plate tags={h.tags} />
     <Story hole={h} /><Related hole={h} />
     <aside className="takeaway"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside>
     {h.shortened && <p className="note">Short version: some details are left out. Pick "A good chew" in your answers to read the full story.</p>}
@@ -223,7 +224,7 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
       {again && <article className="reading inline"><Story hole={h} /><Related hole={h} /><Sources hole={h} /></article>}
     </section>
       : <section className="detour"><Peek /><p className="kicker">Today's detour</p><h1 className="story-title">{h.title}</h1><p className="deck">{h.hook}</p>
-        <p className="mono-note">{h.tags.join(' · ')} · about {h.minutes} min read</p><p className="note">{h.why}</p>
+        <Plate tags={h.tags} /><p className="mono-note">{h.tags.join(' · ')} · about {h.minutes} min read</p><p className="note">{h.why}</p>
         <p><button type="button" className="go" onClick={start}>Go down this rabbit hole</button></p></section>}
     {done && me.streak.bonusHoles > 0 && <section className="strip"><p className="kicker">Another trail</p><p>You have {me.streak.bonusHoles} extra.</p><button type="button" className="ghost" onClick={openBonus}>One tiny detour?</button>{bmsg && <p className="note" role="status">{bmsg}</p>}</section>}
     <section className="strip"><p className="kicker">Connections</p><p className="serif">Two words. One strange bridge.</p><p className="note">Try "moon" and "cheese". The rabbit looks for a link both Wikipedia pages mention. It's an early version.</p><button type="button" className="ghost" onClick={() => goTab('connections')}>Open the lab</button></section>
@@ -288,7 +289,7 @@ function Finder({ me, send }: { me: Me; send: Send }) {
   const line = found ? `${found.a.title} and ${found.b.title} both point to ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}" / "${found.bridge.sentB}").` : '';
   async function copy() { try { await navigator.clipboard.writeText(line); setCopied(true); } catch { setCopied(false); } }
   return <section className="lab">
-    <p className="kicker">Connections · early version</p><h1 className="story-title">The curiosity lab.</h1>
+    <LabArt /><p className="kicker">Connections · early version</p><h1 className="story-title">The curiosity lab.</h1>
     <p className="deck">Give it two things that have nothing to do with each other. The rabbit looks for a topic that both Wikipedia pages mention and shows you the sentences. Some pairs have no bridge, and then it says so.</p>
     <form onSubmit={go} className="pair-form">
       <div className="pair"><label>Thing one<input type="text" placeholder="moon" value={a} onChange={(e) => setA(e.target.value)} /></label>
@@ -297,7 +298,7 @@ function Finder({ me, send }: { me: Me; send: Send }) {
       <p className="row-actions"><button type="button" className="ghost" onClick={random}>Surprise me with a pair</button><button className="go" disabled={busy || !a.trim() || !b.trim()}>{busy ? 'Following the thread…' : 'Find the connection'}</button></p>
     </form>
     {msg && <p className="note bubble" role="status">{msg}</p>}
-    {found && <article className="bridge" role="status"><p className="kicker">A sourced bridge</p>
+    {found && <article className="bridge" role="status"><p className="kicker">A sourced bridge</p><BridgeViz a={found.a.title} b={found.b.title} via={found.bridge.via} />
       <h2 className="serif"><em>{found.a.title}</em> and <em>{found.b.title}</em> both point to <em>{found.bridge.via}</em>.</h2>
       <p className="note">These sentences are copied from the two Wikipedia pages, and each mentions "{found.bridge.via}".</p>
       <blockquote>“{found.bridge.sentA}”<cite><a href={found.a.url} target="_blank" rel="noreferrer">{found.a.title} (Wikipedia)</a></cite></blockquote>
@@ -317,14 +318,15 @@ function Trail({ me, onOpen }: { me: Me; onOpen: (id: string) => void }) {
   const marks = [3, 7, 30];
   return <section>
     <p className="kicker">Trail</p><h1 className="story-title">{me.streak.current ? `Day ${me.streak.current} on the trail.` : 'The trail starts with one detour.'}</h1>
-    <Paws n={me.streak.current} />
+    <TrailPath n={me.streak.current} />
     <p className="mono-note">best {me.streak.longest} · freezes {me.streak.freezesLeft} · extra trails {me.streak.bonusHoles}</p>
     <p className="note">You don't have to read every day. A freeze covers a missed day. No pressure. Curiosity isn't homework.</p>
-    <div className="marks" aria-label="Milestones">{marks.map((n) => <span key={n} className={me.streak.longest >= n ? 'on' : ''}>{n} days{me.streak.longest >= n ? ' ·  reached' : ''}</span>)}</div>
+    <MilestoneLine best={me.streak.longest} marks={marks} /><div className="marks" aria-label="Milestones">{marks.map((n) => <span key={n} className={me.streak.longest >= n ? 'on' : ''}>{n} days{me.streak.longest >= n ? ' ·  reached' : ''}</span>)}</div>
     <p className="note">Milestones are marks on your trail. There are no prizes behind them yet.</p>
     <h2 className="serif">What you've wandered through</h2>
+    {hist && hist.items.length > 0 && <InterestBars items={hist.items} />}
     {!hist ? <p className="note" role="status">Reading the journal…</p> : hist.items.length === 0 ? <p className="note">Nothing yet. Your first detour will show up here.</p>
-      : <ol className="journal">{hist.items.map((x: any) => <li key={x.day + x.topicId}><span className="mono">{x.day}</span><button type="button" className="linklike" onClick={() => onOpen(x.topicId)}>{x.title}</button>{!x.done && <span className="mono-note"> opened, not finished</span>}</li>)}</ol>}
+      : <ol className="journal">{hist.items.map((x: any) => <li key={x.day + x.topicId}><span className="jg" aria-hidden="true">{x.tags.slice(0, 2).map((t: string) => <TagGlyph key={t} tag={t} size={18} />)}</span><span className="mono">{x.day}</span><button type="button" className="linklike" onClick={() => onOpen(x.topicId)}>{x.title}</button>{!x.done && <span className="mono-note"> opened, not finished</span>}</li>)}</ol>}
     <h2 className="serif">Friends on the trail</h2>
     {board.length <= 1 ? <p className="note">It's quiet out here. Invite a friend to walk it with you.</p> : null}
     <ol className="board" aria-label="Friends streak leaderboard">{board.map((r, i) => <li key={i} className={'row' + (r.me ? ' me' : '')}><span className="rank mono">{i + 1}</span><span className="nm">{r.name}{r.me ? ' (you)' : ''}</span><span className="mono">{r.streak} day{r.streak === 1 ? '' : 's'}</span></li>)}</ol>

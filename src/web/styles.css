@@ -105,3 +105,14 @@ blockquote{margin:1em 0;padding:0 0 0 14px;border-left:1px solid var(--line);fon
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 h1:focus{outline:none}
+
+.glyph{flex:none;color:var(--moss)}
+.plate{display:block;width:100%;max-width:460px;height:auto;margin:14px 0 6px}
+.trailpath{display:block;width:100%;max-width:640px;height:auto;margin:10px 0}.svgt{fill:var(--soft);font:20px var(--mono)}.svgt.big{font:700 34px var(--serif);fill:var(--amber)}
+.trailpath .here{transform-box:fill-box;transform-origin:center;animation:hereP 2.4s ease-in-out infinite}@keyframes hereP{50%{opacity:.25}}
+.mline{display:block;width:100%;max-width:640px;height:28px;margin:6px 0 0}
+.ibars{list-style:none;padding:0;margin:8px 0 22px;max-width:520px}.ibars li{display:flex;align-items:center;gap:10px;padding:6px 0}.ibars .nm{width:7.5em;color:var(--ink);font-size:.92rem}.ibars .bar{flex:1;height:8px;background:var(--bg2);border:1px solid var(--line);border-radius:4px;overflow:hidden}.ibars .bar i{display:block;height:100%;background:var(--moss)}.ibars .mono{font-size:.8rem;color:var(--soft)}
+.journal .jg{display:inline-flex;gap:4px;min-width:3.4em}
+.bviz{display:flex;align-items:center;gap:4px;margin:10px 0 14px;flex-wrap:wrap}.bviz svg{width:56px;height:28px}.bviz .n{font-family:var(--serif);border:1px solid var(--ctl);border-radius:20px;padding:6px 14px;font-size:.95rem}.bviz .n.via{border-color:var(--moss);color:var(--moss)}
+.labart{display:block;width:100%;max-width:420px;height:auto;margin:0 0 6px}
+@media (prefers-reduced-motion:reduce){.trailpath .here{animation:none}}
