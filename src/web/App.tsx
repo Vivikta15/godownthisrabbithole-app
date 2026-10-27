@@ -86,7 +86,7 @@ function Quiz({ cfg, onDone, send }: { cfg: Cfg; onDone: () => void; send: Send 
       <div className="chips">{cfg.topics.map((t) => <button key={t} type="button" className="chip" aria-pressed={tags.includes(t)} onClick={() => tog(tags, setTags, t)}>{t}</button>)}</div>
       <p className="note">Everyday life and money &amp; tech are about things you meet every day: your chai, your phone payments, your trains.</p>
     </div>}
-    {step === 2 && <div><div className="chips">{(cfg.whyRead ?? []).map((w) => <button key={w.id} type="button" className="chip" aria-pressed={why.includes(w.id)} onClick={() => tog(why, setWhy, w.id)}>{w.label}</button>)}</div><p className="note">Saved with your answers. It doesn't change your stories yet.</p></div>}
+    {step === 2 && <div><div className="chips">{(cfg.whyRead ?? []).map((w) => <button key={w.id} type="button" className="chip" aria-pressed={why.includes(w.id)} onClick={() => tog(why, setWhy, w.id)}>{w.label}</button>)}</div><p className="note">What this does: "surprising to tell people" adds a one-line "tell someone" under each story. "Learn something real" puts the sources up front as "check it yourself". "Understand things I see every day" nudges your first stories toward everyday life and places. "Unwind" changes nothing yet.</p></div>}
     {step === 3 && <div>
       <h2>Style</h2>
       <div className="chips">{cfg.formats.map((f) => <button key={f.id} type="button" className="chip" aria-pressed={fmts.includes(f.id)} onClick={() => tog(fmts, setFmts, f.id)}>{f.label}</button>)}</div>
@@ -95,7 +95,7 @@ function Quiz({ cfg, onDone, send }: { cfg: Cfg; onDone: () => void; send: Send 
     </div>}
     {step === 4 && <div>
       <input type="text" maxLength={200} placeholder="Something you've been curious about lately (optional)" value={curious} onChange={(e) => setCurious(e.target.value)} aria-label="Something you have been curious about" />
-      <p className="note">I keep this with your answers. It doesn't change your stories yet.</p>
+      <p className="note">If a word you write here appears in one of our stories, that story can come early. It is a word match only. I don't treat what you write as fact, and with only a few stories so far a match may not exist.</p>
     </div>}
     {err && <p className="err" role="alert">{err}</p>}
     <p>{step > 0 && <button type="button" className="chip" onClick={() => setStep(step - 1)}>Back</button>} {step < total - 1 ? <button type="button" onClick={next}>Next</button> : <button type="button" onClick={finish}>All set!</button>}</p>
@@ -173,6 +173,8 @@ function Story({ hole }: { hole: any }) {
   const beats: { q: string; a: string }[] = hole.beats || [];
   return <>
     <div className="story">{paras.map((p, i) => <p key={i}>{p}</p>)}</div>
+    {(hole.whyModes || []).includes('surprise') && hole.hook && <div className="recap"><h3>Tell someone</h3><p>{hole.hook}</p></div>}
+    {(hole.whyModes || []).includes('learn') && (hole.sources || []).length > 0 && <div className="recap"><h3>Check it yourself</h3><p>{(hole.sources as any[]).map((x, i) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a>{i < hole.sources.length - 1 ? ', ' : ''}</span>)}</p></div>}
     {hole.format !== 'narrative' && beats.length > 0 && <div className="recap"><h3>{hole.format === 'steps' ? 'The short version, step by step' : 'The short version, as questions'}</h3>
       {hole.format === 'qa' ? beats.map((b, i) => <div className="beat" key={i}><h3 style={{ color: 'var(--ink)' }}>{b.q}</h3><p>{b.a}</p></div>)
         : <ol className="steps">{beats.map((b, i) => <li key={i}><strong>{b.q}</strong> {b.a}</li>)}</ol>}</div>}

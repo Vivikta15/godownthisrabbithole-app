@@ -68,3 +68,8 @@ The shared-word gate gave trivial matches ("resulting", "forces"), so it was rep
 
 ## Quiz v2, country and relatable topics (2026-10-27)
 Five-step quiz: country (optional, guessed from timezone, editable), topics (adds everyday life, money & tech, places, nature), why you read, style and length, an optional "curious lately" note. Country and topics steer order; "why" and the note are stored but do not change stories yet (the UI says so). Country is a starting point: for a reader's first 3 holes, unseen local stories that match an interest come first; after that, normal selection. Only India has local stories so far (masala chai, UPI, Indian Railways, South Asian monsoon), each hand-written and compared claim by claim against the fetched Wikipedia text, single source, not independent verification. Existing users can reopen the quiz from the Streaks tab.
+
+### Quiz answers now used (no paid calls)
+- Free-text note: words (3+ letters, common words ignored) that literally appear in an unseen story's title, tags or text pull that story into a reader's first 3 holes. It is a word match only; the reason line says so. Text is never treated as fact.
+- "Why" answers: surprise adds a "tell someone" line; learn shows sources as "check it yourself"; understand nudges toward everyday life and places in the first stories; unwind does nothing yet.
+- "Connected" stories: a story can point to another through a stored source sentence (`related`). Only masala chai -> Indian railways exists (Wikipedia, Masala chai). When the last story read has an unseen related story, it comes next with that sentence as the reason.

@@ -160,12 +160,35 @@ app.post('/api/email/verify', async (c) => {
 app.post('/api/logout', async (c) => { const sid = getCookie(c, 'sid'); if (sid) await c.env.DB.prepare('DELETE FROM sessions WHERE id=?').bind(sid).run(); deleteCookie(c, 'sid', { path: '/' }); return c.json({ ok: true }); });
 
 // Country is a starting point: for a reader's first few holes, prefer unseen local stories that also match an interest; otherwise the normal pool.
-function poolFor(pref: any, seenCount: number) {
-  let country: string | null = null; try { country = JSON.parse(pref?.quiz_answers || '{}').country ?? null; } catch { /* ignore */ }
-  if (!country || seenCount >= 3) return SEED;
-  const interests: string[] = JSON.parse(pref.interest_tags || '[]');
-  const local = SEED.filter((t) => t.countries?.includes(country!) && t.tags.some((g) => interests.includes(g)));
-  return local.length ? local : SEED;
+const STOP = new Set('why how the and for are you our out too but not can all any get got its was who did does way ways make made lot lots about with that this what from have been into your they them when where which would could should there their because really just like know want learn more some very much many also than then'.split(' '));
+function curiousWords(text: string): string[] { return [...new Set((text.toLowerCase().match(/[a-z]{3,}/g) || []).filter((w) => !STOP.has(w)))].slice(0, 12); }
+// Soft hints only. Country, interests, the "why" answer and free text each narrow the pool for a reader's first few holes; none is treated as fact and none is a restriction.
+// Returns the narrowed pool plus a plain reason string, or null reason for the normal pool.
+function poolFor(pref: any, seen: string[]): { pool: typeof SEED; reason: string | null } {
+  let qa: any = {}; try { qa = JSON.parse(pref?.quiz_answers || '{}'); } catch { /* ignore */ }
+  const unseen = SEED.filter((t) => !seen.includes(t.id));
+  // 1. continue a connection: the last story read points to an unseen one, and the pointer carries its own source sentence
+  const last = seen.length ? SEED.find((t) => t.id === seen[seen.length - 1]) : null;
+  if (last?.related && unseen.some((t) => t.id === last.related!.id)) return { pool: SEED.filter((t) => t.id === last.related!.id), reason: `Connected to yesterday's story: ${last.related.sentence} (Wikipedia: ${last.related.page.replace(/_/g, ' ')}).` };
+  if (seen.length >= 3) return { pool: SEED, reason: null };
+  const interests: string[] = JSON.parse(pref?.interest_tags || '[]');
+  if ((qa.why || []).includes('understand')) interests.push('everyday life', 'places');
+  // 2. words from the free-text note that literally appear in a story's title, tags or text
+  const words = curiousWords(String(qa.curious || ''));
+  if (words.length) {
+    const scored = unseen.map((t) => {
+      const head = new Set((t.title + ' ' + t.tags.join(' ')).toLowerCase().match(/[a-z]{3,}/g) || []); const body = new Set(t.story.join(' ').toLowerCase().match(/[a-z]{3,}/g) || []);
+      const hit = words.filter((w) => head.has(w) || body.has(w)); const score = words.reduce((n, w) => n + (head.has(w) ? 3 : body.has(w) ? 1 : 0), 0);
+      return { t, hit: hit.sort((x, y) => Number(head.has(y)) - Number(head.has(x))), score };
+    }).filter((x) => x.hit.length);
+    if (scored.length) { const m = Math.max(...scored.map((x) => x.score)); const top = scored.filter((x) => x.score === m); return { pool: top.map((x) => x.t), reason: `You mentioned "${top[0].hit[0]}" in your note, and this story uses that word. That is a word match only.` }; }
+  }
+  // 3. country as a starting point
+  if (qa.country) {
+    const local = SEED.filter((t) => t.countries?.includes(qa.country) && t.tags.some((g) => interests.includes(g)));
+    if (local.length) return { pool: local, reason: null };
+  }
+  return { pool: SEED, reason: null };
 }
 async function loadAll(c: any) {
   const uid = c.get('uid');
@@ -222,27 +245,32 @@ app.get('/api/today', async (c) => {
   const access = accessOf(u, sub);
   if (!access.rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
   const day = localDay(new Date(), u.timezone);
-  let row = await c.env.DB.prepare('SELECT id,topic_id,format,title FROM rabbit_holes WHERE user_id=? AND day=?').bind(u.id, day).first<any>();
+  let row = await c.env.DB.prepare('SELECT id,topic_id,format,title,body FROM rabbit_holes WHERE user_id=? AND day=?').bind(u.id, day).first<any>();
   let why = '';
+  let pickReason: string | null = null;
   const profile = { interestTags: JSON.parse(pref.interest_tags), formats: JSON.parse(pref.formats) };
   if (!row) {
-    const seen = ((await c.env.DB.prepare('SELECT topic_id FROM rabbit_holes WHERE user_id=?').bind(u.id).all()).results as any[]).map((r) => r.topic_id);
+    const seen = ((await c.env.DB.prepare('SELECT topic_id FROM rabbit_holes WHERE user_id=? ORDER BY day').bind(u.id).all()).results as any[]).map((r) => r.topic_id);
     const events = await recentEvents(c, u.id);
     const n = seen.length;
-    let pick = pickTopic(poolFor(pref, seen.length).map((t) => ({ id: t.id, tags: t.tags, formats: FORMATS.map((f) => f.id) })), seen, events, profile, n > 0 && n % 4 === 3) ?? pickTopic(SEED.map((t) => ({ id: t.id, tags: t.tags, formats: FORMATS.map((f) => f.id) })), seen, events, profile, n > 0 && n % 4 === 3);
+    const pf = poolFor(pref, seen); pickReason = pf.reason;
+    let pick = pickTopic(pf.pool.map((t) => ({ id: t.id, tags: t.tags, formats: FORMATS.map((f) => f.id) })), seen, events, profile, n > 0 && n % 4 === 3) ?? pickTopic(SEED.map((t) => ({ id: t.id, tags: t.tags, formats: FORMATS.map((f) => f.id) })), seen, events, profile, n > 0 && n % 4 === 3);
     if (!pick) pick = pickTopic(SEED.map((t) => ({ id: t.id, tags: t.tags, formats: FORMATS.map((f) => f.id) })), [], events, profile);
     if (!pick) return c.json({ error: 'no content' }, 500);
     const seed = SEED.find((t) => t.id === pick.topic.id)!;
     const id = rid();
     // UNIQUE(user_id,day) makes concurrent first opens safe: the loser re-reads the winner's row.
     await c.env.DB.prepare('INSERT OR IGNORE INTO rabbit_holes (id,user_id,day,topic_id,format,title,body,sources,verified) VALUES (?,?,?,?,?,?,?,?,0)')
-      .bind(id, u.id, day, seed.id, pick.format, seed.title, JSON.stringify({ hook: seed.hook, beats: seed.beats }), JSON.stringify(seed.sources)).run();
-    row = await c.env.DB.prepare('SELECT id,topic_id,format,title FROM rabbit_holes WHERE user_id=? AND day=?').bind(u.id, day).first<any>();
+      .bind(id, u.id, day, seed.id, pick.format, seed.title, JSON.stringify({ hook: seed.hook, beats: seed.beats, reason: pf.pool.some((t) => t.id === seed.id) ? pf.reason : null }), JSON.stringify(seed.sources)).run();
+    row = await c.env.DB.prepare('SELECT id,topic_id,format,title,body FROM rabbit_holes WHERE user_id=? AND day=?').bind(u.id, day).first<any>();
   }
   const seed = SEED.find((t) => t.id === row.topic_id)!;
   const matched = seed.tags.filter((t) => profile.interestTags.includes(t));
+  let reason: string | null = null; try { reason = JSON.parse(row.body || '{}').reason ?? null; } catch { /* ignore */ }
+  let whyModes: string[] = []; try { whyModes = JSON.parse(pref.quiz_answers || '{}').why ?? []; } catch { /* ignore */ }
   why = matched.length ? `Because you like ${matched.join(' and ')}.` : 'A fresh corner to explore, to keep things from getting samey.';
-  return c.json({ hole: { id: row.id, title: seed.title, format: row.format, hook: seed.hook, story: pref.length_pref === 'short' ? seed.story.slice(0, 2) : seed.story, beats: seed.beats, length: pref.length_pref ?? 'medium', sources: seed.sources, why, shortened: pref.length_pref === 'short' && seed.story.length > 2, sourceCheck: seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null }, readToday: s.last_read_day === day });
+  if (reason) why = reason;
+  return c.json({ hole: { id: row.id, title: seed.title, format: row.format, hook: seed.hook, story: pref.length_pref === 'short' ? seed.story.slice(0, 2) : seed.story, beats: seed.beats, length: pref.length_pref ?? 'medium', sources: seed.sources, why, whyModes, shortened: pref.length_pref === 'short' && seed.story.length > 2, sourceCheck: seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null }, readToday: s.last_read_day === day });
 });
 
 app.post('/api/read', async (c) => {
@@ -276,7 +304,7 @@ app.post('/api/bonus/redeem', async (c) => {
   if (!pref) return c.json({ error: 'onboarding' }, 409);
   if (!accessOf(u, sub).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
   const day = localDay(new Date(), u.timezone);
-  const seen = ((await c.env.DB.prepare('SELECT topic_id FROM rabbit_holes WHERE user_id=?').bind(u.id).all()).results as any[]).map((r) => r.topic_id);
+  const seen = ((await c.env.DB.prepare('SELECT topic_id FROM rabbit_holes WHERE user_id=? ORDER BY day').bind(u.id).all()).results as any[]).map((r) => r.topic_id);
   const profile = { interestTags: JSON.parse(pref.interest_tags), formats: JSON.parse(pref.formats) };
   const pick = pickTopic(SEED.map((t) => ({ id: t.id, tags: t.tags, formats: FORMATS.map((f) => f.id) })), seen, await recentEvents(c, u.id), profile);
   if (!pick) return c.json({ error: 'no_new_content', message: 'You have seen every story we have for now. Your bonus is kept.' }, 409);
