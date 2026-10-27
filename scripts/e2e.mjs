@@ -1,4 +1,4 @@
-// Run against a local `wrangler dev` (see npm run e2e). Exercises the real Worker + D1.
+// Run against `wrangler dev --local --port 8787 --var BONUS_CHANCE:1` (the bonus checks need it). Exercises the real Worker + D1.
 const base = process.env.BASE || 'http://localhost:8787';
 class Client { jar = ''; async call(path, body) {
   const r = await fetch(base + '/api' + path, { method: body === undefined ? 'GET' : 'POST', headers: { 'content-type': 'application/json', cookie: this.jar }, body: body === undefined ? undefined : JSON.stringify(body) });

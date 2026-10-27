@@ -37,7 +37,8 @@ function Auth({ onDone, send }: { onDone: () => void; send: Send }) {
     {mode === 'signup' && <input type="text" placeholder="What should I call you?" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} aria-label="Name" />}
     <input type="email" placeholder="Email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} aria-label="Email" />
     <input type="password" placeholder="Password (8+ characters)" required minLength={8} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} aria-label="Password" />
-    {err && <p className="err">{err}</p>}
+    {err && <p className="err" role="alert">{err}</p>}
+    <p className="note">Preview build: there is no email verification or password reset yet, so please don't reuse an important password.</p>
     <p><button type="submit">{mode === 'signup' ? 'Start my 3 free days' : 'Log in'}</button></p>
     <p className="note"><a href="#" onClick={(e) => { e.preventDefault(); setMode(mode === 'signup' ? 'login' : 'signup'); }}>{mode === 'signup' ? 'I already have an account' : 'I need an account'}</a></p>
   </form>;
@@ -105,7 +106,7 @@ function Today({ me, refresh, send }: { me: Me; refresh: () => void; send: Send 
       <p className="note">Today's rabbit hole</p><h1>{h.title}</h1><p>{h.hook}</p><p className="note">{h.why}</p>
       {!reading && <button onClick={start}>Jump in</button>}
     </div>
-    {reading && <article className="card"><Story hole={h} /><p><button onClick={finish}>I'm done reading</button></p>
+    {reading && <article className="card"><Story hole={h} />{h.shortened && <p className="note">Short version: some details are left out. The full version is shown when you pick "A good chew" in the quiz (changing it later is not built yet).</p>}<p><button onClick={finish}>I'm done reading</button></p>
       <p className="note">{h.sourceCheck === 'manual' ? `Sample story. Compared by hand against the source text on ${h.checked.date} (one source, not independent verification). Source: ` : 'Sample story. Its sources have not been checked by the app yet: '}{h.sources.map((s: any, i: number) => <span key={i}><a href={s.url} target="_blank" rel="noreferrer">{s.label}</a>{i < h.sources.length - 1 ? ', ' : ''}</span>)}</p></article>}
   </div>;
 }
@@ -144,12 +145,12 @@ function Streaks({ me }: { me: Me }) {
       <p>Best: {me.streak.longest} · Freezes: {me.streak.freezesLeft} · Bonus holes: {me.streak.bonusHoles}</p>
       <p className="note">You don't have to read every day. A freeze covers a missed day.</p></div>
     <div className="card"><h2>Friends</h2>
-      {board.map((r, i) => <div key={i} className={'row' + (r.me ? ' me' : '')}><span>{i + 1}. {r.name}{r.me ? ' (you)' : ''}</span><span>{r.streak}</span></div>)}
+      <ol className="board" aria-label="Friends streak leaderboard">{board.map((r, i) => <li key={i} className={'row' + (r.me ? ' me' : '')}><span>{r.name}{r.me ? ' (you)' : ''}</span><span>{r.streak} day{r.streak === 1 ? '' : 's'}</span></li>)}</ol>
       <p><button className="soft" onClick={async () => { const r = await api('/invite', {}); setCode(r.data.code); }}>Get an invite code</button></p>
-      {code && <p>Share this code: <strong>{code}</strong></p>}
+      {code && <p role="status">Share this code: <strong>{code}</strong></p>}
       <input type="text" placeholder="Have a friend's code?" value={join} onChange={(e) => setJoin(e.target.value)} aria-label="Friend code" />
       <button className="soft" onClick={async () => { const r = await api('/join', { code: join }); setMsg(r.ok ? 'Friend added!' : r.data.error); if (r.ok) load(); }}>Add friend</button>
-      {msg && <p className="note">{msg}</p>}</div>
+      {msg && <p className="note" role="status">{msg}</p>}</div>
   </div>;
 }
 

@@ -19,7 +19,7 @@ input:focus,button:focus-visible{outline:3px solid #1f7a5a;outline-offset:2px}
 .beat h3{font-size:1.05rem;margin-bottom:.1em}.beat p{margin:.2em 0 1em}
 ol.steps{padding-left:1.3em}ol.steps li{margin:.6em 0}
 .streak{font-size:3rem;font-weight:800;color:var(--carrot-d)}
-.row{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}.row.me{font-weight:800}
+.board{list-style:none;padding:0;margin:0}.row{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}.row.me{font-weight:800}
 /* mascot: fixed bottom-right, never blocks taps */
 .dock{position:fixed;left:0;right:0;bottom:0;height:96px;background:var(--cream);border-top:1px solid var(--sand);z-index:19;pointer-events:none}
 .mascot{position:fixed;right:10px;bottom:2px;width:88px;height:92px;pointer-events:none;z-index:20;transform-origin:50% 100%}

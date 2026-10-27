@@ -163,7 +163,7 @@ app.get('/api/today', async (c) => {
   const seed = SEED.find((t) => t.id === row.topic_id)!;
   const matched = seed.tags.filter((t) => profile.interestTags.includes(t));
   why = matched.length ? `Because you like ${matched.join(' and ')}.` : 'A fresh corner to explore, to keep things from getting samey.';
-  return c.json({ hole: { id: row.id, title: seed.title, format: row.format, hook: seed.hook, beats: shapeBeats(seed.beats, pref.length_pref, seed.shortKeep), length: pref.length_pref ?? 'medium', sources: seed.sources, why, sourceCheck: seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null }, readToday: s.last_read_day === day });
+  return c.json({ hole: { id: row.id, title: seed.title, format: row.format, hook: seed.hook, beats: shapeBeats(seed.beats, pref.length_pref, seed.shortKeep), length: pref.length_pref ?? 'medium', sources: seed.sources, why, shortened: shapeBeats(seed.beats, pref.length_pref, seed.shortKeep).length < seed.beats.length, sourceCheck: seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null }, readToday: s.last_read_day === day });
 });
 
 app.post('/api/read', async (c) => {
@@ -207,7 +207,7 @@ app.post('/api/bonus/redeem', async (c) => {
   const seed = SEED.find((t) => t.id === pick.topic.id)!; const id = rid();
   await c.env.DB.prepare('INSERT INTO rabbit_holes (id,user_id,day,topic_id,format,title,body,sources,verified) VALUES (?,?,?,?,?,?,?,?,0)')
     .bind(id, u.id, `${day}#bonus-${id.slice(0, 6)}`, seed.id, pick.format, seed.title, JSON.stringify({ hook: seed.hook, beats: seed.beats }), JSON.stringify(seed.sources)).run();
-  return c.json({ hole: { id, title: seed.title, format: pick.format, hook: seed.hook, beats: shapeBeats(seed.beats, pref.length_pref, seed.shortKeep), length: pref.length_pref ?? 'medium', sources: seed.sources, why: 'A bonus rabbit hole you earned.', sourceCheck: seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null, bonus: true } });
+  return c.json({ hole: { id, title: seed.title, format: pick.format, hook: seed.hook, beats: shapeBeats(seed.beats, pref.length_pref, seed.shortKeep), length: pref.length_pref ?? 'medium', sources: seed.sources, why: 'A bonus rabbit hole you earned.', shortened: shapeBeats(seed.beats, pref.length_pref, seed.shortKeep).length < seed.beats.length, sourceCheck: seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null, bonus: true } });
 });
 
 app.post('/api/finder', async (c) => {

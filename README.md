@@ -54,3 +54,5 @@ Accessibility checked (script audit at 390px): lang, page title, main landmark, 
 - Checkout: src/worker/checkout.ts creates a Dodo checkout session (test endpoint only). Needs CHECKOUT_ENABLED=true, DODO_API_KEY, DODO_PRODUCT_MAP, APP_URL. Refuses live mode. Sends no trial period (undecided). Never run against Dodo yet; unit-tested with a fake fetch.
 - Bonus holes: env BONUS_CHANCE (0..1) decides earning; unset = nobody earns (undecided rule). Redeem is atomic (/api/bonus/redeem) and does not extend streaks.
 - Contrast: computed WCAG ratios. White text on the orange button was 2.35:1, now dark text (5.0:1); note text darkened to 5.5:1; focus ring darkened to 4.95:1. Accessibility tree checked for the sign-up and quiz screens only.
+- Auth: see docs/AUTH.md. Email verification and password reset are NOT built (no email provider connected); the sign-up screen says so. Not suitable for a public launch yet.
+- Short stories now show a 'some details are left out' note; leaderboard is a semantic list.
