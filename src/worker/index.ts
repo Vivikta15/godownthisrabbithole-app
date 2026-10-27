@@ -64,7 +64,7 @@ async function startSession(c: any, uid: string) {
   setCookie(c, 'sid', sid, { httpOnly: true, secure: new URL(c.req.url).protocol === 'https:', sameSite: 'Lax', path: '/', maxAge: 30 * 86400 });
 }
 
-app.get('/api/config', (c) => c.json({ topics: TOPIC_TAGS, formats: FORMATS, plans: PLANS, finderGenerator: false, payments: c.env.CHECKOUT_ENABLED === 'true' && c.env.DODO_API_KEY && c.env.DODO_ENV !== 'live_mode' ? 'test_mode' : 'not_configured' }));
+app.get('/api/config', (c) => c.json({ topics: TOPIC_TAGS, formats: FORMATS, plans: PLANS, finderGenerator: false, emailRecovery: !!getMailer(c.env), payments: c.env.CHECKOUT_ENABLED === 'true' && c.env.DODO_API_KEY && c.env.DODO_ENV !== 'live_mode' ? 'test_mode' : 'not_configured' }));
 
 // Per-IP throttle (security, not a product rule). The IP is stored only as a truncated SHA-256 in login_attempts.
 async function ipKey(c: any, action: string) {
@@ -114,7 +114,7 @@ app.post('/api/login', async (c) => {
   if ((n?.n ?? 0) >= 8) return c.json({ error: 'Too many tries. Please wait a few minutes.' }, 429);
   const u = await c.env.DB.prepare('SELECT id,pw_hash,pw_salt FROM users WHERE email=?').bind(email).first<any>();
   const good = u ? ctEq(await hashPw(String(b.password || ''), u.pw_salt), u.pw_hash) : (await hashPw(String(b.password || ''), 'x'), false);
-  if (!good) { await c.env.DB.prepare('INSERT INTO login_attempts (key,at) VALUES (?,?)').bind(key, Date.now()).run(); await c.env.DB.prepare('INSERT INTO login_attempts (key,at) VALUES (?,?)').bind(await ipKey(c, 'login'), Date.now()).run(); return c.json({ error: 'Email or password did not match.' }, 401); }
+  if (!good) { await c.env.DB.prepare('INSERT INTO login_attempts (key,at) VALUES (?,?)').bind(key, Date.now()).run(); await c.env.DB.prepare('INSERT INTO login_attempts (key,at) VALUES (?,?)').bind(await ipKey(c, 'login'), Date.now()).run(); return c.json({ error: 'Email or password did not match. If you have not signed up yet, tap "I need an account".' }, 401); }
   await c.env.DB.prepare('DELETE FROM login_attempts WHERE key=?').bind(key).run();
   await startSession(c, u.id);
   return c.json({ ok: true });

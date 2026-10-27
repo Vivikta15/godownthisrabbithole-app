@@ -4,7 +4,7 @@ import { Mascot, useMascot } from './Mascot';
 import type { MascotEvent } from '../shared/mascot';
 
 type Me = { user: { email: string; name: string | null; onboarded: boolean }; access: { plan: string; rabbitHoles: boolean; finderQuota: { period: string; limit: number } | null; trialEndsAt: string }; streak: { current: number; longest: number; freezesLeft: number; bonusHoles: number; readToday: boolean }; prefs: any };
-type Cfg = { topics: string[]; formats: { id: string; label: string }[]; plans: any; payments?: string };
+type Cfg = { topics: string[]; formats: { id: string; label: string }[]; plans: any; payments?: string; emailRecovery?: boolean };
 type Send = (e: MascotEvent) => void;
 
 export function App() {
@@ -18,7 +18,7 @@ export function App() {
   let body: React.ReactNode;
   if (rt || vt) body = <TokenScreen kind={rt ? 'reset' : 'verify'} token={(rt || vt) as string} />;
   else if (me === undefined || !cfg) body = <p className="note">Waking the rabbit…</p>;
-  else if (me === null) body = <Auth onDone={refresh} send={send} />;
+  else if (me === null) body = <Auth onDone={refresh} send={send} recovery={!!cfg.emailRecovery} />;
   else if (!me.user.onboarded) body = <Quiz cfg={cfg} onDone={refresh} send={send} />;
   else body = <Main me={me} cfg={cfg} refresh={refresh} send={send} />;
   return <><main>{body}</main><div className="dock" aria-hidden="true" /><Mascot state={mascot} /></>;
@@ -35,7 +35,7 @@ function TokenScreen({ kind, token }: { kind: 'reset' | 'verify'; token: string 
     <p className="note"><a href="/">Back to the app</a></p></div>;
 }
 
-function Auth({ onDone, send }: { onDone: () => void; send: Send }) {
+function Auth({ onDone, send, recovery }: { onDone: () => void; send: Send; recovery: boolean }) {
   const [mode, setMode] = useState<'signup' | 'login' | 'forgot'>('signup'); const [note, setNote] = useState('');
   const [f, setF] = useState({ name: '', email: '', password: '' }); const [err, setErr] = useState('');
   useEffect(() => { send('onboarding_start'); }, [send]);
@@ -49,12 +49,13 @@ function Auth({ onDone, send }: { onDone: () => void; send: Send }) {
     <h1>go down this rabbit hole</h1>
     <div className="bubble">{mode === 'signup' ? "Hi, hi! Come on in and make yourself at home. Let's get you a cozy little account first." : 'Welcome back! The kettle is on.'}</div>
     {mode === 'signup' && <input type="text" placeholder="What should I call you?" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} aria-label="Name" />}
-    <input type="email" placeholder="Email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} aria-label="Email" />
+    {!(mode === 'forgot' && !recovery) && <input type="email" placeholder="Email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} aria-label="Email" />}
+    {mode === 'forgot' && !recovery && <p role="status">Password reset by email isn't available yet in this preview. If you can't log in, tap "I need an account" below to start fresh with a new email or password.</p>}
     {mode !== 'forgot' && <input type="password" placeholder="Password (8+ characters)" required minLength={8} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} aria-label="Password" />}
     {note && <p role="status">{note}</p>}
     {err && <p className="err" role="alert">{err}</p>}
     <p className="note">Preview build: there is no email verification or password reset yet, so please don't reuse an important password.</p>
-    <p><button type="submit">{mode === 'signup' ? 'Start my 3 free days' : mode === 'forgot' ? 'Send reset link' : 'Log in'}</button></p>
+    {!(mode === 'forgot' && !recovery) && <p><button type="submit">{mode === 'signup' ? 'Start my 3 free days' : mode === 'forgot' ? 'Send reset link' : 'Log in'}</button></p>}
     <p className="note"><a href="#" onClick={(e) => { e.preventDefault(); setMode(mode === 'signup' ? 'login' : 'signup'); }}>{mode === 'signup' ? 'I already have an account' : 'I need an account'}</a>{mode === 'login' && <> · <a href="#" onClick={(e) => { e.preventDefault(); setMode('forgot'); }}>Forgot password?</a></>}</p>
   </form>;
 }
