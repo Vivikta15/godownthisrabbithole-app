@@ -1,0 +1,162 @@
+{
+ "sources": {
+  "honey": "Due to honey's high sugar concentration and acidic pH level many microorganisms cannot grow in it and, when properly stored, honey therefore does not spoil. Samples of honey discovered in archaeological contexts have proven edible even after millennia. If exposed to moist air, its hydrophilic properties pull moisture into the honey, eventually diluting it to the point that fermentation can begin. However, no edible honey has been found in Egyptian tombs; all such cases have been proven to be other substances or only chemical traces.",
+  "octopus": "They have three hearts; a systemic or main heart that circulates blood around the body and two branchial or gill hearts that pump it through the two gills. The systemic heart becomes inactive when the animal is swimming. Thus, the octopus loses energy quickly and mostly crawls. Octopus blood contains the copper-rich protein haemocyanin to transport oxygen. In cold conditions with low oxygen levels, haemocyanin transports oxygen more efficiently than haemoglobin. The haemocyanin is dissolved in the blood plasma instead of carried within blood cells and gives the blood a bluish colour.",
+  "venus": "Venus has retrograde rotation, meaning that unlike most planets, including Earth, it rotates clockwise around its own axis, opposite to its anticlockwise rotation around the Sun. Therefore, Venusian sidereal day, 243 Earth days, lasts longer than a Venusian year, 224.7 Earth days. Because of the retrograde rotation, the length of a solar day on Venus is significantly shorter than the sidereal day, at 116.75 Earth days.",
+  "emu": "The farmers' difficulties were worsened by the arrival of approximately 20,000 emus. By 8 November, six days after the first engagement, 2,500 rounds of ammunition had been fired. Following the negative coverage of the events in the local media, which included claims that \"only a few\" emus had died, Pearce withdrew the military personnel and the guns on 8 November. The Australian military made two attempts to cull the emus, but both were largely ineffective, as the emus split into small, alert and highly mobile groups making the operation uneconomic.",
+  "wombat": "Wombats leave distinctive cube-shaped faeces. As wombats arrange these feces to mark territories and attract mates, it is believed that the cubic shape makes them more stackable and less likely to roll, which gives this shape a biological advantage. The method by which the wombat produces them is not well understood, but it is believed that the wombat intestine stretches preferentially at the walls, with two flexible and two stiff areas around its intestines.",
+  "oxford": "There is evidence of teaching as early as 1096, making it the oldest university in the English-speaking world and the world's second-oldest university in continuous operation. It grew rapidly from 1167, when Henry II prohibited English students from attending the University of Paris. After escalating conflict between students and the Oxford townspeople, some Oxford academics fled northeast to Cambridge, where they established the University of Cambridge in 1209."
+ },
+ "pairs": [
+  {
+   "source": "honey",
+   "claim": "Honey rarely spoils because it is very sugary and acidic, which stops most microbes growing.",
+   "label": "S"
+  },
+  {
+   "source": "honey",
+   "claim": "Honey found in archaeological sites has still been edible after thousands of years.",
+   "label": "S"
+  },
+  {
+   "source": "honey",
+   "claim": "Honey left open in damp air can absorb moisture until it starts to ferment.",
+   "label": "S"
+  },
+  {
+   "source": "honey",
+   "claim": "Edible honey has not been found in Egyptian tombs.",
+   "label": "S"
+  },
+  {
+   "source": "honey",
+   "claim": "Honey never spoils under any conditions, even when it absorbs water.",
+   "label": "N"
+  },
+  {
+   "source": "honey",
+   "claim": "Edible honey was found in the tomb of Tutankhamun.",
+   "label": "N"
+  },
+  {
+   "source": "honey",
+   "claim": "Honey stays fresh because bees add a preservative called formic acid.",
+   "label": "N"
+  },
+  {
+   "source": "octopus",
+   "claim": "An octopus has three hearts: one for the body and two for the gills.",
+   "label": "S"
+  },
+  {
+   "source": "octopus",
+   "claim": "The main heart stops when the octopus swims, so it tires quickly and mostly crawls.",
+   "label": "S"
+  },
+  {
+   "source": "octopus",
+   "claim": "The blue colour comes from a copper-based protein dissolved in the blood plasma.",
+   "label": "S"
+  },
+  {
+   "source": "octopus",
+   "claim": "An octopus has nine hearts, one in each arm and one in the head.",
+   "label": "N"
+  },
+  {
+   "source": "octopus",
+   "claim": "Octopus blood is blue because of iron, like human blood.",
+   "label": "N"
+  },
+  {
+   "source": "octopus",
+   "claim": "Octopuses are fast swimmers that prefer jetting to crawling.",
+   "label": "N"
+  },
+  {
+   "source": "venus",
+   "claim": "One full rotation of Venus takes about 243 Earth days, longer than its 224.7-day year.",
+   "label": "S"
+  },
+  {
+   "source": "venus",
+   "claim": "Venus spins the opposite way to Earth and most other planets.",
+   "label": "S"
+  },
+  {
+   "source": "venus",
+   "claim": "Because of the backward spin, the time from one sunrise to the next is about 117 Earth days.",
+   "label": "S"
+  },
+  {
+   "source": "venus",
+   "claim": "A Venus day is 24 Earth hours long.",
+   "label": "N"
+  },
+  {
+   "source": "venus",
+   "claim": "Venus rotates in the same direction as Earth and takes 58 days per turn.",
+   "label": "N"
+  },
+  {
+   "source": "venus",
+   "claim": "Venus has two moons that cause its slow rotation.",
+   "label": "N"
+  },
+  {
+   "source": "emu",
+   "claim": "About 20,000 emus arrived and damaged farmers crops in Western Australia in 1932.",
+   "label": "S"
+  },
+  {
+   "source": "emu",
+   "claim": "The minister withdrew the soldiers and guns on 8 November after bad press coverage.",
+   "label": "S"
+  },
+  {
+   "source": "emu",
+   "claim": "The emus split into small groups, which made the cull hard and uneconomic.",
+   "label": "S"
+  },
+  {
+   "source": "emu",
+   "claim": "The army won the Emu War decisively and killed every emu.",
+   "label": "N"
+  },
+  {
+   "source": "emu",
+   "claim": "The soldiers used tanks and fired more than 50,000 rounds.",
+   "label": "N"
+  },
+  {
+   "source": "wombat",
+   "claim": "Wombats produce cube-shaped droppings.",
+   "label": "S"
+  },
+  {
+   "source": "wombat",
+   "claim": "Scientists fully understand how wombats make cube-shaped droppings.",
+   "label": "N"
+  },
+  {
+   "source": "wombat",
+   "claim": "The cube shape is believed to help the droppings stack and not roll.",
+   "label": "S"
+  },
+  {
+   "source": "wombat",
+   "claim": "Wombats use cube droppings to build their burrows.",
+   "label": "N"
+  },
+  {
+   "source": "oxford",
+   "claim": "There is evidence of teaching at Oxford from 1096.",
+   "label": "S"
+  },
+  {
+   "source": "oxford",
+   "claim": "Oxford was founded in 1325, the same year as Tenochtitlan.",
+   "label": "N"
+  }
+ ]
+}

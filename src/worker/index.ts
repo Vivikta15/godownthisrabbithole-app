@@ -11,6 +11,7 @@ import { createToken, consumeToken } from './authtokens';
 import { getMailer } from './mail';
 import { createCheckout } from './checkout';
 import { findBridge } from './bridge';
+import { judge } from './judge';
 import { shapeBeats } from '../shared/shape';
 
 type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; BONUS_CHANCE?: string; DODO_API_KEY?: string; MAIL_ENABLED?: string; REQUIRE_VERIFIED_EMAIL?: string; IP_SIGNUP_MAX?: string; DODO_ENV?: string; AI?: any; AI_ENABLED?: string; AI_PLAN_CONFIRMED?: string; FINDER_MODEL?: string; APP_URL?: string; CHECKOUT_ENABLED?: string };
