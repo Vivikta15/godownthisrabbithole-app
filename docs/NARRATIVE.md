@@ -17,3 +17,8 @@ Open: the judge model must be benchmarked on known-supported and known-unsupport
 - llama-3.1-8b: passed 14/16 supported, wrongly passed 0/14 corrupted. About 57 neurons reserved for 30 calls (about 2 each, an estimate from the published rates, not provider-measured).
 - llama-3.3-70b: passed 15/16 supported, wrongly passed 0/14 corrupted. About 221 neurons reserved for 30 calls (about 7 each). Slower (21s vs 9s for 30).
 Caveats: small, hand-made, corruptions are fairly blunt; subtle paraphrase drift and multi-sentence claims are untested; sources were short (3-5 sentences), real page sections are longer. Not yet evidence that a judge is safe for unattended publishing. Next: add harder pairs (subtle drift, partial support) and run again before any generated story is shown.
+
+## Harder judge benchmark (24 subtle pairs: swapped numbers/roles/dates, overreach), 2026-10-27
+- llama-3.1-8b: wrongly passed 4/13 corrupted (e.g. "Venus orbits the Sun in 243 days", "the Prime Minister withdrew the soldiers", "2,500 rounds in the first day"). NOT usable as the judge.
+- llama-3.3-70b: wrongly passed 0/13; passed 10/11 supported (one safe miss). About 174 neurons reserved for 24 calls (~7 each).
+Decision: judge = 70B only. Still a small hand-made set, not proof of safety; a hand spot check stays mandatory before showing generated stories. scripts/judge-pairs-hard.json, run with PAIRS_FILE=./judge-pairs-hard.json.
