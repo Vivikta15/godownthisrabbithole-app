@@ -57,3 +57,8 @@ Accessibility checked (script audit at 390px): lang, page title, main landmark, 
 - Auth: see docs/AUTH.md. Email verification and password reset are NOT built (no email provider connected); the sign-up screen says so. Not suitable for a public launch yet.
 - Short stories now show a 'some details are left out' note; leaderboard is a semantic list.
 - AI adapter: src/worker/ai.ts is the only allowed Workers AI path (off switch AI_ENABLED, human plan confirmation AI_PLAN_CONFIRMED=free, allowlisted models, clamped max_tokens, prompt cap, per-call and daily neuron caps with atomic D1 reservation). Nothing calls it and wrangler.jsonc has no AI binding. 6 tests with a fake binding and fake D1.
+
+## Connection Finder (live, Cloudflare Workers AI free allowance only)
+Flow: fetch the Wikipedia intro for each word, ask the model for one exact sentence from each plus a link, then the server **discards the model's link wording** and only accepts the answer if (1) both sentences appear verbatim in the extracts and (2) they share a non-generic 5+ letter word. The user sees the two copied sentences and the shared word, never model-written claims. One source per word, not independent verification.
+Why: a bench on 8 pairs showed the model fabricated a link (Venus + Oxford "planetarium") using real quotes. Quote matching alone was not enough; the shared-word check rejects it. Bench: scripts/finder-bench.mjs (uses one synthetic account, removes it).
+Limits: Wikipedia returned 429 to Cloudflare's shared IPs under bursts (retry once, honest error after). AI guards: AI_ENABLED, AI_PLAN_CONFIRMED=free, 8,000 neuron/day atomic cap, max_tokens 350, FINDER_MODEL switch.

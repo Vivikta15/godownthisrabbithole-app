@@ -1,0 +1,10 @@
+// Live benchmark of the Connection Finder with one synthetic account. Prints one JSON line per pair. Resets only this account's finder_uses between calls.
+import { execSync } from 'node:child_process';
+const B = process.env.BASE; const email = `synthetic-bench-${Date.now()}@example.com`; let jar = '';
+const call = async (p, body) => { const t = Date.now(); const r = await fetch(B + '/api' + p, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', cookie: jar }, body: body ? JSON.stringify(body) : undefined }); const sc = r.headers.get('set-cookie'); if (sc) jar = sc.split(';')[0]; return { s: r.status, d: await r.json().catch(() => ({})), ms: Date.now() - t }; };
+await call('/signup', { email, password: 'password-bench-1', name: 'Bench' }); await call('/quiz', { interestTags: ['science'], formats: ['narrative'], length: 'medium' });
+const pairs = (process.env.PAIRS ? JSON.parse(process.env.PAIRS) : [['moon', 'tides'], ['honey', 'bees'], ['octopus', 'copper'], ['wombat', 'cheese'], ['Venus', 'Oxford'], ['volcano', 'chocolate'], ['bicycle', 'whale'], ['zxqvplm', 'moon']]);
+const reset = () => execSync(`npx wrangler d1 execute rabbithole-app --remote --command "DELETE FROM finder_uses WHERE user_id=(SELECT id FROM users WHERE email='${email}')"`, { stdio: 'ignore' });
+for (const [a, b] of pairs) { const r = await call('/finder', { a, b }); console.log(JSON.stringify({ a, b, status: r.s, ms: r.ms, ok: r.d.ok === true, reason: r.d.reason, link: r.d.link, quotes: r.d.quotes?.map((q) => q.quote.slice(0, 90)), dbg: r.d.debug, msg: r.d.ok ? undefined : r.d.message?.slice(0, 80) })); reset(); }
+execSync(`npx wrangler d1 execute rabbithole-app --remote --command "DELETE FROM sessions WHERE user_id=(SELECT id FROM users WHERE email='${email}'); DELETE FROM preferences WHERE user_id=(SELECT id FROM users WHERE email='${email}'); DELETE FROM streaks WHERE user_id=(SELECT id FROM users WHERE email='${email}'); DELETE FROM rabbit_holes WHERE user_id=(SELECT id FROM users WHERE email='${email}'); DELETE FROM users WHERE email='${email}'"`, { stdio: 'ignore' });
+console.log('cleaned', email);

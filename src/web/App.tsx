@@ -154,11 +154,11 @@ function Story({ hole }: { hole: any }) {
 }
 
 function Finder({ me, send }: { me: Me; send: Send }) {
-  const [a, setA] = useState(''); const [b, setB] = useState(''); const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false);
+  const [a, setA] = useState(''); const [b, setB] = useState(''); const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false); const [found, setFound] = useState<any>(null);
   const q = me.access.finderQuota;
   async function go(e: React.FormEvent) {
-    e.preventDefault(); setBusy(true); setMsg(''); send('tab_change_finder');
-    const r = await api('/finder', { a, b }); setBusy(false); setMsg(r.data.message || r.data.error || ''); send('tab_change_other');
+    e.preventDefault(); setBusy(true); setMsg(''); setFound(null); send('tab_change_finder');
+    const r = await api('/finder', { a, b }); setBusy(false); if (r.data.ok) { setFound(r.data); send('finder_result'); } else { setMsg(r.data.message || r.data.error || ''); send('tab_change_other'); }
   }
   return <form onSubmit={go}>
     <div className="card hero"><p className="eyebrow">Connection finder</p><h1>Two words. One true link.</h1>
@@ -168,7 +168,10 @@ function Finder({ me, send }: { me: Me; send: Send }) {
     <div className="examples" aria-label="Example pairs">{[['moon', 'cheese'], ['honey', 'Venus'], ['wombat', 'cube']].map(([x, y]) => <button type="button" className="soft" key={x + y} onClick={() => { setA(x); setB(y); }}>{x} + {y}</button>)}</div></div>
     <p><button disabled={busy || !a.trim() || !b.trim()}>{busy ? 'Thinking…' : 'Find the link'}</button></p>
     {msg && <div className="bubble" role="status">{msg}</div>}
-    <div className="card"><h3>How this will work</h3><ul className="ticks"><li>Every link comes with its sources, so you can check it.</li><li>If the rabbit can't find a true link, it says so instead of making one up.</li><li>Tries per day depend on your plan.</li></ul></div>
+    {found && <div className="card hero" role="status"><p className="eyebrow">A real overlap</p><p style={{ fontSize: '1.1rem' }}>Both passages talk about <strong>{found.shared.join(', ')}</strong>.</p>
+      <p className="note">These sentences are copied from the sources. The rabbit picked them, and the app checked that they really share that word. It is a lead to explore, not a claim that the two things are deeply linked.</p>
+      {found.quotes.map((x: any, i: number) => <blockquote key={i} style={{ borderLeft: '3px solid var(--amber)', margin: '10px 0', padding: '2px 12px' }}>“{x.quote}”<br /><a href={x.url} target="_blank" rel="noreferrer">{x.title} (Wikipedia)</a></blockquote>)}</div>}
+    <div className="card"><h3>How this will work</h3><ul className="ticks"><li>Every link comes with its sources, so you can check it.</li><li>If the rabbit can't find a true link, it says so instead of making one up.</li><li>You only see sentences copied from the source pages, and the app checks that they share a word. It is one source per word, not independent verification.</li><li>Tries depend on your plan.</li></ul></div>
     {q && <p className="note">Your plan: {q.limit} {q.limit === 1 ? 'try' : 'tries'} per {q.period}.</p>}
   </form>;
 }

@@ -10,9 +10,10 @@ import { mapSubscriptionEvent } from './billing';
 import { createToken, consumeToken } from './authtokens';
 import { getMailer } from './mail';
 import { createCheckout } from './checkout';
+import { findConnection } from './finder';
 import { shapeBeats } from '../shared/shape';
 
-type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; BONUS_CHANCE?: string; DODO_API_KEY?: string; MAIL_ENABLED?: string; REQUIRE_VERIFIED_EMAIL?: string; IP_SIGNUP_MAX?: string; DODO_ENV?: string; APP_URL?: string; CHECKOUT_ENABLED?: string };
+type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; BONUS_CHANCE?: string; DODO_API_KEY?: string; MAIL_ENABLED?: string; REQUIRE_VERIFIED_EMAIL?: string; IP_SIGNUP_MAX?: string; DODO_ENV?: string; AI?: any; AI_ENABLED?: string; AI_PLAN_CONFIRMED?: string; FINDER_MODEL?: string; APP_URL?: string; CHECKOUT_ENABLED?: string };
 type Vars = { uid: string };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
@@ -282,8 +283,15 @@ app.post('/api/finder', async (c) => {
   const since = Date.now() - (access.finderQuota?.period === 'week' ? 7 : 1) * 86400000; // rolling window; calendar-based reset is undecided
   const used = await c.env.DB.prepare('SELECT count(*) n FROM finder_uses WHERE user_id=? AND created_at>?').bind(u.id, since).first<{ n: number }>();
   if (!finderUsesAllowed(access.finderQuota, used?.n ?? 0)) return c.json({ error: 'quota', message: 'No Connection Finder tries left for now.' }, 429);
-  // No generator is connected yet. Never invent a connection; do not consume quota.
-  return c.json({ error: 'generator_not_connected', message: 'The Connection Finder needs the fact engine, which is not switched on yet.' }, 503);
+  if (await ipLimited(c, 'finder', 40, 3600000, true)) return c.json({ error: 'slow_down', message: 'Slow down a little and try again later.' }, 429);
+  const res = await findConnection(c.env as any, b.a, b.b);
+  if (res.aiUsed) { // count a try only when the model was actually asked
+    await c.env.DB.prepare('INSERT INTO finder_uses (id,user_id,word_a,word_b,result,sources,created_at) VALUES (?,?,?,?,?,?,?)')
+      .bind(rid(), u.id, b.a.slice(0, 40), b.b.slice(0, 40), res.ok ? res.shared.join(', ') : null, res.ok ? JSON.stringify(res.quotes.map((q) => q.url)) : null, Date.now()).run();
+  }
+  const dbg = (c.env as any).FINDER_DEBUG === '1' ? { debug: (globalThis as any).__fdbg } : {};
+  if (res.ok) return c.json({ ok: true, shared: res.shared, quotes: res.quotes, ...dbg });
+  return c.json({ ok: false, reason: res.reason, message: res.message, ...dbg }, res.reason === 'ai_unavailable' ? 503 : 200);
 });
 
 app.post('/api/invite', verifiedGate, async (c) => {

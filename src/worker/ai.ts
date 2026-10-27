@@ -23,6 +23,7 @@ export async function guardedRun(env: AiEnv, req: { model: string; system?: stri
   try {
     const messages = [...(req.system ? [{ role: 'system', content: req.system }] : []), { role: 'user', content: req.prompt }];
     const out = await env.AI.run(req.model, { messages, max_tokens: maxTokens });
-    return { ok: true, text: String(out?.response ?? '') };
+    const resp = out?.response; // Workers AI may hand back already-parsed JSON as an object
+    return { ok: true, text: typeof resp === 'string' ? resp : resp == null ? '' : JSON.stringify(resp) };
   } catch { return { ok: false, reason: 'provider_error' }; }
 }
