@@ -37,4 +37,14 @@ const click = async (t) => { const [el] = await page.$$(`xpath/.//button[contain
 await click('Connections'); await small('connections'); await click('Trail'); await small('trail'); await click('You'); await small('you');
 const you = await page.evaluate(() => document.querySelector('.plan-block')?.innerText); L('PLAN TEXT:', you.replace(/\n+/g, ' | '));
 await page.evaluate(() => document.querySelector('.plan-block')?.scrollIntoView()); await wait(300); await page.screenshot({ path: '/tmp/ui/m-you-plan.png' });
+// rendered text contrast on each screen (effective background found by walking up; ignores images)
+const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+const contrast = async (label) => { const r = await page.evaluate(() => { const parse = (s) => (s.match(/[\d.]+/g) || []).map(Number); const out = []; const seen = new Set();
+  for (const e of document.querySelectorAll('main *, .nav *')) { if (!e.childNodes.length || ![...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue; if (e.offsetParent === null && getComputedStyle(e).position !== 'fixed') continue; const cs = getComputedStyle(e); const fg = parse(cs.color); let bgc = null; let n = e; while (n) { const b = parse(getComputedStyle(n).backgroundColor); if (b.length >= 3 && (b.length === 3 || b[3] > 0.9)) { bgc = b; break; } n = n.parentElement; } bgc = bgc || [17, 20, 16]; const key = cs.color + bgc.join(',') + cs.fontSize; if (seen.has(key)) continue; seen.add(key); out.push({ t: e.textContent.trim().slice(0, 30), fg, bg: bgc.slice(0, 3), size: parseFloat(cs.fontSize), bold: parseInt(cs.fontWeight) >= 700, dis: e.closest('button')?.disabled || false }); } return out; });
+  const bad = r.map((x) => ({ ...x, ratio: (Math.max(lum(x.fg), lum(x.bg)) + 0.05) / (Math.min(lum(x.fg), lum(x.bg)) + 0.05) })).filter((x) => x.ratio < ((x.size >= 24 || (x.size >= 18.66 && x.bold)) ? 3 : 4.5) && !x.dis);
+  L(label, 'text styles checked:', r.length, 'below WCAG AA:', JSON.stringify(bad.map((x) => [x.t, x.ratio.toFixed(2)])));
+  // placeholders + control borders
+  };
+await contrast('you');
+await click('Explore'); await contrast('explore'); await click('Connections'); await contrast('connections'); await click('Trail'); await contrast('trail');
 console.log(log.join('\n')); await browser.close();

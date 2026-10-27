@@ -96,7 +96,7 @@ function Quiz({ cfg, me, redo, onDone, onCancel, send }: { cfg: Cfg; me: Me; red
   const tog = (a: string[], s: (x: string[]) => void, v: string) => s(a.includes(v) ? a.filter((x) => x !== v) : [...a, v]);
   const withStories = cfg.countriesWithStories ?? []; const total = 5;
   const next = () => { setErr(''); if (step === 1 && !tags.length) return setErr('Pick at least one so I know where to start.'); if (step === 3 && !fmts.length) return setErr('Pick at least one style.'); setStep(step + 1); };
-  const finish = async () => { const r = await api('/quiz', { interestTags: tags, formats: fmts, length: len, country: country || undefined, why, curious }); if (r.ok) onDone(); else setErr(r.data.error); };
+  const finish = async (skipNote = false) => { const r = await api('/quiz', { interestTags: tags, formats: fmts, length: len, country: country || undefined, why, curious: skipNote ? '' : curious }); if (r.ok) onDone(); else setErr(r.data.error); };
   const skippable = step === 0 || step === 2 || step === 4;
   const asks = ['Where are you reading from? I can start with stories close to home.', 'What do you actually wonder about? Pick a few.', 'Why do you want a daily rabbit hole?', 'How should a story feel?', 'Last one, and you can skip it.'];
   return <main className="quiz">
@@ -133,8 +133,8 @@ function Quiz({ cfg, me, redo, onDone, onCancel, send }: { cfg: Cfg; me: Me; red
     </div>}
     {err && <p className="err" role="alert">{err}</p>}
     <p className="row-actions">{step > 0 && <button type="button" className="ghost" onClick={() => setStep(step - 1)}>Back</button>}{step === 0 && onCancel && <button type="button" className="ghost" onClick={onCancel}>Cancel</button>}
-      {skippable && step < total - 1 && <button type="button" className="ghost" onClick={() => setStep(step + 1)}>Skip</button>}
-      {step < total - 1 ? <button type="button" className="go" onClick={next}>Next</button> : <button type="button" className="go" onClick={finish}>{redo ? 'Save my answers' : 'All set'}</button>}</p>
+      {skippable && <button type="button" className="ghost" onClick={() => (step < total - 1 ? setStep(step + 1) : finish(true))}>Skip</button>}
+      {step < total - 1 ? <button type="button" className="go" onClick={next}>Next</button> : <button type="button" className="go" onClick={() => finish()}>{redo ? 'Save my answers' : 'All set'}</button>}</p>
   </main>;
 }
 
@@ -361,7 +361,7 @@ function You({ me, cfg, onRedo, onOpen }: { me: Me; cfg: Cfg; onRedo: () => void
 }
 
 function Plan({ me, cfg }: { me: Me; cfg: Cfg }) {
-  const p = cfg.plans; const fz = (n: number | null) => (n === null ? 'to be decided' : n);
+  const p = cfg.plans;
   const [msg, setMsg] = useState('');
   async function buy(plan: string) { const r = await api('/checkout', { plan }); if (r.ok && r.data.url) window.location.href = r.data.url; else setMsg(r.data.message || 'Could not start checkout.'); }
   const per = (x: any) => (x.period === 'day' ? 'a day' : x.period === 'week' ? 'a week' : x.period);
@@ -370,7 +370,7 @@ function Plan({ me, cfg }: { me: Me; cfg: Cfg }) {
     <p className="note">One rabbit hole a day. No endless feed, ever. Paid plans are billed monthly in USD. Renewal and cancellation terms are not set yet, so none are shown. Nothing can be charged.</p>
     <div className="plans">{([['plan3', 'Little burrow', '$3'], ['plan5', 'Deep warren', '$5']] as const).map(([k, l, pr]) => <div className="plan" key={k}>
       <h3 className="serif">{l}</h3><p className="price mono">{pr}<small> / {p[k].billing ?? 'billing period to be decided'}</small></p>
-      <ul className="ticks"><li>A personalised rabbit hole every day</li><li>Connection finder: {p[k].connection_finder.limit} {p[k].connection_finder.limit === 1 ? 'try' : 'tries'} {per(p[k].connection_finder)}</li><li>Streak freezes: {fz(p[k].streak_freezes)}</li></ul>
+      <ul className="ticks"><li>A personalised rabbit hole every day</li><li>Connection finder: {p[k].connection_finder.limit} {p[k].connection_finder.limit === 1 ? 'try' : 'tries'} {per(p[k].connection_finder)}</li><li>Streak freezes: not decided yet</li></ul>
       {cfg.payments === 'test_mode' ? <button type="button" className="ghost" onClick={() => buy(k)}>Start {l} (test mode, no real charge)</button> : <button type="button" className="ghost" disabled>Payments not switched on yet</button>}</div>)}</div>
     {msg && <p className="note" role="status">{msg}</p>}
     <p className="note">Payments are not live; nothing can be charged in this preview.</p>

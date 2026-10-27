@@ -1,0 +1,10 @@
+import puppeteer from 'puppeteer-core';
+const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox'] });
+const page = await (await b.createBrowserContext()).newPage(); await page.setViewport({ width: 390, height: 780 });
+await page.setExtraHTTPHeaders({ 'cf-connecting-ip': '10.7.' + Math.floor(Math.random()*250) + '.' + Math.floor(Math.random()*250) });
+const w = (ms) => new Promise((r) => setTimeout(r, ms)); const click = async (t) => { const [el] = await page.$$(`xpath/.//button[contains(., "${t}")]`); await el.click(); };
+await page.goto('http://localhost:8787'); await page.waitForSelector('.welcome'); await click("Let's wander"); await page.waitForSelector('form'); await page.type('input[type=email]', `synthetic-skip-${Date.now()}@example.test`); await page.type('input[type=password]', 'password-synth1'); await click('Start my 3 free days');
+await page.waitForSelector('select'); await click('Next'); await page.waitForSelector('.chips'); await click('places'); await click('Next'); await w(200); await click('Skip'); await w(200); await click('A flowing story'); await click('Next'); await w(200);
+const hasSkip = await page.evaluate(() => [...document.querySelectorAll('button')].some((x) => x.innerText.trim() === 'Skip'));
+await page.screenshot({ path: '/tmp/ui/quiz-last.png' }); await click('Skip'); await page.waitForSelector('.nav', { timeout: 5000 }); console.log('LAST STEP SKIP OK, button present:', hasSkip);
+await page.screenshot({ path: '/tmp/ui/skip-done.png' }); await b.close();
