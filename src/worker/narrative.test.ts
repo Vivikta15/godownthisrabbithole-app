@@ -12,3 +12,9 @@ describe('narrative', () => {
 });
 import { it as it2, expect as expect2 } from 'vitest';
 it2('qualifier guard', () => { expect2(qualifiersOk('Honey does not spoil.', ['When properly stored, honey does not spoil.'])).toBe(false); expect2(qualifiersOk('Honey does not spoil when properly stored.', ['When properly stored, honey does not spoil.'])).toBe(true); expect2(qualifiersOk('Venus is hot.', ['Venus is hot.'])).toBe(true); });
+it2('qualifier guard adversarial: known limits', () => {
+  // caught: hedge dropped entirely
+  expect2(qualifiersOk('Octopuses live in every ocean.', ['Octopuses may live in most oceans.'])).toBe(false);
+  // NOT caught by token presence (documented limit): hedge present but a different one, or moved to the wrong clause
+  expect2(qualifiersOk('Some octopuses live in every ocean.', ['Octopuses may live in most oceans.'])).toBe(true);
+});
