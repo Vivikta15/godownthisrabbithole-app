@@ -1,0 +1,14 @@
+import puppeteer from 'puppeteer-core';
+const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox'] });
+const page = await (await browser.createBrowserContext()).newPage(); await page.setViewport({ width: 360, height: 700, deviceScaleFactor: 2 }); await page.emulateTimezone('Asia/Calcutta');
+const click = async (t) => { const [h] = await page.$$(`xpath/.//button[contains(., "${t}")]`); await h.click(); };
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+await page.goto('http://localhost:8787'); await page.waitForSelector('form');
+await page.type('input[type=email]', `synthetic-reread-${Date.now()}@example.test`); await page.type('input[type=password]', 'password-synth1'); await click('Start my 3 free days');
+await page.waitForSelector('select'); await click('Next'); await page.waitForSelector('.chips'); await click('everyday life'); await click('Next'); await wait(300); await click('To unwind'); await click('Next'); await wait(300); await click('A flowing story'); await click('Next'); await wait(300); await click('All set');
+await page.waitForSelector('.tabs'); await wait(800); await click('Jump in'); await wait(500); await click("I'm done reading"); await wait(1000);
+const streak1 = await page.evaluate(() => document.body.innerText.match(/Streak: \d+/)?.[0]);
+await click("Read today's story again"); await wait(600);
+const txt = await page.evaluate(() => document.body.innerText);
+console.log('STREAK', streak1, 'HAS_STORY', txt.includes('Check') || txt.length > 900, 'HIDE_BTN', txt.includes('Hide the story'));
+await page.screenshot({ path: '/downloads/reread.png' }); await browser.close();

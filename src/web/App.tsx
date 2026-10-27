@@ -117,7 +117,7 @@ function Main({ me, cfg, refresh, send, onRedo }: { me: Me; cfg: Cfg; refresh: (
 }
 
 function Today({ me, refresh, send }: { me: Me; refresh: () => void; send: Send }) {
-  const [d, setD] = useState<any>(null); const [err, setErr] = useState(''); const [reading, setReading] = useState(false); const [res, setRes] = useState<any>(null);
+  const [d, setD] = useState<any>(null); const [err, setErr] = useState(''); const [reading, setReading] = useState(false); const [res, setRes] = useState<any>(null); const [again, setAgain] = useState(false);
   const t0 = useRef(0); const [extra, setExtra] = useState<any>(null); const [bmsg, setBmsg] = useState('');
   async function openBonus() { const r = await api('/bonus/redeem', {}); if (r.ok) { setExtra(r.data.hole); t0.current = Date.now(); refresh(); window.scrollTo({ top: 0 }); } else setBmsg(r.data.message || r.data.error); }
   async function closeBonus() { await api('/read', { holeId: extra.id, seconds: Math.round((Date.now() - t0.current) / 1000), completed: true }); setExtra(null); refresh(); }
@@ -140,6 +140,8 @@ function Today({ me, refresh, send }: { me: Me; refresh: () => void; send: Send 
     {res?.bonusEarned && <p className="ok">You earned a bonus rabbit hole!</p>}
     {me.streak.bonusHoles > 0 && <p><button onClick={openBonus}>Open a bonus rabbit hole ({me.streak.bonusHoles})</button></p>}
     {bmsg && <p className="note" role="status">{bmsg}</p>}
+    <p><button type="button" onClick={() => setAgain(!again)}>{again ? 'Hide the story' : "Read today's story again"}</button> <span className="note">Re-reading does not change your streak or count again.</span></p>
+    {again && <article className="card"><h3>{h.title}</h3><Story hole={h} /><Related hole={h} /><p className="note">{h.sourceCheck === 'manual' ? `Sample story. Compared by hand against the source text on ${h.checked.date} (one source, not independent verification). Source: ` : 'Sample story. Its sources have not been checked by the app yet: '}{h.sources.map((s: any, i: number) => <span key={i}><a href={s.url} target="_blank" rel="noreferrer">{s.label}</a>{i < h.sources.length - 1 ? ', ' : ''}</span>)}</p></article>}
     <p className="note">That's all for today. Nothing else to scroll. See you tomorrow!</p>
   </div>;
   return <div>
