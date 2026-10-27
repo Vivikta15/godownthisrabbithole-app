@@ -4,7 +4,7 @@ const base = 'http://localhost:8787'; let fails = 0;
 const ok = (n, c, x = '') => { console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' ' + x)); if (!c) fails++; };
 const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox'] });
 for (const w of [320, 390]) {
-  const page = await browser.newPage(); await page.setViewport({ width: w, height: 800 });
+  const ctx = await browser.createBrowserContext(); const page = await ctx.newPage(); await page.setViewport({ width: w, height: 800 });
   const errs = []; page.on('pageerror', (e) => errs.push(String(e)));
   page.on('console', (m) => m.type() === 'error' && !/status of (401|503)/.test(m.text()) && errs.push(m.text()));
   // DOM click, not real mouse events: in headless Chrome here, real pointer events stopped reaching the page after the quiz (see README Known issues).
@@ -23,7 +23,7 @@ for (const w of [320, 390]) {
   await wait(600); await click('Jump in'); await page.waitForSelector('article', { timeout: 8000 }); await wait(300);
   t = await text(); ok(`${w}: reader says sources not checked yet`, /have not been checked/i.test(t), t.slice(0, 300));
   ok(`${w}: reader open, no overflow`, await noOverflow());
-  await click('Connect'); await page.waitForSelector('input[placeholder=moon]', { timeout: 8000 }); await page.type('input[placeholder=moon]', 'moon'); await page.type('input[placeholder=cheese]', 'cheese'); await click('Find the link'); await wait(500);
+  await click('Connect'); await page.waitForSelector('input[placeholder=moon]', { timeout: 8000 }); await page.type('input[placeholder=moon]', 'moon'); await page.type('input[placeholder=cheese]', 'cheese'); await click('Find the link'); await page.waitForFunction(() => /not switched on|fact engine|try|left/i.test(document.body.innerText) && !/Type two/.test(document.body.innerText.split('Find the link')[1] || ''), { timeout: 5000 }).catch(() => {}); await wait(300);
   t = await text(); ok(`${w}: finder says engine not on, invents nothing`, /not switched on|needs the fact engine/i.test(t), t.slice(0, 200));
   await click('Today'); await wait(300); await click("I'm done"); await wait(500);
   await click('Streaks'); await wait(500); t = await text(); ok(`${w}: streak is 1`, /\b1\b/.test(t));
@@ -33,6 +33,6 @@ for (const w of [320, 390]) {
   const btn = await page.$$eval('button', (bs) => bs.filter((b) => /Payments not switched/.test(b.innerText)).every((b) => b.disabled));
   ok(`${w}: payment buttons disabled`, btn);
   ok(`${w}: no unexpected console errors`, errs.length === 0, JSON.stringify(errs));
-  await page.close();
+  await page.close(); await ctx.close();
 }
 await browser.close(); console.log(fails ? `${fails} FAILED` : 'ALL PASSED'); process.exit(fails ? 1 : 0);
