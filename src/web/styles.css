@@ -1,0 +1,34 @@
+:root{--cream:#fff7ec;--sand:#f3e3cc;--carrot:#ff8a3d;--carrot-d:#e8731a;--mint:#bfe8d4;--mint-d:#6cc3a0;--ink:#4a3326;--soft:#8a6f5c;--card:#fffdf8;--line:#ecd9c2;
+--font:ui-rounded,"SF Pro Rounded","Nunito","Quicksand",system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box}html,body{margin:0;background:var(--cream);color:var(--ink);font-family:var(--font);font-size:17px;line-height:1.5}
+#root{max-width:560px;margin:0 auto;min-height:100dvh;padding:18px 18px 150px}
+h1,h2,h3{line-height:1.2;margin:.2em 0 .4em}h1{font-size:1.9rem}h2{font-size:1.4rem}
+.card{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:18px;margin:14px 0}
+.tag{display:inline-block;background:var(--mint);border-radius:999px;padding:2px 12px;font-size:.85rem;margin:0 6px 6px 0}
+.note{color:var(--soft);font-size:.92rem}
+button,.btn{font:inherit;font-weight:700;border:0;border-radius:16px;padding:12px 20px;background:var(--carrot);color:#fff;cursor:pointer;box-shadow:0 3px 0 var(--carrot-d)}
+button:active{transform:translateY(2px);box-shadow:0 1px 0 var(--carrot-d)}button.soft{background:var(--mint);color:var(--ink);box-shadow:0 3px 0 var(--mint-d)}button:disabled{opacity:.5}
+input[type=text],input[type=email],input[type=password]{font:inherit;width:100%;padding:12px 14px;border-radius:14px;border:2px solid var(--line);background:#fff;color:var(--ink);margin:6px 0}
+input:focus,button:focus-visible{outline:3px solid var(--mint-d);outline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.chip{padding:10px 16px;border-radius:999px;border:2px solid var(--line);background:#fff;color:var(--ink);box-shadow:none;font-weight:600}
+.chip[aria-pressed=true]{background:var(--mint);border-color:var(--mint-d)}
+.tabs{position:sticky;top:0;display:flex;gap:6px;padding:8px 0;background:var(--cream);z-index:5}.tabs button{flex:1;background:transparent;color:var(--ink);box-shadow:none;padding:10px 4px;border-radius:14px;font-size:.95rem}
+.tabs button[aria-current=page]{background:var(--sand)}
+.bubble{background:#fff;border:2px solid var(--line);border-radius:20px;padding:14px 16px;position:relative;margin:10px 0}
+.err{color:#b3261e;font-weight:600}.ok{color:#2e7d57;font-weight:600}
+.beat h3{font-size:1.05rem;margin-bottom:.1em}.beat p{margin:.2em 0 1em}
+ol.steps{padding-left:1.3em}ol.steps li{margin:.6em 0}
+.streak{font-size:3rem;font-weight:800;color:var(--carrot-d)}
+.row{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}.row.me{font-weight:800}
+/* mascot: fixed bottom-right, never blocks taps */
+.mascot{position:fixed;right:10px;bottom:10px;width:104px;height:114px;pointer-events:none;z-index:20;transform-origin:50% 100%}
+.mascot .rabbit{transform-box:fill-box;transform-origin:50% 100%}
+.m-idle .rabbit{animation:bob 3.2s ease-in-out infinite}.m-idle .eye{animation:blink 5s infinite;transform-box:fill-box;transform-origin:center}
+.m-greet .rabbit,.m-explain_quiz .rabbit{animation:bob 1.6s ease-in-out infinite}.m-greet .paw,.m-cheer .paw{animation:wave .5s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:50% 100%}
+.m-finder_think .rabbit{animation:tilt 1s ease-in-out infinite}.m-finder_found .rabbit,.m-cheer .rabbit{animation:jump .6s ease-out 2}
+.m-hop_in .rabbit{animation:hopin .7s ease-in forwards}.m-reading .rabbit{transform:translateY(46px)}.m-reading .phone{animation:bob 2.4s ease-in-out infinite}.m-hop_out .rabbit{animation:hopout .7s ease-out forwards}
+@keyframes bob{50%{transform:translateY(-4px)}}@keyframes blink{0%,94%,100%{transform:scaleY(1)}97%{transform:scaleY(.1)}}
+@keyframes wave{to{transform:rotate(28deg)}}@keyframes tilt{50%{transform:rotate(-6deg)}}@keyframes jump{40%{transform:translateY(-22px)}}
+@keyframes hopin{0%{transform:translateY(0)}35%{transform:translateY(-26px)}100%{transform:translateY(46px)}}
+@keyframes hopout{0%{transform:translateY(46px)}60%{transform:translateY(-26px)}100%{transform:translateY(0)}}
+@media (prefers-reduced-motion:reduce){.mascot *{animation:none!important}}
