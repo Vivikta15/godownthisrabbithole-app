@@ -6,6 +6,7 @@ import { accessFor, finderUsesAllowed, type Account } from '../shared/entitlemen
 import { recordRead, displayStreak, localDay, type StreakState } from '../shared/streak';
 import { pickTopic, type ReadEvent } from '../shared/recommend';
 import { verifyWebhook } from './webhook';
+import { mapSubscriptionEvent } from './billing';
 
 type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; ENABLE_BONUS_CHANCE?: string };
 type Vars = { uid: string };
@@ -197,9 +198,15 @@ app.post('/api/webhooks/dodo', async (c) => {
   const body = await c.req.text();
   const ok = await verifyWebhook(secret, { id: c.req.header('webhook-id') || '', timestamp: c.req.header('webhook-timestamp') || '', signature: c.req.header('webhook-signature') || '' }, body);
   if (!ok) return c.json({ error: 'bad signature' }, 401);
-  const ev = JSON.parse(body); const id = c.req.header('webhook-id')!;
-  await c.env.DB.prepare('INSERT OR IGNORE INTO webhook_events (id,type,received_at) VALUES (?,?,?)').bind(id, String(ev.type ?? 'unknown'), Date.now()).run();
-  // TODO(payments): map verified Dodo subscription events to the subscriptions table once the payload schema is confirmed against live docs.
+  let ev: any; try { ev = JSON.parse(body); } catch { return c.json({ error: 'bad json' }, 400); }
+  const id = c.req.header('webhook-id')!;
+  const ins = await c.env.DB.prepare('INSERT OR IGNORE INTO webhook_events (id,type,received_at) VALUES (?,?,?)').bind(id, String(ev.type ?? 'unknown'), Date.now()).run();
+  if (!ins.meta.changes) return c.json({ ok: true, duplicate: true });
+  const u = mapSubscriptionEvent(ev);
+  if (u) {
+    const exists = await c.env.DB.prepare('SELECT id FROM users WHERE id=?').bind(u.userId).first();
+    if (exists) await c.env.DB.prepare('INSERT INTO subscriptions (user_id,plan,status,dodo_subscription_id,paid_through,updated_at) VALUES (?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,status=excluded.status,dodo_subscription_id=excluded.dodo_subscription_id,paid_through=excluded.paid_through,updated_at=excluded.updated_at').bind(u.userId, u.plan, u.status, u.dodoSubscriptionId, u.paidThrough, Date.now()).run();
+  }
   return c.json({ ok: true });
 });
 

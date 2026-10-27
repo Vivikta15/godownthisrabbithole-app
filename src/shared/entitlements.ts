@@ -12,7 +12,7 @@ export function trialEnd(signupAt: Date): Date { return new Date(signupAt.getTim
 
 export function accessFor(a: Account, now: Date): Access {
   const trialEndsAt = trialEnd(a.signupAt);
-  const paidActive = a.paidPlan !== null && (a.subscriptionStatus === 'active' || (a.subscriptionStatus === 'cancelled' && a.paidThrough !== null && a.paidThrough > now));
+  const paidActive = a.paidPlan !== null && (a.subscriptionStatus === 'active' || ((a.subscriptionStatus === 'cancelled' || a.subscriptionStatus === 'past_due') && a.paidThrough !== null && a.paidThrough > now));
   if (paidActive && a.paidPlan) {
     const p = PLANS[a.paidPlan];
     return { plan: a.paidPlan, rabbitHoles: p.rabbit_holes, finderQuota: p.connection_finder, trialEndsAt };
