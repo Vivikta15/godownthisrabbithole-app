@@ -38,7 +38,8 @@ export function parseLines(raw: string): GenSentence[] {
   return out;
 }
 export const LABEL = 'Written by AI from one Wikipedia page. Each sentence was machine-checked against it; that is not independent verification.';
-export async function generateStory(env: AiEnv, page: Page, fmt: Fmt, len: Len, debug?: string[]): Promise<{ ok: true; story: Story } | { ok: false; reason: string }> {
+export type Runners = { write: (r: { system: string; prompt: string; maxTokens: number }) => Promise<{ ok: true; text: string } | { ok: false; reason: string }>; judge: (source: string, claim: string) => Promise<'SUPPORTED' | 'PARTLY' | 'NOT' | 'ERROR'> };
+export async function generateStory(env: AiEnv, page: Page, fmt: Fmt, len: Len, debug?: string[], runners?: Runners): Promise<{ ok: true; story: Story } | { ok: false; reason: string }> {
   const src = sourceSentences(page, 30); if (src.length < 8) return { ok: false, reason: 'source_too_short' };
   const want = PARAS[len]; const win = Math.ceil(src.length / want);
   const kept: string[] = []; let dropped = 0; const used = new Set<number>(); const seen = new Set<string>();
@@ -47,7 +48,7 @@ export async function generateStory(env: AiEnv, page: Page, fmt: Fmt, len: Len, 
     const numbered = src.slice(lo, hi).map((x, i) => `[${lo + i + 1}] ${x}`).join('\n');
     let accepted: string | null = null;
     for (let attempt = 0; attempt < 2 && !accepted; attempt++) {
-      const g = await guardedRun(env, { model: GEN_MODEL, maxTokens: 350, system: `You write ${STYLE[fmt]} about "${page.title}" using ONLY the numbered source sentences. Write ONE paragraph of 2-3 sentences${k === 0 ? ', opening with a hook' : ', continuing the piece'}. Each sentence must faithfully restate one or two source sentences: no added facts, dates, numbers or names. Keep every sentence under 30 words and end it with a period. Do not repeat a sentence. ${fmt === 'qa' ? 'Make the first sentence a question and the rest the answer.' : ''} Output exactly one line per sentence in this format:\nyour restated sentence || 3,4\nwhere the numbers after || are the source sentence numbers used. No other text.`, prompt: numbered });
+      const g = await (runners ? runners.write : (r: any) => guardedRun(env, { model: GEN_MODEL, ...r }))({ maxTokens: 350, system: `You write ${STYLE[fmt]} about "${page.title}" using ONLY the numbered source sentences. Write ONE paragraph of 2-3 sentences${k === 0 ? ', opening with an inviting first sentence that is itself a restated source fact (no rhetorical questions or teasers)' : ', continuing the piece'}. Each sentence must faithfully restate one or two source sentences: no added facts, dates, numbers or names. Keep every sentence under 30 words and end it with a period. Do not repeat a sentence. ${fmt === 'qa' ? 'Make the first sentence a question and the rest the answer.' : ''} Output exactly one line per sentence, one sentence per line, in this format:\nyour restated sentence || 3,4\nwhere the numbers after || are the source sentence numbers used. No other text.`, prompt: numbered });
       if (!g.ok) return { ok: false, reason: g.reason };
       const p = parseLines(g.text); if (!p.length) { dropped++; debug?.push('UNPARSED ' + g.text.slice(0, 200)); continue; }
       const okS: string[] = []; let bad = false;
@@ -55,7 +56,7 @@ export async function generateStory(env: AiEnv, page: Page, fmt: Fmt, len: Len, 
         const key = x.t.toLowerCase().replace(/[^a-z]/g, ''); if (seen.has(key) || x.c.every((n) => used.has(n))) { bad = true; debug?.push('REPEAT ' + x.t.slice(0, 60)); break; }
         const cited = x.c.filter((n) => n >= lo + 1 && n <= hi).map((n) => src[n - 1]);
         if (!cited.length || !mechanicalOk(x.t, cited) || !qualifiersOk(x.t, cited)) { bad = true; debug?.push('MECH ' + x.t.slice(0, 90)); break; }
-        const v = await judge(env, GEN_MODEL, cited.join(' '), x.t);
+        const v = runners ? await runners.judge(cited.join(' '), x.t) : await judge(env, GEN_MODEL, cited.join(' '), x.t);
         if (v !== 'SUPPORTED') { bad = true; debug?.push(v + ' ' + x.t.slice(0, 90)); break; }
         okS.push(x.t.replace(/[.\s]+$/, '') + '.'); seen.add(key); x.c.forEach((n) => used.add(n));
       }

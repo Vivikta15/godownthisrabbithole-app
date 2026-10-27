@@ -6,25 +6,26 @@ export const PRICES_MICROUSD_PER_MTOK: Record<string, { in: number; out: number 
   'claude-sonnet-5-5': { in: 2_000_000, out: 10_000_000 }, // $2 / $10 per MTok
 };
 export const MAX_TRIAL_CAP_MICROUSD = 2_000_000; // hard ceiling in code: $2 total, the amount asked of the owner
-export const MAX_OUT = 700; export const MAX_PROMPT_CHARS = 12000;
+export const MAX_OUT = 1500; export const MAX_PROMPT_CHARS = 12000;
 export type PaidEnv = { DB: D1Database; ANTHROPIC_ENABLED?: string; ANTHROPIC_TRIAL_CAP_MICROUSD?: string; ANTHROPIC_API_KEY?: string };
 // Input bound: a token never covers less than one UTF-8 byte, so tokens <= bytes of the FULL serialized request body (model, framing, system, messages).
 // Anthropic's own count_tokens endpoint is documented as "an estimate", so it is not used as a bound. This overestimates real usage several-fold on purpose.
-export const requestBody = (model: string, maxOut: number, system: string | undefined, prompt: string) => JSON.stringify({ model, max_tokens: maxOut, ...(system ? { system } : {}), messages: [{ role: 'user', content: prompt }] });
+export type Thinking = 'disabled' | 'between_tools';
+export const requestBody = (model: string, maxOut: number, system: string | undefined, prompt: string, thinking?: Thinking) => JSON.stringify({ model, max_tokens: maxOut, ...(thinking ? { thinking: { type: thinking } } : {}), ...(system ? { system } : {}), messages: [{ role: 'user', content: prompt }] });
 export const bodyBytes = (body: string) => new TextEncoder().encode(body).length;
 export function worstCaseMicroUsd(model: string, body: string, maxOut: number): number | null {
   const p = PRICES_MICROUSD_PER_MTOK[model]; if (!p) return null;
   return Math.ceil((bodyBytes(body) * p.in + maxOut * p.out) / 1_000_000);
 }
 export type PaidResult = { ok: true; text: string; usage?: { input_tokens?: number; output_tokens?: number } } | { ok: false; reason: 'disabled' | 'no_cap' | 'no_key' | 'model_not_allowed' | 'prompt_too_long' | 'over_cap' | 'provider_error' };
-export async function paidRun(env: PaidEnv, req: { model: string; system?: string; prompt: string; maxTokens?: number }, fetchFn: typeof fetch = fetch): Promise<PaidResult> {
+export async function paidRun(env: PaidEnv, req: { model: string; system?: string; prompt: string; maxTokens?: number; thinking?: Thinking }, fetchFn: typeof fetch = fetch): Promise<PaidResult> {
   if (env.ANTHROPIC_ENABLED !== 'true') return { ok: false, reason: 'disabled' };
   const cap = Math.min(Number(env.ANTHROPIC_TRIAL_CAP_MICROUSD), MAX_TRIAL_CAP_MICROUSD);
   if (!(cap > 0)) return { ok: false, reason: 'no_cap' };
   if (!env.ANTHROPIC_API_KEY) return { ok: false, reason: 'no_key' };
   const text = (req.system ?? '') + req.prompt; if (text.length > MAX_PROMPT_CHARS) return { ok: false, reason: 'prompt_too_long' };
   const maxOut = Math.max(1, Math.min(MAX_OUT, Math.floor(req.maxTokens ?? 400)));
-  const body = requestBody(req.model, maxOut, req.system, req.prompt); const cost = worstCaseMicroUsd(req.model, body, maxOut); if (cost === null) return { ok: false, reason: 'model_not_allowed' };
+  const body = requestBody(req.model, maxOut, req.system, req.prompt, req.thinking); const cost = worstCaseMicroUsd(req.model, body, maxOut); if (cost === null) return { ok: false, reason: 'model_not_allowed' };
   const r = await env.DB.prepare('UPDATE paid_spend SET reserved_microusd=reserved_microusd+? WHERE id=1 AND reserved_microusd+?<=?').bind(cost, cost, cap).run();
   if (r.meta.changes !== 1) return { ok: false, reason: 'over_cap' };
   try {
