@@ -56,3 +56,4 @@ Accessibility checked (script audit at 390px): lang, page title, main landmark, 
 - Contrast: computed WCAG ratios. White text on the orange button was 2.35:1, now dark text (5.0:1); note text darkened to 5.5:1; focus ring darkened to 4.95:1. Accessibility tree checked for the sign-up and quiz screens only.
 - Auth: see docs/AUTH.md. Email verification and password reset are NOT built (no email provider connected); the sign-up screen says so. Not suitable for a public launch yet.
 - Short stories now show a 'some details are left out' note; leaderboard is a semantic list.
+- AI adapter: src/worker/ai.ts is the only allowed Workers AI path (off switch AI_ENABLED, human plan confirmation AI_PLAN_CONFIRMED=free, allowlisted models, clamped max_tokens, prompt cap, per-call and daily neuron caps with atomic D1 reservation). Nothing calls it and wrangler.jsonc has no AI binding. 6 tests with a fake binding and fake D1.
