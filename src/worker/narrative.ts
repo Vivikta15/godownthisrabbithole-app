@@ -25,24 +25,39 @@ export function parseGen(raw: string): GenSentence[][] | null {
   } catch { return null; }
 }
 export type Story = { title: string; url: string; fmt: Fmt; len: Len; paragraphs: string[]; dropped: number; label: string };
-export async function generateStory(env: AiEnv, page: Page, fmt: Fmt, len: Len): Promise<{ ok: true; story: Story } | { ok: false; reason: string }> {
-  const src = sourceSentences(page); if (src.length < 8) return { ok: false, reason: 'source_too_short' };
-  const numbered = src.map((s, i) => `[${i + 1}] ${s}`).join('\n');
-  const want = PARAS[len];
-  const g = await guardedRun(env, { model: GEN_MODEL, maxTokens: 600, system: `You write ${STYLE[fmt]} about the topic using ONLY the numbered source sentences. Write ${want} short paragraphs, 2-3 sentences each. Every sentence must be a faithful restatement of one or two source sentences, with no added facts, dates, numbers or names. Reply JSON only: {"paragraphs":[[{"t":"<your restated sentence>","c":[3,4]}]]} where each "c" lists the numbers of the source sentences you used. Never output placeholder text.`, prompt: `Topic: ${page.title}\nSources:\n${numbered}` });
-  if (!g.ok) return { ok: false, reason: g.reason };
-  const paras = parseGen(g.text); if (!paras) return { ok: false, reason: 'unparseable' };
-  const kept: string[] = []; let dropped = 0; const dbg: string[] = [];
-  for (const p of paras) {
-    const okSent: string[] = [];
-    for (const s of p) {
-      const cited = s.c.filter((n) => n >= 1 && n <= src.length).map((n) => src[n - 1]);
-      if (!cited.length || !mechanicalOk(s.t, cited)) { dropped++; dbg.push('MECH ' + s.t.slice(0, 80) + ' | cites ' + s.c.join(',')); continue; }
-      const v = await judge(env, GEN_MODEL, cited.join(' '), s.t);
-      if (v === 'SUPPORTED') okSent.push(s.t); else { dropped++; dbg.push(v + ' ' + s.t.slice(0, 80)); }
+// One paragraph per call, plain lines "sentence || 3,4" (robust to truncation). Each paragraph gets its own window of the source.
+export function parseLines(raw: string): GenSentence[] {
+  const out: GenSentence[] = [];
+  for (const line of raw.split('\n')) { const m = line.match(/^\s*(?:[-*\d.]+\s+)?(.+?)\s*\|\|\s*\[?([\d,\s]+)\]?\s*$/); if (!m) continue;
+    const c = m[2].split(',').map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n)); if (c.length && m[1].length > 15) out.push({ t: m[1].trim(), c }); }
+  return out;
+}
+export const LABEL = 'Written by AI from one Wikipedia page. Each sentence was machine-checked against it; that is not independent verification.';
+export async function generateStory(env: AiEnv, page: Page, fmt: Fmt, len: Len, debug?: string[]): Promise<{ ok: true; story: Story } | { ok: false; reason: string }> {
+  const src = sourceSentences(page, 30); if (src.length < 8) return { ok: false, reason: 'source_too_short' };
+  const want = PARAS[len]; const win = Math.ceil(src.length / want);
+  const kept: string[] = []; let dropped = 0; const used = new Set<number>(); const seen = new Set<string>();
+  for (let k = 0; k < want; k++) {
+    const lo = k * win, hi = Math.min(src.length, lo + win + 2); if (lo >= src.length) break;
+    const numbered = src.slice(lo, hi).map((x, i) => `[${lo + i + 1}] ${x}`).join('\n');
+    let accepted: string | null = null;
+    for (let attempt = 0; attempt < 2 && !accepted; attempt++) {
+      const g = await guardedRun(env, { model: GEN_MODEL, maxTokens: 350, system: `You write ${STYLE[fmt]} about "${page.title}" using ONLY the numbered source sentences. Write ONE paragraph of 2-3 sentences${k === 0 ? ', opening with a hook' : ', continuing the piece'}. Each sentence must faithfully restate one or two source sentences: no added facts, dates, numbers or names. Keep every sentence under 30 words and end it with a period. Do not repeat a sentence. ${fmt === 'qa' ? 'Make the first sentence a question and the rest the answer.' : ''} Output exactly one line per sentence in this format:\nyour restated sentence || 3,4\nwhere the numbers after || are the source sentence numbers used. No other text.`, prompt: numbered });
+      if (!g.ok) return { ok: false, reason: g.reason };
+      const p = parseLines(g.text); if (!p.length) { dropped++; debug?.push('UNPARSED ' + g.text.slice(0, 200)); continue; }
+      const okS: string[] = []; let bad = false;
+      for (const x of p) {
+        const key = x.t.toLowerCase().replace(/[^a-z]/g, ''); if (seen.has(key) || x.c.every((n) => used.has(n))) { bad = true; debug?.push('REPEAT ' + x.t.slice(0, 60)); break; }
+        const cited = x.c.filter((n) => n >= lo + 1 && n <= hi).map((n) => src[n - 1]);
+        if (!cited.length || !mechanicalOk(x.t, cited)) { bad = true; debug?.push('MECH ' + x.t.slice(0, 90)); break; }
+        const v = await judge(env, GEN_MODEL, cited.join(' '), x.t);
+        if (v !== 'SUPPORTED') { bad = true; debug?.push(v + ' ' + x.t.slice(0, 90)); break; }
+        okS.push(x.t.replace(/[.\s]+$/, '') + '.'); seen.add(key); x.c.forEach((n) => used.add(n));
+      }
+      if (bad) dropped++; else accepted = okS.join(' ');
     }
-    if (okSent.length === p.length && p.length > 0) kept.push(okSent.join(' ')); else dropped += 0; // a paragraph with any failed sentence is dropped whole
+    if (accepted) kept.push(accepted);
   }
   if (kept.length < Math.max(2, want - 1)) return { ok: false, reason: 'too_few_checked_paragraphs' };
-  return { ok: true, story: { title: page.title, url: page.url, fmt, len, paragraphs: kept, dropped, label: 'Written by AI from one Wikipedia page. Each sentence was machine-checked against it; that is not independent verification.' } };
+  return { ok: true, story: { title: page.title, url: page.url, fmt, len, paragraphs: kept, dropped, label: LABEL } };
 }
