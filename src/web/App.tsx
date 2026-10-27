@@ -14,20 +14,34 @@ export function App() {
   const refresh = useCallback(async () => { const r = await api('/me'); setMe(r.ok ? r.data : null); }, []);
   useEffect(() => { refresh(); api('/config').then((r) => setCfg(r.data)); }, [refresh]);
 
+  const q = new URLSearchParams(window.location.search); const rt = q.get('reset'), vt = q.get('verify');
   let body: React.ReactNode;
-  if (me === undefined || !cfg) body = <p className="note">Waking the rabbit…</p>;
+  if (rt || vt) body = <TokenScreen kind={rt ? 'reset' : 'verify'} token={(rt || vt) as string} />;
+  else if (me === undefined || !cfg) body = <p className="note">Waking the rabbit…</p>;
   else if (me === null) body = <Auth onDone={refresh} send={send} />;
   else if (!me.user.onboarded) body = <Quiz cfg={cfg} onDone={refresh} send={send} />;
   else body = <Main me={me} cfg={cfg} refresh={refresh} send={send} />;
   return <><main>{body}</main><div className="dock" aria-hidden="true" /><Mascot state={mascot} /></>;
 }
 
+function TokenScreen({ kind, token }: { kind: 'reset' | 'verify'; token: string }) {
+  const [pw, setPw] = useState(''); const [msg, setMsg] = useState(''); const [done, setDone] = useState(false);
+  useEffect(() => { window.history.replaceState({}, '', '/'); }, []);
+  useEffect(() => { if (kind === 'verify') api('/email/verify', { token }).then((r) => { setMsg(r.ok ? 'Your email is verified. Thank you!' : r.data.error); setDone(r.ok); }); }, [kind, token]);
+  async function reset(e: React.FormEvent) { e.preventDefault(); const r = await api('/password/reset', { token, password: pw }); setMsg(r.ok ? 'Password changed. You are logged out everywhere; log in with the new one.' : r.data.error); setDone(r.ok); }
+  return <div className="card"><h1>{kind === 'reset' ? 'Choose a new password' : 'Email check'}</h1>
+    {kind === 'reset' && !done && <form onSubmit={reset}><input type="password" aria-label="New password" placeholder="New password (8+ characters)" minLength={8} required value={pw} onChange={(e) => setPw(e.target.value)} /><p><button type="submit">Save new password</button></p></form>}
+    {msg && <p role="status">{msg}</p>}
+    <p className="note"><a href="/">Back to the app</a></p></div>;
+}
+
 function Auth({ onDone, send }: { onDone: () => void; send: Send }) {
-  const [mode, setMode] = useState<'signup' | 'login'>('signup');
+  const [mode, setMode] = useState<'signup' | 'login' | 'forgot'>('signup'); const [note, setNote] = useState('');
   const [f, setF] = useState({ name: '', email: '', password: '' }); const [err, setErr] = useState('');
   useEffect(() => { send('onboarding_start'); }, [send]);
   async function go(e: React.FormEvent) {
-    e.preventDefault(); setErr('');
+    e.preventDefault(); setErr(''); setNote('');
+    if (mode === 'forgot') { const fr = await api('/password/forgot', { email: f.email }); setNote(fr.data.message || fr.data.error || 'Please try again.'); return; }
     const r = await api(mode === 'signup' ? '/signup' : '/login', { ...f, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
     if (r.ok) onDone(); else setErr(r.data.error || 'Something went sideways. Try again?');
   }
@@ -36,11 +50,12 @@ function Auth({ onDone, send }: { onDone: () => void; send: Send }) {
     <div className="bubble">{mode === 'signup' ? "Hi, hi! Come on in and make yourself at home. Let's get you a cozy little account first." : 'Welcome back! The kettle is on.'}</div>
     {mode === 'signup' && <input type="text" placeholder="What should I call you?" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} aria-label="Name" />}
     <input type="email" placeholder="Email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} aria-label="Email" />
-    <input type="password" placeholder="Password (8+ characters)" required minLength={8} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} aria-label="Password" />
+    {mode !== 'forgot' && <input type="password" placeholder="Password (8+ characters)" required minLength={8} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} aria-label="Password" />}
+    {note && <p role="status">{note}</p>}
     {err && <p className="err" role="alert">{err}</p>}
     <p className="note">Preview build: there is no email verification or password reset yet, so please don't reuse an important password.</p>
-    <p><button type="submit">{mode === 'signup' ? 'Start my 3 free days' : 'Log in'}</button></p>
-    <p className="note"><a href="#" onClick={(e) => { e.preventDefault(); setMode(mode === 'signup' ? 'login' : 'signup'); }}>{mode === 'signup' ? 'I already have an account' : 'I need an account'}</a></p>
+    <p><button type="submit">{mode === 'signup' ? 'Start my 3 free days' : mode === 'forgot' ? 'Send reset link' : 'Log in'}</button></p>
+    <p className="note"><a href="#" onClick={(e) => { e.preventDefault(); setMode(mode === 'signup' ? 'login' : 'signup'); }}>{mode === 'signup' ? 'I already have an account' : 'I need an account'}</a>{mode === 'login' && <> · <a href="#" onClick={(e) => { e.preventDefault(); setMode('forgot'); }}>Forgot password?</a></>}</p>
   </form>;
 }
 

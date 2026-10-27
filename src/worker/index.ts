@@ -12,7 +12,7 @@ import { getMailer } from './mail';
 import { createCheckout } from './checkout';
 import { shapeBeats } from '../shared/shape';
 
-type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; BONUS_CHANCE?: string; DODO_API_KEY?: string; MAIL_ENABLED?: string; DODO_ENV?: string; APP_URL?: string; CHECKOUT_ENABLED?: string };
+type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; BONUS_CHANCE?: string; DODO_API_KEY?: string; MAIL_ENABLED?: string; REQUIRE_VERIFIED_EMAIL?: string; IP_SIGNUP_MAX?: string; DODO_ENV?: string; APP_URL?: string; CHECKOUT_ENABLED?: string };
 type Vars = { uid: string };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
@@ -64,7 +64,30 @@ async function startSession(c: any, uid: string) {
 
 app.get('/api/config', (c) => c.json({ topics: TOPIC_TAGS, formats: FORMATS, plans: PLANS, finderGenerator: false, payments: c.env.CHECKOUT_ENABLED === 'true' && c.env.DODO_API_KEY && c.env.DODO_ENV !== 'live_mode' ? 'test_mode' : 'not_configured' }));
 
+// Per-IP throttle (security, not a product rule). The IP is stored only as a truncated SHA-256 in login_attempts.
+async function ipKey(c: any, action: string) {
+  const ip = c.req.header('cf-connecting-ip') || 'local';
+  const h = await crypto.subtle.digest('SHA-256', enc.encode('ip:' + ip));
+  return `i:${action}:${hex(h).slice(0, 24)}`;
+}
+async function ipLimited(c: any, action: string, max: number, windowMs: number, record: boolean) {
+  if (!c.req.header('cf-connecting-ip')) return false; // local dev has no client IP; Cloudflare always sets it in production
+  const key = await ipKey(c, action); const since = Date.now() - windowMs;
+  const n = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE key=? AND at>?').bind(key, since).first();
+  if ((n?.n ?? 0) >= max) return true;
+  if (record) await c.env.DB.prepare('INSERT INTO login_attempts (key,at) VALUES (?,?)').bind(key, Date.now()).run();
+  return false;
+}
+const verifiedGate = async (c: any, next: any) => {
+  if (c.env.REQUIRE_VERIFIED_EMAIL === 'true') {
+    const u = await c.env.DB.prepare('SELECT email_verified_at v FROM users WHERE id=?').bind(c.get('uid')).first();
+    if (!u?.v) return c.json({ error: 'verify_email', message: 'Please verify your email first.' }, 403);
+  }
+  await next();
+};
+
 app.post('/api/signup', async (c) => {
+  if (await ipLimited(c, 'signup', Number(c.env.IP_SIGNUP_MAX) || 10, 3600000, true)) return c.json({ error: 'Too many sign-ups from here. Please try again later.' }, 429);
   const b = await c.req.json<{ email: string; password: string; name?: string; timezone?: string }>();
   const email = (b.email || '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || (b.password || '').length < 8) return c.json({ error: 'Use a valid email and a password of 8+ characters.' }, 400);
@@ -80,6 +103,7 @@ app.post('/api/signup', async (c) => {
 });
 
 app.post('/api/login', async (c) => {
+  if (await ipLimited(c, 'login', 30, 15 * 60000, false)) return c.json({ error: 'Too many tries. Please wait a few minutes.' }, 429);
   const b = await c.req.json<{ email: string; password: string }>();
   const email = String(b.email || '').trim().toLowerCase().slice(0, 254);
   // throttle: max 8 failed attempts per email per 15 min (also bounds password guessing)
@@ -88,7 +112,7 @@ app.post('/api/login', async (c) => {
   if ((n?.n ?? 0) >= 8) return c.json({ error: 'Too many tries. Please wait a few minutes.' }, 429);
   const u = await c.env.DB.prepare('SELECT id,pw_hash,pw_salt FROM users WHERE email=?').bind(email).first<any>();
   const good = u ? ctEq(await hashPw(String(b.password || ''), u.pw_salt), u.pw_hash) : (await hashPw(String(b.password || ''), 'x'), false);
-  if (!good) { await c.env.DB.prepare('INSERT INTO login_attempts (key,at) VALUES (?,?)').bind(key, Date.now()).run(); return c.json({ error: 'Email or password did not match.' }, 401); }
+  if (!good) { await c.env.DB.prepare('INSERT INTO login_attempts (key,at) VALUES (?,?)').bind(key, Date.now()).run(); await c.env.DB.prepare('INSERT INTO login_attempts (key,at) VALUES (?,?)').bind(await ipKey(c, 'login'), Date.now()).run(); return c.json({ error: 'Email or password did not match.' }, 401); }
   await c.env.DB.prepare('DELETE FROM login_attempts WHERE key=?').bind(key).run();
   await startSession(c, u.id);
   return c.json({ ok: true });
@@ -96,6 +120,7 @@ app.post('/api/login', async (c) => {
 // Account recovery. Sending needs a mail provider, which is not connected: forgot answers 501 honestly instead of pretending.
 app.post('/api/password/forgot', async (c) => {
   const mailer = getMailer(c.env);
+  if (mailer && (await ipLimited(c, 'forgot', 10, 3600000, true))) return c.json({ ok: true, message: 'If that email has an account, a reset link is on its way.' });
   if (!mailer) return c.json({ error: 'recovery_unavailable', message: 'Password reset by email is not available yet in this preview.' }, 501);
   const b = await c.req.json<{ email: string }>();
   const email = String(b.email || '').trim().toLowerCase().slice(0, 254);
@@ -109,6 +134,7 @@ app.post('/api/password/forgot', async (c) => {
   return generic;
 });
 app.post('/api/password/reset', async (c) => {
+  if (await ipLimited(c, 'reset', 20, 3600000, true)) return c.json({ error: 'Too many tries. Please wait.' }, 429);
   const b = await c.req.json<{ token: string; password: string }>();
   if (String(b.password || '').length < 8) return c.json({ error: 'Use a password of 8+ characters.' }, 400);
   const uid = await consumeToken(c.env.DB, String(b.token || ''), 'reset');
@@ -260,11 +286,11 @@ app.post('/api/finder', async (c) => {
   return c.json({ error: 'generator_not_connected', message: 'The Connection Finder needs the fact engine, which is not switched on yet.' }, 503);
 });
 
-app.post('/api/invite', async (c) => {
+app.post('/api/invite', verifiedGate, async (c) => {
   const code = rid().slice(0, 8); await c.env.DB.prepare('INSERT INTO invites (code,inviter_id,created_at) VALUES (?,?,?)').bind(code, c.get('uid'), Date.now()).run();
   return c.json({ code });
 });
-app.post('/api/join', async (c) => {
+app.post('/api/join', verifiedGate, async (c) => {
   const { code } = await c.req.json<{ code: string }>(); const uid = c.get('uid');
   const inv = await c.env.DB.prepare('SELECT inviter_id FROM invites WHERE code=?').bind((code || '').trim()).first<{ inviter_id: string }>();
   if (!inv || inv.inviter_id === uid) return c.json({ error: 'That invite code did not work.' }, 400);
@@ -284,7 +310,7 @@ app.get('/api/leaderboard', async (c) => {
 });
 
 // Billing: not live. Checkout is not wired; the webhook endpoint verifies signatures and logs events only.
-app.post('/api/checkout', async (c) => {
+app.post('/api/checkout', verifiedGate, async (c) => {
   const b = await c.req.json<{ plan: string }>().catch(() => ({ plan: '' }));
   const r = await createCheckout(c.env, { id: c.get('uid') }, b.plan);
   return r.ok ? c.json({ url: r.url }) : c.json({ error: r.error, message: r.message }, r.status as any);
