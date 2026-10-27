@@ -29,3 +29,10 @@ $3 plan freezes, billing cadence, streak miss rule, bonus chance.
 3. `wrangler secret put DODO_WEBHOOK_SECRET`
 4. `npm run build && wrangler deploy`
 Dodo stays in test mode until the owner approves going live.
+
+## Tests and migrations
+- `npm test`: unit tests (streak math, entitlements incl. trial expiry and past_due grace, webhook signature, Dodo event mapping, source-check pipeline).
+- `node scripts/e2e.mjs` (needs `npm run dev:api`): real Worker + D1. Covers auth, quiz, today, reads, friends, parallel /today and parallel completions, cross-user access, malformed JSON, cross-origin POST, login throttle.
+- Migrations: 0001_init.sql (schema), 0002_login_attempts.sql (login throttle).
+- Env (non-secret): DODO_PRODUCT_MAP = JSON mapping Dodo product ids to plan3/plan5. It is the authority for the plan on plan changes.
+- Known gaps: no IP-level rate limit, no email verification or password reset, trial-expiry and session-expiry covered by unit logic and a code check only, not by e2e with a moved clock.

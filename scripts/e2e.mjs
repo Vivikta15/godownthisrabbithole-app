@@ -34,6 +34,15 @@ ok('join', (await b.call('/join', { code: inv })).status === 200);
 const lb = (await a.call('/leaderboard')).data.board; ok('leaderboard shows both, Ann first with 1', lb.length === 2 && lb[0].name === 'Ann' && lb[0].streak === 1, JSON.stringify(lb));
 ok('webhook without secret configured is 501', (await new Client().call('/webhooks/dodo', {})).status === 501);
 
+// concurrency + abuse
+const cc = new Client(); await cc.call('/signup', { email: `d${tag}@t.co`, password: 'password1', name: 'Dee' }); await cc.call('/quiz', { interestTags: ['space'], formats: ['qa'] });
+const par = await Promise.all([cc.call('/today'), cc.call('/today'), cc.call('/today')]);
+ok('parallel first /today all succeed with the same hole', par.every((x) => x.status === 200) && new Set(par.map((x) => x.data.hole?.id)).size === 1, JSON.stringify(par.map((x) => x.status)));
+const hid = par[0].data.hole.id;
+const rr = await Promise.all([1, 2, 3].map(() => cc.call('/read', { holeId: hid, seconds: 60, completed: true })));
+ok('parallel completions count the streak once', (await cc.call('/me')).data.streak.current === 1, JSON.stringify(rr.map((x) => x.data)));
+ok('another user cannot read my hole id', (await b.call('/read', { holeId: hid, seconds: 5, completed: true })).status === 404);
+
 // security checks
 const rawPost = (path, body, headers = {}) => fetch(base + '/api' + path, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body });
 ok('malformed JSON is 400 not 500', (await rawPost('/login', '{bad')).status === 400);

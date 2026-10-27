@@ -8,7 +8,7 @@ import { pickTopic, type ReadEvent } from '../shared/recommend';
 import { verifyWebhook } from './webhook';
 import { mapSubscriptionEvent } from './billing';
 
-type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; ENABLE_BONUS_CHANCE?: string };
+type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; ENABLE_BONUS_CHANCE?: string };
 type Vars = { uid: string };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
@@ -23,6 +23,14 @@ async function hashPw(pw: string, salt: string) {
 const BONUS_CHANCE = 0.1;
 const ctEq = (a: string, b: string) => { if (a.length !== b.length) return false; let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i); return r === 0; };
 
+app.use('*', async (c, next) => {
+  await next();
+  c.res = new Response(c.res.body, c.res);
+  c.res.headers.set('X-Content-Type-Options', 'nosniff');
+  c.res.headers.set('Referrer-Policy', 'same-origin');
+  c.res.headers.set('X-Frame-Options', 'DENY');
+  c.res.headers.set('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'");
+});
 // CSRF defence in depth on top of SameSite=Lax: state-changing browser requests must come from our own origin.
 app.use('/api/*', async (c, next) => {
   const m = c.req.method; const p = new URL(c.req.url).pathname;
@@ -145,9 +153,10 @@ app.get('/api/today', async (c) => {
     if (!pick) return c.json({ error: 'no content' }, 500);
     const seed = SEED.find((t) => t.id === pick.topic.id)!;
     const id = rid();
-    await c.env.DB.prepare('INSERT INTO rabbit_holes (id,user_id,day,topic_id,format,title,body,sources,verified) VALUES (?,?,?,?,?,?,?,?,0)')
+    // UNIQUE(user_id,day) makes concurrent first opens safe: the loser re-reads the winner's row.
+    await c.env.DB.prepare('INSERT OR IGNORE INTO rabbit_holes (id,user_id,day,topic_id,format,title,body,sources,verified) VALUES (?,?,?,?,?,?,?,?,0)')
       .bind(id, u.id, day, seed.id, pick.format, seed.title, JSON.stringify({ hook: seed.hook, beats: seed.beats }), JSON.stringify(seed.sources)).run();
-    row = { id, topic_id: seed.id, format: pick.format, title: seed.title };
+    row = await c.env.DB.prepare('SELECT id,topic_id,format,title FROM rabbit_holes WHERE user_id=? AND day=?').bind(u.id, day).first<any>();
   }
   const seed = SEED.find((t) => t.id === row.topic_id)!;
   const matched = seed.tags.filter((t) => profile.interestTags.includes(t));
@@ -157,20 +166,25 @@ app.get('/api/today', async (c) => {
 
 app.post('/api/read', async (c) => {
   const b = await c.req.json<{ holeId: string; seconds: number; completed: boolean }>();
-  const { u, s } = await loadAll(c);
-  const hole = await c.env.DB.prepare('SELECT id,topic_id,format FROM rabbit_holes WHERE id=? AND user_id=?').bind(b.holeId, u.id).first<any>();
+  const { u, s, sub } = await loadAll(c);
+  if (!accessOf(u, sub).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
+  const hole = await c.env.DB.prepare('SELECT id,topic_id,format,day FROM rabbit_holes WHERE id=? AND user_id=?').bind(b.holeId, u.id).first<any>();
   if (!hole) return c.json({ error: 'not found' }, 404);
   const seed = SEED.find((t) => t.id === hole.topic_id)!; const day = localDay(new Date(), u.timezone);
   const seconds = Math.max(0, Math.min(3600, Math.floor(b.seconds || 0)));
   await c.env.DB.prepare('INSERT INTO read_events (id,user_id,hole_id,topic_tags,format,seconds_read,completed,day,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
     .bind(rid(), u.id, hole.id, JSON.stringify(seed.tags), hole.format, seconds, b.completed ? 1 : 0, day, Date.now()).run();
   if (!b.completed) return c.json({ ok: true });
+  // only today's hole can extend today's streak; re-reading an old one cannot farm streak days
+  if (hole.day !== day) return c.json({ ok: true, alreadyCounted: true });
   const prev: StreakState = { current: s.current, longest: s.longest, lastReadDay: s.last_read_day, freezesLeft: s.freezes_left };
   const r = recordRead(prev, day);
   let bonus = 0;
   if (!r.alreadyCounted && Math.random() < BONUS_CHANCE) bonus = 1;
-  await c.env.DB.prepare('UPDATE streaks SET current=?,longest=?,last_read_day=?,freezes_left=?,bonus_holes=bonus_holes+? WHERE user_id=?')
-    .bind(r.state.current, r.state.longest, r.state.lastReadDay, r.state.freezesLeft, bonus, u.id).run();
+  // compare-and-set on the previous last_read_day: of two concurrent completions only one updates the streak
+  const upd = await c.env.DB.prepare('UPDATE streaks SET current=?,longest=?,last_read_day=?,freezes_left=?,bonus_holes=bonus_holes+? WHERE user_id=? AND last_read_day IS ?')
+    .bind(r.state.current, r.state.longest, r.state.lastReadDay, r.state.freezesLeft, bonus, u.id, s.last_read_day).run();
+  if (!upd.meta.changes && !r.alreadyCounted) return c.json({ ok: true, alreadyCounted: true });
   return c.json({ ok: true, streak: r.state.current, freezesUsed: r.freezesUsed, reset: r.reset, alreadyCounted: r.alreadyCounted, bonusEarned: bonus === 1 });
 });
 
@@ -220,7 +234,8 @@ app.post('/api/webhooks/dodo', async (c) => {
   const id = c.req.header('webhook-id')!;
   const ins = await c.env.DB.prepare('INSERT OR IGNORE INTO webhook_events (id,type,received_at) VALUES (?,?,?)').bind(id, String(ev.type ?? 'unknown'), Date.now()).run();
   if (!ins.meta.changes) return c.json({ ok: true, duplicate: true });
-  const u = mapSubscriptionEvent(ev);
+  let pm = {}; try { pm = JSON.parse(c.env.DODO_PRODUCT_MAP || '{}'); } catch { /* ignore bad config */ }
+  const u = mapSubscriptionEvent(ev, pm);
   if (u) {
     const exists = await c.env.DB.prepare('SELECT id FROM users WHERE id=?').bind(u.userId).first();
     if (exists) await c.env.DB.prepare('INSERT INTO subscriptions (user_id,plan,status,dodo_subscription_id,paid_through,updated_at) VALUES (?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,status=excluded.status,dodo_subscription_id=excluded.dodo_subscription_id,paid_through=excluded.paid_through,updated_at=excluded.updated_at').bind(u.userId, u.plan, u.status, u.dodoSubscriptionId, u.paidThrough, Date.now()).run();

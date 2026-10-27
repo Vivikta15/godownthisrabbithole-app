@@ -13,4 +13,11 @@ describe('mapSubscriptionEvent', () => {
     const acct = (now: string) => accessFor({ signupAt: new Date('2026-01-01'), paidPlan: u.plan, subscriptionStatus: u.status, paidThrough: new Date(u.paidThrough!) }, new Date(now)).plan;
     expect(acct('2026-11-02T00:00:00Z')).toBe('plan3'); expect(acct('2026-11-04T00:00:00Z')).toBe('expired');
   });
+  it('plan_changed uses product map, ignored without a match (stale metadata)', () => {
+    expect(mapSubscriptionEvent(ev('subscription.plan_changed', { status: 'active', product_id: 'pdt_5' }), { pdt_5: 'plan5' })!.plan).toBe('plan5');
+    expect(mapSubscriptionEvent(ev('subscription.plan_changed', { status: 'active', product_id: 'pdt_x' }), {})).toBeNull();
+  });
+  it('product map beats stale metadata on renewal', () => {
+    expect(mapSubscriptionEvent(ev('subscription.renewed', { status: 'active', product_id: 'pdt_3' }, { user_id: 'u1', plan: 'plan5' }), { pdt_3: 'plan3' })!.plan).toBe('plan3');
+  });
 });

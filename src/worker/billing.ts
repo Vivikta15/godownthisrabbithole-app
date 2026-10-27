@@ -11,11 +11,16 @@ const ENDED = new Set(['subscription.cancelled', 'subscription.expired', 'subscr
 
 const ms = (v: unknown): number | null => { if (typeof v !== 'string') return null; const t = Date.parse(v); return Number.isFinite(t) ? t : null; };
 
-export function mapSubscriptionEvent(ev: any): SubUpdate | null {
+export type ProductMap = Record<string, 'plan3' | 'plan5'>;
+// productMap (env DODO_PRODUCT_MAP, JSON {"pdt_...":"plan3"}) is the authority for the plan. Checkout metadata can go stale after a plan change,
+// so without a product match a plan_changed event is ignored (and must be reviewed) instead of guessing.
+export function mapSubscriptionEvent(ev: any, productMap: ProductMap = {}): SubUpdate | null {
   const type = String(ev?.type ?? '');
   const d = ev?.data;
   if (!type.startsWith('subscription.') || !d || d.payload_type !== 'Subscription') return null;
-  const userId = d.metadata?.user_id; const plan = d.metadata?.plan;
+  const userId = d.metadata?.user_id;
+  const fromProduct = typeof d.product_id === 'string' && Object.prototype.hasOwnProperty.call(productMap, d.product_id) ? productMap[d.product_id] : undefined;
+  const plan = fromProduct ?? (type === 'subscription.plan_changed' ? undefined : d.metadata?.plan);
   if (typeof userId !== 'string' || !userId || (plan !== 'plan3' && plan !== 'plan5') || !(plan in PLANS)) return null;
   const base = { userId, plan, dodoSubscriptionId: typeof d.subscription_id === 'string' ? d.subscription_id : null } as const;
   const next = ms(d.next_billing_date);
