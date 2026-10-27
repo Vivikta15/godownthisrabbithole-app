@@ -12,12 +12,12 @@ async function run(tag, w, h) {
   await click("Let's wander"); await page.waitForSelector('form'); await page.type('input[type=email]', `synthetic-ui-${tag}-${Date.now()}@example.test`); await page.type('input[type=password]', 'password-synth1'); await click('Start my 3 free days');
   await page.waitForSelector('select'); await shot('2-quiz'); await click('Next'); await page.waitForSelector('.chips'); await click('everyday life'); await click('money & tech'); await click('Next'); await wait(200); await click('To understand'); await click('Next'); await wait(200); await click('A flowing story'); await click('Next'); await wait(200); await page.type('input[type=text]', 'tea'); await click('All set');
   await page.waitForSelector('.nav'); await wait(1000); await shot('3-explore');
-  await click('Go down this rabbit hole'); await wait(800); await page.evaluate(() => window.scrollBy(0, 500)); await wait(300); await shot('4-reading');
+  await click('Go down this rabbit hole'); await wait(800); await shot('4a-reading-top'); await page.evaluate(() => window.scrollBy(0, 500)); await wait(300); await shot('4-reading');
   await page.evaluate(() => window.scrollTo(0, 99999)); await wait(400); await shot('5-reading-end');
   await click("I'm done reading"); await wait(1500); await shot('6-done');
   await click('Connections'); await wait(600); await shot('7-connections');
   await click('Trail'); await wait(900); await shot('8-trail');
-  await click('You'); await wait(900); await shot('9-you');
+  await click('You'); await wait(900); await shot('9-you'); await page.evaluate(() => document.querySelector('.plan-block')?.scrollIntoView()); await wait(300); await shot('10-plan');
   console.log(tag, 'errors:', errs.length ? errs.slice(0, 3) : 'none', 'overflowX:', await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth));
   await page.close();
 }

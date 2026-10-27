@@ -6,6 +6,11 @@ import type { MascotEvent } from '../shared/mascot';
 type Me = { user: { email: string; name: string | null; onboarded: boolean }; access: { plan: string; rabbitHoles: boolean; finderQuota: { period: string; limit: number } | null; trialEndsAt: string }; streak: { current: number; longest: number; freezesLeft: number; bonusHoles: number; readToday: boolean }; prefs: any };
 type Cfg = { topics: string[]; formats: { id: string; label: string }[]; plans: any; payments?: string; emailRecovery?: boolean; whyRead?: { id: string; label: string }[]; countries?: { code: string; name: string }[]; countriesWithStories?: string[] };
 type Send = (e: MascotEvent) => void;
+// Move keyboard and screen-reader focus to the page heading when the view changes, so the next Tab starts at the top of the new content.
+function useFocusHeading(dep: unknown, skipFirst = true) {
+  const first = useRef(true);
+  useEffect(() => { if (first.current && skipFirst) { first.current = false; return; } first.current = false; const h = document.querySelector('main h1') as HTMLElement | null; if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); } }, [dep]); // eslint-disable-line
+}
 type Tab = 'explore' | 'connections' | 'trail' | 'you';
 
 export function App() {
@@ -87,6 +92,7 @@ function Quiz({ cfg, me, redo, onDone, onCancel, send }: { cfg: Cfg; me: Me; red
   const [step, setStep] = useState(0); const [country, setCountry] = useState<string>(pf ? pf.quiz?.country ?? '' : guess);
   const [tags, setTags] = useState<string[]>(pf?.interestTags ?? []); const [why, setWhy] = useState<string[]>(pf?.quiz?.why ?? []); const [fmts, setFmts] = useState<string[]>(pf?.formats ?? []); const [len, setLen] = useState<string>(pf?.length ?? 'medium'); const [curious, setCurious] = useState<string>(pf?.quiz?.curious ?? ''); const [err, setErr] = useState('');
   useEffect(() => { send('quiz_begin'); }, [send]);
+  useFocusHeading(step);
   const tog = (a: string[], s: (x: string[]) => void, v: string) => s(a.includes(v) ? a.filter((x) => x !== v) : [...a, v]);
   const withStories = cfg.countriesWithStories ?? []; const total = 5;
   const next = () => { setErr(''); if (step === 1 && !tags.length) return setErr('Pick at least one so I know where to start.'); if (step === 3 && !fmts.length) return setErr('Pick at least one style.'); setStep(step + 1); };
@@ -149,6 +155,7 @@ function Paws({ n, of = 7 }: { n: number; of?: number }) {
 function Main({ me, cfg, refresh, send, onRedo }: { me: Me; cfg: Cfg; refresh: () => void; send: Send; onRedo: () => void }) {
   const [tab, setTab] = useState<Tab>('explore'); const [open, setOpen] = useState<string | null>(null);
   const go = (t: Tab) => { setTab(t); setOpen(null); send(t === 'connections' ? 'tab_change_finder' : 'tab_change_other'); window.scrollTo({ top: 0 }); };
+  useFocusHeading(tab + '|' + (open ?? ''));
   const names: [Tab, string][] = [['explore', 'Explore'], ['connections', 'Connections'], ['trail', 'Trail'], ['you', 'You']];
   return <>
     <nav className="nav" aria-label="Sections"><p className="brand" aria-hidden="true">go down this<br />rabbit hole</p>{names.map(([k, l]) => <button key={k} type="button" aria-current={tab === k ? 'page' : undefined} onClick={() => go(k)}><Icon k={k} /><span>{l}</span></button>)}</nav>
@@ -177,6 +184,7 @@ function Peek() {
 
 function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; send: Send; goTab: (t: Tab) => void }) {
   const [d, setD] = useState<any>(null); const [err, setErr] = useState<{ status: number; msg: string } | null>(null); const [reading, setReading] = useState(false); const [res, setRes] = useState<any>(null); const [again, setAgain] = useState(false);
+  useFocusHeading(String(reading) + String(!!res));
   const t0 = useRef(0); const [extra, setExtra] = useState<any>(null); const [bmsg, setBmsg] = useState(''); const [savedN, setSavedN] = useState<number | null>(null);
   async function openBonus() { const r = await api('/bonus/redeem', {}); if (r.ok) { setExtra(r.data.hole); t0.current = Date.now(); refresh(); window.scrollTo({ top: 0 }); } else setBmsg(r.data.message || r.data.error); }
   async function closeBonus() { await api('/read', { holeId: extra.id, seconds: Math.round((Date.now() - t0.current) / 1000), completed: true }); setExtra(null); refresh(); }
@@ -359,7 +367,7 @@ function Plan({ me, cfg }: { me: Me; cfg: Cfg }) {
   const per = (x: any) => (x.period === 'day' ? 'a day' : x.period === 'week' ? 'a week' : x.period);
   return <div className="plan-block">
     <p>{me.access.plan === 'trial' ? 'You are on the free 3-day trial.' : `Current plan: ${me.access.plan}.`}{me.access.plan === 'trial' && <span className="mono-note"> ends {new Date(me.access.trialEndsAt).toLocaleString()}</span>}</p>
-    <p className="note">One rabbit hole a day. No endless feed, ever. Paid plans are billed monthly in USD. Renewal terms and cancellation will be shown here before anything can be charged.</p>
+    <p className="note">One rabbit hole a day. No endless feed, ever. Paid plans are billed monthly in USD. Renewal and cancellation terms are not set yet, so none are shown. Nothing can be charged.</p>
     <div className="plans">{([['plan3', 'Little burrow', '$3'], ['plan5', 'Deep warren', '$5']] as const).map(([k, l, pr]) => <div className="plan" key={k}>
       <h3 className="serif">{l}</h3><p className="price mono">{pr}<small> / {p[k].billing ?? 'billing period to be decided'}</small></p>
       <ul className="ticks"><li>A personalised rabbit hole every day</li><li>Connection finder: {p[k].connection_finder.limit} {p[k].connection_finder.limit === 1 ? 'try' : 'tries'} {per(p[k].connection_finder)}</li><li>Streak freezes: {fz(p[k].streak_freezes)}</li></ul>

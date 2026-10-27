@@ -61,7 +61,7 @@ dl.prefs{display:grid;grid-template-columns:7em 1fr;gap:6px 14px;margin:0}dl.pre
 .plans{display:grid;gap:0;border-top:1px solid var(--line)}.plan{padding:16px 0;border-bottom:1px solid var(--line)}.price{font-size:1.6rem;color:var(--amber);margin:.1em 0}.price small{font-size:.8rem;color:var(--soft)}
 ul.ticks{list-style:none;padding:0;margin:.6em 0}ul.ticks li{padding-left:1.4em;position:relative;margin:.3em 0}ul.ticks li::before{content:"\2014";position:absolute;left:0;color:var(--moss)}
 /* lab */
-.pair{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:end}.swap{padding:10px 12px;margin-bottom:6px;color:var(--amber);font-size:1.1rem}
+.pair{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:end}.swap{min-width:44px;min-height:44px;padding:10px 12px;margin-bottom:6px;color:var(--amber);font-size:1.1rem}
 .bridge{margin-top:1.4em}.bridge h2{margin-top:.2em}.bridge em{color:var(--amber);font-style:italic}
 blockquote{margin:1em 0;padding:0 0 0 14px;border-left:1px solid var(--line);font-family:var(--serif);font-size:1.05rem}blockquote cite{display:block;font-family:var(--sans);font-style:normal;font-size:.82rem;margin-top:4px}
 .bubble{border:1px solid var(--line);padding:12px 14px;border-radius:4px}.fine-block{margin-top:2.4em;border-top:1px solid var(--line);padding-top:12px}
@@ -104,3 +104,4 @@ blockquote{margin:1em 0;padding:0 0 0 14px;border-left:1px solid var(--line);fon
 @media (prefers-reduced-motion:reduce){.mascot *{animation:none!important}}
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+h1:focus{outline:none}
