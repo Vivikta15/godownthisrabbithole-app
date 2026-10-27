@@ -1,6 +1,6 @@
 // Browser journey test against local dev server (npm run dev:api). Asserts, not just screenshots.
 import puppeteer from 'puppeteer-core';
-const base = 'http://localhost:8787'; let fails = 0;
+const base = process.env.BASE || 'http://localhost:8787'; let fails = 0;
 const ok = (n, c, x = '') => { console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' ' + x)); if (!c) fails++; };
 const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox'] });
 for (const w of [320, 390]) {

@@ -1,5 +1,5 @@
 import puppeteer from 'puppeteer-core';
-const base = 'http://localhost:8787'; const out = process.env.OUT || '/downloads/shots';
+const base = process.env.BASE || 'http://localhost:8787'; const out = process.env.OUT || '/downloads/shots';
 import { mkdirSync } from 'fs'; mkdirSync(out, { recursive: true });
 const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox'] });
 const page = await browser.newPage(); await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
