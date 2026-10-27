@@ -26,7 +26,7 @@ export const SEED: Seed[] = [
       { q: 'Why is it remembered?', a: 'It is usually called the Great Emu War, a nickname more than an official name, and it still gets retold as a lesson in underestimating wildlife.' },
     ], sources: [{ label: 'Wikipedia: Emu War', url: 'https://en.wikipedia.org/wiki/Emu_War' }] },
   { id: 'venus-day', title: 'A day on Venus is longer than its year', tags: ['space', 'science'],
-    hook: 'On Venus, the sun can rise twice before a day has passed, and still the year is shorter.',
+    hook: 'Venus spins so slowly that its day is longer than its year.',
     beats: [
       { q: 'How slowly does Venus spin?', a: 'Venus turns once in about 243 Earth days, and it spins backwards compared with most planets.' },
       { q: 'How long is its year?', a: 'It circles the Sun in about 225 Earth days, which is shorter than one spin.' },

@@ -7,7 +7,8 @@ for (const w of [320, 390]) {
   const page = await browser.newPage(); await page.setViewport({ width: w, height: 800 });
   const errs = []; page.on('pageerror', (e) => errs.push(String(e)));
   page.on('console', (m) => m.type() === 'error' && !/status of (401|503)/.test(m.text()) && errs.push(m.text()));
-  const click = async (t) => { const [h] = await page.$$(`xpath/.//button[contains(., "${t}")]`); if (!h) throw new Error('no button ' + t); await h.click(); };
+  // DOM click, not real mouse events: in headless Chrome here, real pointer events stopped reaching the page after the quiz (see README Known issues).
+  const click = async (t) => { const ok = await page.evaluate((t) => { const b = [...document.querySelectorAll('button')].find((x) => x.innerText.includes(t)); if (b) b.click(); return !!b; }, t); if (!ok) throw new Error('no button ' + t); await wait(50); };
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const text = () => page.evaluate(() => document.body.innerText);
   const noOverflow = () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
