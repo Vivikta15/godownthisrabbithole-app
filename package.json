@@ -15,6 +15,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "puppeteer-core": "^25.16.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0",
     "wrangler": "^4.153.0"

@@ -32,7 +32,7 @@ function Auth({ onDone, send }: { onDone: () => void; send: Send }) {
     if (r.ok) onDone(); else setErr(r.data.error || 'Something went sideways. Try again?');
   }
   return <form onSubmit={go}>
-    <h1>go down this rabbit hole 🐇</h1>
+    <h1>go down this rabbit hole</h1>
     <div className="bubble">{mode === 'signup' ? "Hi, hi! Come on in and make yourself at home. Let's get you a cozy little account first." : 'Welcome back! The kettle is on.'}</div>
     {mode === 'signup' && <input type="text" placeholder="What should I call you?" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} aria-label="Name" />}
     <input type="email" placeholder="Email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} aria-label="Email" />
@@ -67,7 +67,7 @@ function Main({ me, cfg, refresh, send }: { me: Me; cfg: Cfg; refresh: () => voi
   const names: [typeof tab, string][] = [['today', 'Today'], ['finder', 'Connect'], ['streaks', 'Streaks'], ['plan', 'Plan']];
   return <div>
     <nav className="tabs" aria-label="Sections">{names.map(([k, l]) => <button key={k} aria-current={tab === k ? 'page' : undefined} onClick={() => go(k)}>{l}</button>)}</nav>
-    {tab === 'today' && <Today me={me} refresh={refresh} send={send} />}
+    <div hidden={tab !== 'today'}><Today me={me} refresh={refresh} send={send} /></div>
     {tab === 'finder' && <Finder me={me} send={send} />}
     {tab === 'streaks' && <Streaks me={me} />}
     {tab === 'plan' && <Plan me={me} cfg={cfg} />}
@@ -88,7 +88,7 @@ function Today({ me, refresh, send }: { me: Me; refresh: () => void; send: Send 
   if (!d) return <p className="note">Digging up today's rabbit hole…</p>;
   const h = d.hole;
   if (res || d.readToday) return <div className="card">
-    <h2>That's today's rabbit hole 🥕</h2>
+    <h2>That's today's rabbit hole</h2>
     <p>{res?.alreadyCounted ? 'Already counted for today.' : res ? `Streak: ${res.streak} day${res.streak === 1 ? '' : 's'}.` : `You've already read today. Streak: ${me.streak.current}.`}</p>
     {res?.freezesUsed > 0 && <p className="note">A streak freeze covered {res.freezesUsed} missed day{res.freezesUsed > 1 ? 's' : ''}.</p>}
     {res?.reset && <p className="note">A fresh start today. Streaks are meant to be cozy, not scary.</p>}
@@ -135,11 +135,11 @@ function Streaks({ me }: { me: Me }) {
   const load = () => api('/leaderboard').then((r) => setBoard(r.data.board || []));
   useEffect(() => { load(); }, []);
   return <div>
-    <div className="card"><p className="note">Current streak</p><div className="streak">{me.streak.current} 🔥</div>
+    <div className="card"><p className="note">Current streak</p><div className="streak">{me.streak.current} <span className="note">day{me.streak.current === 1 ? "" : "s"}</span></div>
       <p>Best: {me.streak.longest} · Freezes: {me.streak.freezesLeft} · Bonus holes: {me.streak.bonusHoles}</p>
       <p className="note">You don't have to read every day. A freeze covers a missed day.</p></div>
     <div className="card"><h2>Friends</h2>
-      {board.map((r, i) => <div key={i} className={'row' + (r.me ? ' me' : '')}><span>{i + 1}. {r.name}{r.me ? ' (you)' : ''}</span><span>{r.streak} 🔥</span></div>)}
+      {board.map((r, i) => <div key={i} className={'row' + (r.me ? ' me' : '')}><span>{i + 1}. {r.name}{r.me ? ' (you)' : ''}</span><span>{r.streak}</span></div>)}
       <p><button className="soft" onClick={async () => { const r = await api('/invite', {}); setCode(r.data.code); }}>Get an invite code</button></p>
       {code && <p>Share this code: <strong>{code}</strong></p>}
       <input type="text" placeholder="Have a friend's code?" value={join} onChange={(e) => setJoin(e.target.value)} aria-label="Friend code" />

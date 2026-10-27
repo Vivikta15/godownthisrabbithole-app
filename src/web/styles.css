@@ -26,9 +26,9 @@ ol.steps{padding-left:1.3em}ol.steps li{margin:.6em 0}
 .m-idle .rabbit{animation:bob 3.2s ease-in-out infinite}.m-idle .eye{animation:blink 5s infinite;transform-box:fill-box;transform-origin:center}
 .m-greet .rabbit,.m-explain_quiz .rabbit{animation:bob 1.6s ease-in-out infinite}.m-greet .paw,.m-cheer .paw{animation:wave .5s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:50% 100%}
 .m-finder_think .rabbit{animation:tilt 1s ease-in-out infinite}.m-finder_found .rabbit,.m-cheer .rabbit{animation:jump .6s ease-out 2}
-.m-hop_in .rabbit{animation:hopin .7s ease-in forwards}.m-reading .rabbit{transform:translateY(46px)}.m-reading .phone{animation:bob 2.4s ease-in-out infinite}.m-hop_out .rabbit{animation:hopout .7s ease-out forwards}
+.m-hop_in .rabbit{animation:hopin .7s ease-in forwards}.m-reading .rabbit{transform:translateY(16px)}.m-reading .phone{animation:bob 2.4s ease-in-out infinite}.m-hop_out .rabbit{animation:hopout .7s ease-out forwards}
 @keyframes bob{50%{transform:translateY(-4px)}}@keyframes blink{0%,94%,100%{transform:scaleY(1)}97%{transform:scaleY(.1)}}
 @keyframes wave{to{transform:rotate(28deg)}}@keyframes tilt{50%{transform:rotate(-6deg)}}@keyframes jump{40%{transform:translateY(-22px)}}
-@keyframes hopin{0%{transform:translateY(0)}35%{transform:translateY(-26px)}100%{transform:translateY(46px)}}
-@keyframes hopout{0%{transform:translateY(46px)}60%{transform:translateY(-26px)}100%{transform:translateY(0)}}
+@keyframes hopin{0%{transform:translateY(0)}35%{transform:translateY(-26px)}100%{transform:translateY(16px)}}
+@keyframes hopout{0%{transform:translateY(16px)}60%{transform:translateY(-26px)}100%{transform:translateY(0)}}
 @media (prefers-reduced-motion:reduce){.mascot *{animation:none!important}}

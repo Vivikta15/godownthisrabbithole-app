@@ -34,12 +34,12 @@ export function Mascot({ state }: { state: MascotState }) {
           <circle className="eye" cx="49" cy="64" r="3.2" fill="#4a3326" /><circle className="eye" cx="71" cy="64" r="3.2" fill="#4a3326" />
           <circle cx="42" cy="72" r="5" fill="#ffc9b8" opacity=".8" /><circle cx="78" cy="72" r="5" fill="#ffc9b8" opacity=".8" />
           <path d="M56 72 Q60 77 64 72" stroke="#4a3326" strokeWidth="2" fill="none" strokeLinecap="round" /><ellipse cx="60" cy="70" rx="2.6" ry="2" fill="#ff8a8a" />
-          {state === 'reading' && <g className="phone"><rect x="50" y="82" width="20" height="30" rx="4" fill="#8fd6b4" stroke="#4a3326" strokeWidth="1.5" /><rect x="53" y="86" width="14" height="20" rx="2" fill="#fff" /></g>}
+          {state === 'reading' && <g className="phone"><rect x="47" y="72" width="26" height="36" rx="5" fill="#8fd6b4" stroke="#4a3326" strokeWidth="1.5" /><rect x="50" y="76" width="20" height="26" rx="3" fill="#fff" /><path d="M53 83h14M53 88h14M53 93h9" stroke="#8fd6b4" strokeWidth="2" strokeLinecap="round" /></g>}
           {(state === 'greet' || state === 'cheer') && <g className="paw"><ellipse cx="94" cy="84" rx="7" ry="11" fill="#fff" stroke="#e9d6c3" /></g>}
           {state === 'finder_think' && <g className="glass"><circle cx="92" cy="86" r="9" fill="none" stroke="#4a3326" strokeWidth="3" /><line x1="98" y1="93" x2="108" y2="103" stroke="#4a3326" strokeWidth="3" strokeLinecap="round" /></g>}
           {state === 'finder_found' && <g className="spark"><path d="M96 70 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3z" fill="#ff8a3d" /></g>}
         </g>
-        {inHole && <ellipse cx="60" cy="118" rx="52" ry="10" fill="#f3d9b1" />}
+        {inHole && <ellipse cx="60" cy="124" rx="52" ry="9" fill="#f3d9b1" />}
       </svg>
     </div>
   );
