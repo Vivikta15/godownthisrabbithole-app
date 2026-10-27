@@ -86,7 +86,7 @@ function Quiz({ cfg, onDone, send }: { cfg: Cfg; onDone: () => void; send: Send 
       <div className="chips">{cfg.topics.map((t) => <button key={t} type="button" className="chip" aria-pressed={tags.includes(t)} onClick={() => tog(tags, setTags, t)}>{t}</button>)}</div>
       <p className="note">Everyday life and money &amp; tech are about things you meet every day: your chai, your phone payments, your trains.</p>
     </div>}
-    {step === 2 && <div><div className="chips">{(cfg.whyRead ?? []).map((w) => <button key={w.id} type="button" className="chip" aria-pressed={why.includes(w.id)} onClick={() => tog(why, setWhy, w.id)}>{w.label}</button>)}</div><p className="note">What this does: "surprising to tell people" adds a one-line "tell someone" under each story. "Learn something real" puts the sources up front as "check it yourself". "Understand things I see every day" nudges your first stories toward everyday life and places. "Unwind" changes nothing yet.</p></div>}
+    {step === 2 && <div><div className="chips">{(cfg.whyRead ?? []).map((w) => <button key={w.id} type="button" className="chip" aria-pressed={why.includes(w.id)} onClick={() => tog(why, setWhy, w.id)}>{w.label}</button>)}</div><p className="note">Optional. It adds a "tell someone" line, shows sources as "check it yourself", or nudges your first stories toward everyday life. "Unwind" changes nothing yet.</p></div>}
     {step === 3 && <div>
       <h2>Style</h2>
       <div className="chips">{cfg.formats.map((f) => <button key={f.id} type="button" className="chip" aria-pressed={fmts.includes(f.id)} onClick={() => tog(fmts, setFmts, f.id)}>{f.label}</button>)}</div>
@@ -147,7 +147,7 @@ function Today({ me, refresh, send }: { me: Me; refresh: () => void; send: Send 
       <p className="eyebrow">Today's rabbit hole</p><h1>{h.title}</h1><p>{h.hook}</p><p className="note">{h.why}</p>
       {!reading && <button onClick={start}>Jump in</button>}
     </div>
-    {reading && <article className="card"><ReadProgress /><Story hole={h} />{h.shortened && <p className="note">Short version: some details are left out. The full version is shown when you pick "A good chew" in the quiz (changing it later is not built yet).</p>}<p><button onClick={finish}>I'm done reading</button></p>
+    {reading && <article className="card"><ReadProgress /><Story hole={h} /><Related hole={h} />{h.shortened && <p className="note">Short version: some details are left out. The full version is shown when you pick "A good chew" in the quiz (changing it later is not built yet).</p>}<p><button onClick={finish}>I'm done reading</button></p>
       <p className="note">{h.sourceCheck === 'manual' ? `Sample story. Compared by hand against the source text on ${h.checked.date} (one source, not independent verification). Source: ` : 'Sample story. Its sources have not been checked by the app yet: '}{h.sources.map((s: any, i: number) => <span key={i}><a href={s.url} target="_blank" rel="noreferrer">{s.label}</a>{i < h.sources.length - 1 ? ', ' : ''}</span>)}</p></article>}
   </div>;
 }
@@ -166,6 +166,18 @@ function ReadProgress() {
   const [p, setP] = useState(0);
   useEffect(() => { const f = () => { const m = document.documentElement.scrollHeight - window.innerHeight; setP(m > 0 ? Math.min(100, Math.round((window.scrollY / m) * 100)) : 100); }; f(); window.addEventListener('scroll', f, { passive: true }); return () => window.removeEventListener('scroll', f); }, []);
   return <div className="progress" role="progressbar" aria-label="Reading progress" aria-valuenow={p} aria-valuemin={0} aria-valuemax={100}><i style={{ width: p + '%' }} /></div>;
+}
+
+function Related({ hole }: { hole: any }) {
+  const [open, setOpen] = useState<any>(null); const [msg, setMsg] = useState('');
+  if (!hole.related) return null;
+  async function go() { const r = await api(`/related/${hole.related.id}`); if (r.ok) setOpen(r.data.hole); else setMsg(r.data.message || r.data.error || 'Could not open it.'); }
+  return <div className="recap"><h3>If you want to follow a connection</h3>
+    <p>Wikipedia links this story to "{hole.related.title}": {hole.related.sentence}</p>
+    {!open && <p><button type="button" onClick={go}>Read "{hole.related.title}"</button> <span className="note">Optional. It does not change tomorrow's story, your streak or what counts as read.</span></p>}
+    {msg && <p className="note" role="status">{msg}</p>}
+    {open && <div><h3>{open.title}</h3><Story hole={open} /><p className="note">Sample story. Compared by hand against the source text on {open.checked?.date} (one source, not independent verification). Source: {open.sources.map((x: any, i: number) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a></span>)}</p><p><button type="button" onClick={() => setOpen(null)}>Close</button></p></div>}
+  </div>;
 }
 
 function Story({ hole }: { hole: any }) {

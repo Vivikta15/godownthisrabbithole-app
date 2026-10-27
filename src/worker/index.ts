@@ -167,9 +167,6 @@ function curiousWords(text: string): string[] { return [...new Set((text.toLower
 function poolFor(pref: any, seen: string[]): { pool: typeof SEED; reason: string | null } {
   let qa: any = {}; try { qa = JSON.parse(pref?.quiz_answers || '{}'); } catch { /* ignore */ }
   const unseen = SEED.filter((t) => !seen.includes(t.id));
-  // 1. continue a connection: the last story read points to an unseen one, and the pointer carries its own source sentence
-  const last = seen.length ? SEED.find((t) => t.id === seen[seen.length - 1]) : null;
-  if (last?.related && unseen.some((t) => t.id === last.related!.id)) return { pool: SEED.filter((t) => t.id === last.related!.id), reason: `Connected to yesterday's story: ${last.related.sentence} (Wikipedia: ${last.related.page.replace(/_/g, ' ')}).` };
   if (seen.length >= 3) return { pool: SEED, reason: null };
   const interests: string[] = JSON.parse(pref?.interest_tags || '[]');
   if ((qa.why || []).includes('understand')) interests.push('everyday life', 'places');
@@ -270,7 +267,19 @@ app.get('/api/today', async (c) => {
   let whyModes: string[] = []; try { whyModes = JSON.parse(pref.quiz_answers || '{}').why ?? []; } catch { /* ignore */ }
   why = matched.length ? `Because you like ${matched.join(' and ')}.` : 'A fresh corner to explore, to keep things from getting samey.';
   if (reason) why = reason;
-  return c.json({ hole: { id: row.id, title: seed.title, format: row.format, hook: seed.hook, story: pref.length_pref === 'short' ? seed.story.slice(0, 2) : seed.story, beats: seed.beats, length: pref.length_pref ?? 'medium', sources: seed.sources, why, whyModes, shortened: pref.length_pref === 'short' && seed.story.length > 2, sourceCheck: seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null }, readToday: s.last_read_day === day });
+  return c.json({ hole: { id: row.id, title: seed.title, format: row.format, hook: seed.hook, story: pref.length_pref === 'short' ? seed.story.slice(0, 2) : seed.story, beats: seed.beats, length: pref.length_pref ?? 'medium', sources: seed.sources, why, whyModes, related: seed.related ? (() => { const r = SEED.find((x) => x.id === seed.related!.id); return r ? { id: r.id, title: r.title, sentence: seed.related!.sentence, page: seed.related!.page } : null; })() : null, shortened: pref.length_pref === 'short' && seed.story.length > 2, sourceCheck: seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null }, readToday: s.last_read_day === day });
+});
+
+// Optional, reader-chosen: open the story that today's story points to. Read-only: no streak, read event, or "seen" change.
+app.get('/api/related/:id', async (c) => {
+  const { u, s, sub } = await loadAll(c);
+  if (!accessOf(u, sub).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
+  const day = localDay(new Date(), u.timezone);
+  const row = await c.env.DB.prepare('SELECT topic_id FROM rabbit_holes WHERE user_id=? AND day=?').bind(u.id, day).first<any>();
+  const cur = row && SEED.find((t) => t.id === row.topic_id);
+  if (!cur?.related || cur.related.id !== c.req.param('id')) return c.json({ error: 'not found' }, 404);
+  const t = SEED.find((x) => x.id === cur.related!.id)!;
+  return c.json({ hole: { id: t.id, title: t.title, story: t.story, beats: t.beats, format: 'narrative', sources: t.sources, hook: t.hook, whyModes: [], sourceCheck: t.checked ? 'manual' : 'pending', checked: t.checked ?? null } });
 });
 
 app.post('/api/read', async (c) => {
