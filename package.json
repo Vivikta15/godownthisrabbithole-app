@@ -8,7 +8,7 @@
     "dev:web": "vite",
     "build": "vite build",
     "dev:api": "wrangler dev --local --port 8787",
-    "db:local": "wrangler d1 migrations apply rabbithole-dev --local"
+    "db:local": "wrangler d1 migrations apply rabbithole-app --local"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261027.1",
