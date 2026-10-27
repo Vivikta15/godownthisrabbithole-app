@@ -161,17 +161,22 @@ function Finder({ me, send }: { me: Me; send: Send }) {
     const r = await api('/finder', { a, b }); setBusy(false); if (r.data.ok) { setFound(r.data); send('finder_result'); } else { setMsg(r.data.message || r.data.error || ''); send('tab_change_other'); }
   }
   return <form onSubmit={go}>
-    <div className="card hero"><p className="eyebrow">Connection finder</p><h1>Two words. One true link.</h1>
-    <p>Type two random things and the rabbit looks for a real, surprising link you can drop into a conversation.</p>
+    <div className="card hero"><p className="eyebrow">Connection finder</p><h1>Two words. A sourced bridge.</h1>
+    <p>Type two things. The rabbit looks for a topic that both Wikipedia pages mention and shows you the sentences. Some pairs have no bridge, and then it says so.</p>
     <div className="pair"><input type="text" placeholder="moon" value={a} onChange={(e) => setA(e.target.value)} aria-label="First word" /><span aria-hidden="true">↔</span>
     <input type="text" placeholder="cheese" value={b} onChange={(e) => setB(e.target.value)} aria-label="Second word" /></div>
     <div className="examples" aria-label="Example pairs">{[['moon', 'cheese'], ['honey', 'Venus'], ['wombat', 'cube']].map(([x, y]) => <button type="button" className="soft" key={x + y} onClick={() => { setA(x); setB(y); }}>{x} + {y}</button>)}</div></div>
     <p><button disabled={busy || !a.trim() || !b.trim()}>{busy ? 'Thinking…' : 'Find the link'}</button></p>
     {msg && <div className="bubble" role="status">{msg}</div>}
-    {found && <div className="card hero" role="status"><p className="eyebrow">A real overlap</p><p style={{ fontSize: '1.1rem' }}>Both passages talk about <strong>{found.shared.join(', ')}</strong>.</p>
-      <p className="note">These sentences are copied from the sources. The rabbit picked them, and the app checked that they really share that word. It is a lead to explore, not a claim that the two things are deeply linked.</p>
-      {found.quotes.map((x: any, i: number) => <blockquote key={i} style={{ borderLeft: '3px solid var(--amber)', margin: '10px 0', padding: '2px 12px' }}>“{x.quote}”<br /><a href={x.url} target="_blank" rel="noreferrer">{x.title} (Wikipedia)</a></blockquote>)}</div>}
-    <div className="card"><h3>How this will work</h3><ul className="ticks"><li>Every link comes with its sources, so you can check it.</li><li>If the rabbit can't find a true link, it says so instead of making one up.</li><li>You only see sentences copied from the source pages, and the app checks that they share a word. It is one source per word, not independent verification.</li><li>Tries depend on your plan.</li></ul></div>
+    {found && <div className="card hero" role="status"><p className="eyebrow">A sourced bridge</p>
+      <p style={{ fontSize: '1.1rem' }}><strong>{found.a.title}</strong> and <strong>{found.b.title}</strong> both point to <strong>{found.bridge.via}</strong>.</p>
+      <p className="note">Sourced: these sentences are copied from the two Wikipedia pages, and each mentions "{found.bridge.via}".</p>
+      <blockquote style={{ borderLeft: '3px solid var(--amber)', margin: '10px 0', padding: '2px 12px' }}>“{found.bridge.sentA}”<br /><a href={found.a.url} target="_blank" rel="noreferrer">{found.a.title} (Wikipedia)</a></blockquote>
+      <blockquote style={{ borderLeft: '3px solid var(--amber)', margin: '10px 0', padding: '2px 12px' }}>“{found.bridge.sentB}”<br /><a href={found.b.url} target="_blank" rel="noreferrer">{found.b.title} (Wikipedia)</a></blockquote>
+      {found.inference && <p><span className="tag">Rabbit's guess, not sourced</span> {found.inference}</p>}
+      {found.alternatives?.length > 0 && <p className="note">Other shared topics: {found.alternatives.join(', ')}.</p>}
+      <p className="note">Both pages mentioning a topic is a lead, not proof the two things are closely related.</p></div>}
+    <div className="card"><h3>How this will work</h3><ul className="ticks"><li>Every link comes with its sources, so you can check it.</li><li>If the rabbit can't find a true link, it says so instead of making one up.</li><li>The app finds a topic both Wikipedia pages mention and shows the sentences from each. Anything the rabbit adds is labelled as its own guess.</li><li>Tries depend on your plan.</li></ul></div>
     {q && <p className="note">Your plan: {q.limit} {q.limit === 1 ? 'try' : 'tries'} per {q.period}.</p>}
   </form>;
 }

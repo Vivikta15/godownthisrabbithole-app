@@ -1,0 +1,1 @@
+CREATE TABLE extract_cache (word TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL, text TEXT NOT NULL, fetched_at INTEGER NOT NULL);

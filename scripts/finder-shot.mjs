@@ -1,0 +1,10 @@
+import puppeteer from 'puppeteer-core'; import { execSync } from 'node:child_process';
+const base = process.env.BASE; const email = `synthetic-ui-${Date.now()}@example.com`;
+const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox'] });
+const ctx = await browser.createBrowserContext(); const page = await ctx.newPage(); await page.setViewport({ width: 390, height: 900, deviceScaleFactor: 1 });
+const click = async (t) => { const [h] = await page.$$(`xpath/.//button[contains(., "${t}")]`); await h.click(); }; const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+await page.goto(base); await page.waitForSelector('form'); await page.type('input[type=email]', email); await page.type('input[type=password]', 'password-ui-1'); await page.type('input[placeholder^="What should"]', 'Jo');
+await click('Start my 3 free days'); await page.waitForSelector('.chips'); for (const t of ['space', 'A flowing story', 'A good chew']) await click(t); await click('All set'); await page.waitForSelector('.card h1'); await wait(800);
+await click('Connect'); await page.waitForSelector('input[placeholder=moon]'); await page.type('input[placeholder=moon]', 'volcano'); await page.type('input[placeholder=cheese]', 'chocolate'); await click('Find the link'); await wait(4500);
+await page.screenshot({ path: '/downloads/s-finder-live.png' }); console.log((await page.evaluate(() => document.body.innerText)).slice(0, 700)); await browser.close();
+const id = `(SELECT id FROM users WHERE email='${email}')`; execSync(`npx wrangler d1 execute rabbithole-app ${process.env.REMOTE ? '--remote' : '--local'} --command "DELETE FROM finder_uses WHERE user_id=${id}; DELETE FROM sessions WHERE user_id=${id}; DELETE FROM preferences WHERE user_id=${id}; DELETE FROM streaks WHERE user_id=${id}; DELETE FROM rabbit_holes WHERE user_id=${id}; DELETE FROM users WHERE email='${email}'"`, { stdio: 'ignore' }); console.log('cleaned');
