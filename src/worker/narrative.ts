@@ -18,6 +18,11 @@ export function mechanicalOk(claim: string, cited: string[]): boolean {
   const src = cited.join(' ').toLowerCase();
   return nums(claim).every((n) => src.includes(n.replace(/[.,]$/, '').toLowerCase())) && names(claim).every((n) => src.includes(n.toLowerCase()));
 }
+const HEDGE = /\b(may|might|usually|often|about|approximately|frequently|typically|generally|unless|if|when properly|mostly|most|some|can|could|likely|roughly)\b/i;
+// Conservative qualifier guard: if the cited source sentences hedge, the claim must keep some hedge too. Fallible; drops more than it needs to.
+export function qualifiersOk(claim: string, cited: string[]): boolean {
+  return !HEDGE.test(cited.join(' ')) || HEDGE.test(claim);
+}
 export function parseGen(raw: string): GenSentence[][] | null {
   const m = raw.match(/\{[\s\S]*\}/); if (!m) return null;
   try { const o = JSON.parse(m[0]); if (!Array.isArray(o.paragraphs)) return null;
@@ -49,7 +54,7 @@ export async function generateStory(env: AiEnv, page: Page, fmt: Fmt, len: Len, 
       for (const x of p) {
         const key = x.t.toLowerCase().replace(/[^a-z]/g, ''); if (seen.has(key) || x.c.every((n) => used.has(n))) { bad = true; debug?.push('REPEAT ' + x.t.slice(0, 60)); break; }
         const cited = x.c.filter((n) => n >= lo + 1 && n <= hi).map((n) => src[n - 1]);
-        if (!cited.length || !mechanicalOk(x.t, cited)) { bad = true; debug?.push('MECH ' + x.t.slice(0, 90)); break; }
+        if (!cited.length || !mechanicalOk(x.t, cited) || !qualifiersOk(x.t, cited)) { bad = true; debug?.push('MECH ' + x.t.slice(0, 90)); break; }
         const v = await judge(env, GEN_MODEL, cited.join(' '), x.t);
         if (v !== 'SUPPORTED') { bad = true; debug?.push(v + ' ' + x.t.slice(0, 90)); break; }
         okS.push(x.t.replace(/[.\s]+$/, '') + '.'); seen.add(key); x.c.forEach((n) => used.add(n));

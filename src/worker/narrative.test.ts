@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mechanicalOk, parseGen, cacheKey, generateStory } from './narrative';
+import { qualifiersOk, mechanicalOk, parseGen, cacheKey, generateStory } from './narrative';
 const page = { title: 'Venus', url: 'u', links: new Set<string>(), text: Array.from({ length: 10 }, (_, i) => `Source sentence number ${i + 1} says Venus takes 243 Earth days to turn once in space.`).join(' ') };
 describe('narrative', () => {
   it('mechanical check', () => { expect(mechanicalOk('Venus takes 243 days.', ['It takes 243 Earth days.'])).toBe(true); expect(mechanicalOk('Venus takes 244 days.', ['It takes 243 Earth days.'])).toBe(false); expect(mechanicalOk('Then Pearce left.', ['Minister Smith left.'])).toBe(false); });
@@ -10,3 +10,5 @@ describe('narrative', () => {
     const r = await generateStory({ DB: db as any, AI, AI_ENABLED: 'true', AI_PLAN_CONFIRMED: 'free' } as any, page as any, 'narrative', 'short'); expect(r.ok).toBe(false);
   });
 });
+import { it as it2, expect as expect2 } from 'vitest';
+it2('qualifier guard', () => { expect2(qualifiersOk('Honey does not spoil.', ['When properly stored, honey does not spoil.'])).toBe(false); expect2(qualifiersOk('Honey does not spoil when properly stored.', ['When properly stored, honey does not spoil.'])).toBe(true); expect2(qualifiersOk('Venus is hot.', ['Venus is hot.'])).toBe(true); });
