@@ -2,7 +2,7 @@
    Solid shapes, rounded letterforms, gentle motion. Text stays on calm sky tones; scenery stays below the fold line. */
 :root{
   --sans:"DM Sans Variable","DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --serif:"Baloo 2 Variable","Baloo 2","DM Sans Variable","DM Sans",system-ui,sans-serif;
+  --serif:"Cormorant Garamond","Baloo 2 Variable","Baloo 2",Georgia,serif;
   --mono:"DM Mono",ui-monospace,Menlo,monospace;--navh:60px;
   /* light theme (day). Dawn and dusk only retint the sky and scenery; night rethemes. */
   --ink:#23413a;--soft:#3a5b52;--line:#9dbdac;--ctl:#6f9c8a;
@@ -58,11 +58,11 @@ input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{ou
 .steps-bar{display:flex;gap:4px;margin:6px 0 18px}.steps-bar i{flex:1;height:4px;border-radius:2px;background:var(--line)}.steps-bar i.on{background:var(--moss)}
 .row-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.nav{position:fixed;left:0;right:0;bottom:0;height:var(--navh);display:flex;background:var(--sky);border-top:1px solid var(--line);z-index:30;padding-bottom:env(safe-area-inset-bottom)}
-.nav .brand{display:none}
-.nav button{flex:1;border:0;border-radius:0;background:transparent;color:var(--soft);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:.72rem;padding:6px 2px;font-weight:500}
+.nav{position:fixed;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));height:var(--navh);display:flex;z-index:30}
+.nav .brand,.nav .streakpill{display:none}
+.nav button{flex:1;border:0;border-radius:18px;background:transparent;color:var(--soft);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:.72rem;padding:6px 2px;font-weight:500}
 .nav button:hover{border:0}
-.nav button[aria-current=page]{color:var(--coral);box-shadow:inset 0 2.5px 0 var(--coral)}
+.nav button[aria-current=page]{color:var(--brand);background:rgba(255,255,255,.55);box-shadow:0 1px 0 #fff inset,0 2px 8px rgba(40,80,50,.15)}
 .greet{font-family:var(--serif);font-weight:600;color:var(--soft);font-size:1.1rem;margin:.2em 0 1.2em}
 .detour{position:relative;border-top:1px solid var(--line);padding-top:18px}.peek{position:absolute;right:0;top:-34px}
 .strip{border-top:1px solid var(--line);padding:16px 0;margin-top:22px}.strip.row{display:flex;gap:28px;flex-wrap:wrap}.strip p{margin:.2em 0}
@@ -90,14 +90,12 @@ blockquote{margin:1em 0;padding:10px 14px;border-left:3px solid var(--line);back
 .mascot{position:fixed;right:max(4px,calc(50% - 330px));bottom:0;width:150px;height:105px;pointer-events:none;z-index:20}
 .has-nav .mascot{bottom:var(--navh)}
 @media (min-width:900px){
-  .has-nav{max-width:none;padding:40px 220px 150px 264px}.has-nav main{max-width:680px;margin:0 auto}
-  .nav{top:0;right:auto;bottom:0;width:224px;height:auto;flex-direction:column;border-top:0;border-right:1px solid var(--line);padding:32px 14px;gap:4px}
-  .nav .brand{display:block;font-family:var(--serif);font-weight:700;font-size:1.35rem;line-height:1.1;color:var(--ink);margin:0 10px 28px}
-  .nav button{flex:none;flex-direction:row;justify-content:flex-start;gap:12px;font-size:.98rem;padding:11px 12px;border-radius:12px}
-  .nav button[aria-current=page]{box-shadow:none;background:var(--bg2)}
-  .has-nav .dock{display:none}.has-nav .mascot{right:28px;bottom:0;width:170px;height:119px}
-  .shell:not(.has-nav) .dock{display:none}.shell:not(.has-nav) .mascot{right:max(12px,calc(50% - 330px))}
-  .story-title{font-size:2.5rem}.reading p{font-size:1.15rem}
+  .has-nav{max-width:none;padding:116px 24px 150px}.has-nav main{max-width:720px;margin:0 auto}
+  .nav{top:22px;bottom:auto;left:0;right:0;margin:0 auto;width:max-content;max-width:calc(100% - 32px);height:auto;flex-direction:row;align-items:center;gap:6px;padding:8px 10px 8px 18px}
+  .nav .brand{display:flex;align-items:center;margin:0 18px 0 0;color:var(--brand)}
+  .nav .streakpill{display:block;margin:0 0 0 14px;font-family:var(--mono);font-size:.78rem;color:var(--soft);padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.5)}
+  .nav button{flex:none;flex-direction:row;gap:8px;font-size:1.02rem;padding:10px 16px;border-radius:999px}
+  .story-title{font-size:3rem}.reading p{font-size:1.15rem}
 }
 .mascot .pos,.mascot .bob,.mascot .paw,.mascot .phone,.mascot .eye{transform-box:fill-box}
 .mascot .pos{transform:translateX(-50px)}
@@ -242,6 +240,7 @@ html{transition:background-color .8s ease}
 button,.go,.ghost,a{transition:background-color .2s ease,color .2s ease,border-color .2s ease,transform .15s ease}
 .reading p{line-height:1.75}
 
+<<<<<<< HEAD
 /* Lake world (approved 28 Oct): a fixed Three.js lake behind every screen. Content sits on still paper panels, in the day palette, whatever the time of day. */
 html,body{background:#1d3a38}
 .lake-world{position:fixed;inset:0;width:100vw;height:100vh;height:100lvh;display:block;z-index:0;pointer-events:none}
@@ -272,3 +271,5 @@ html,body{background:#1d3a38}
 .consent{position:fixed;left:50%;bottom:calc(16px + var(--navh, 0px));transform:translateX(-50%);width:min(560px, calc(100% - 32px));background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:14px 18px;z-index:60;box-shadow:0 8px 28px rgb(35 65 58 / .22)}
 .consent .kicker{margin:0 0 6px}
 .consent .note{margin:0 0 10px}
+=======
+>>>>>>> d2a6313 (Meadow backdrop, glass UI, reactive motion and a small rabbit)

@@ -4,7 +4,12 @@ import { App } from './App';
 import '@fontsource-variable/baloo-2';
 import '@fontsource-variable/dm-sans';
 import '@fontsource/dm-mono/400.css';
+import '@fontsource/cormorant-garamond/500.css';
+import '@fontsource/cormorant-garamond/500-italic.css';
+import '@fontsource/cormorant-garamond/600.css';
+import '@fontsource/cormorant-garamond/700.css';
 import './styles.css';
+import './meadow.css';
 
 // Time-of-day theme from the device clock: dawn 5-8, day 8-17, dusk 17-20, night 20-5.
 // ?daypart= overrides it for testing. No location or weather data is read or sent anywhere.
