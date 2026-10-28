@@ -1,114 +1,73 @@
-// Three.js motion preview. The scene frames the article (top band and a bottom scroll bar); the words sit on a still panel.
-// Honours prefers-reduced-motion (one still frame), a Pause button, hidden tabs and off-screen canvases. DPR is capped.
+// Three.js motion preview 2: a top-down autumn lake, lit and shaded. Article text stays on still paper panels over it.
+// Provisional art direction, not final. Native page scroll drives the world through a damped value; nothing is hijacked.
 import * as THREE from 'three';
 import '@fontsource-variable/baloo-2'; import '@fontsource-variable/dm-sans'; import '@fontsource/dm-mono/400.css';
 import './motion.css';
 import { SEED } from '../content/seed';
 
+const s = SEED.find((x) => x.id === 'honey')!; const host = document.getElementById('panels')!;
+const paras = s.story.map((p) => p.replace(/[<>&]/g, '')); const per = Math.ceil(Math.min(paras.length, 6) / 3);
+for (let i = 0; i < 3; i++) { const chunk = paras.slice(i * per, i * per + per); if (!chunk.length) break; const sec = document.createElement('section'); sec.className = 'panel'; sec.style.setProperty('--r', `${[-0.5, 0.4, -0.3][i]}deg`); sec.innerHTML = (i === 0 ? '<h1>Why honey outlasts almost everything</h1>' : '') + chunk.map((p) => `<p>${p}</p>`).join(''); host.appendChild(sec); }
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-let paused = reduce; const toggle = document.getElementById('toggle') as HTMLButtonElement;
-const setToggle = () => { toggle.textContent = paused ? 'Play motion' : 'Pause motion'; toggle.setAttribute('aria-pressed', String(paused)); };
-toggle.onclick = () => { paused = !paused; setToggle(); kick(); }; setToggle();
-const q = new URLSearchParams(location.search); const FIXED_T = q.has('t') ? Number(q.get('t')) : null; // ?t=seconds renders one deterministic frame (used for screenshots)
-if (FIXED_T !== null) paused = true;
+const io = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting && e.target.classList.add('in')), { threshold: 0.12 });
+document.querySelectorAll('.panel').forEach((p) => (reduce ? p.classList.add('in') : io.observe(p)));
 
-// Article: first paragraphs of a real story from the app.
-const s = SEED.find((x) => x.id === 'honey')!; const art = document.getElementById('article')!;
-art.innerHTML = `<h1>${s.title === 'Honey' ? 'Why honey outlasts almost everything' : s.title}</h1>` + s.story.slice(0, 3).map((p) => `<p>${p.replace(/[<>&]/g, '')}</p>`).join('');
+const canvas = document.getElementById('scene') as HTMLCanvasElement;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75)); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100); camera.position.set(0, 0, 14);
+scene.add(new THREE.HemisphereLight(0xffe2b8, 0x1d3a38, 1.05)); const sun = new THREE.DirectionalLight(0xffc98a, 2.4); sun.position.set(-4, 6, 8); scene.add(sun);
 
-const C = (h: number) => new THREE.Color(h);
-const rnd = (seed: number) => () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
-const mat = (c: number, o = 1) => new THREE.MeshBasicMaterial({ color: c, transparent: o < 1, opacity: o, depthTest: false });
-let ord = 0; // painter's order = order of creation (renderOrder is per object, not inherited)
-const add = (g: THREE.Object3D, m: THREE.Object3D, z: number) => { m.position.z = z; m.renderOrder = ++ord; g.add(m); return m; };
-const H = 9;
+// Water: layered ripple normals, warm sky reflection, soft caustic light, drifting canopy shadow.
+const water = new THREE.ShaderMaterial({
+  uniforms: { uT: { value: 0 }, uS: { value: 0 }, uAsp: { value: 1 } },
+  vertexShader: 'varying vec2 vP; void main(){ vP = position.xy*2.0; gl_Position = vec4(position.xy*2.0,0.0,1.0); }',
+  fragmentShader: `precision highp float; varying vec2 vP; uniform float uT,uS,uAsp;
+  float h(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+  float n(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }
+  float fbm(vec2 p){ float a=.5,v=0.; for(int i=0;i<4;i++){ v+=a*n(p); p=p*2.03+vec2(7.1,3.7); a*=.5; } return v; }
+  float ht(vec2 p){ return fbm(p*.9+vec2(uT*.03,-uT*.02)) + .22*fbm(p*2.6-vec2(uT*.05,uT*.03)); }
+  void main(){ vec2 uv=vP; uv.x*=uAsp; vec2 w=uv*2.2+vec2(0.,uS*1.4);
+    float e=.012; float c=ht(w); vec3 nm=normalize(vec3(c-ht(w+vec2(e,0.)), c-ht(w+vec2(0.,e)), .06));
+    vec3 deep=vec3(.075,.17,.165), mid=vec3(.15,.31,.28); vec3 col=mix(deep,mid,smoothstep(.3,1.0,c)*.7+ (1.-vP.y-.5)*.15);
+    float refl=pow(clamp(dot(normalize(vec3(nm.xy*1.8,1.)),normalize(vec3(-.35,.5,.8))),0.,1.),9.); col+=vec3(.95,.55,.28)*refl*.38;
+    float sky=smoothstep(.2,.9,fbm(w*.45+vec2(3.,uS*.3))); col=mix(col,vec3(.55,.34,.2),sky*.10*(.5+.5*nm.x));
+    vec2 q=w*1.5+nm.xy*1.6; float ca=n(q+vec2(uT*.08,0.))*n(q*1.3-vec2(0.,uT*.07)); col+=vec3(.9,.78,.55)*smoothstep(.30,.7,ca)*.07;
+    float sh=smoothstep(.52,.78,fbm(uv*1.1+vec2(uT*.012,uS*.5+uT*.01))); col*=1.-sh*.32;
+    float vg=smoothstep(1.25,.25,length(vP*vec2(1.,1.1))); col*=.55+.45*vg;
+    gl_FragColor=vec4(col,1.); }`, depthWrite: false, depthTest: false });
+const bg = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), water); bg.frustumCulled = false; bg.renderOrder = -10; scene.add(bg);
 
-type Scene = { scene: THREE.Scene; update: (t: number) => void; dispose: () => void };
-function buildHero(W: number): Scene {
-  const scene = new THREE.Scene(); const root = new THREE.Group(); scene.add(root); const R = rnd(7);
-  // sky: cooler peach to pale mist, autumn not winter
-  const sky = new THREE.Mesh(new THREE.PlaneGeometry(W + 2, H + 2), new THREE.ShaderMaterial({ depthTest: false, uniforms: { a: { value: C(0xcfe0d6) }, b: { value: C(0xf3d6b6) } }, vertexShader: 'varying vec2 v;void main(){v=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}', fragmentShader: 'varying vec2 v;uniform vec3 a,b;void main(){gl_FragColor=vec4(mix(b,a,smoothstep(.15,1.,v.y)),1.);\n#include <colorspace_fragment>\n}' }));
-  add(root, sky, -9);
-  const sun = new THREE.Mesh(new THREE.CircleGeometry(0.9, 40), mat(0xf4c98a, 0.75)); sun.position.set(W * 0.22, 1.6, 0); add(root, sun, -8);
-  const ridges: THREE.Mesh[] = [];
-  const ridge = (base: number, amp: number, f: number, ph: number, col: number, z: number) => {
-    const sh = new THREE.Shape(); sh.moveTo(-W / 2 - 1.5, -H); for (let i = 0; i <= 60; i++) { const x = -W / 2 - 1.5 + ((W + 3) * i) / 60; sh.lineTo(x, base + amp * Math.sin(x * f + ph) + amp * 0.4 * Math.sin(x * f * 2.3 + ph * 2)); }
-    sh.lineTo(W / 2 + 1.5, -H); const m = new THREE.Mesh(new THREE.ShapeGeometry(sh), mat(col)); add(root, m, z); ridges.push(m); return m;
-  };
-  ridge(0.35, 0.5, 0.5, 0.4, 0xb9cdb5, -7); ridge(-0.1, 0.45, 0.7, 2.1, 0x93baa6, -6);
-  const pines = new THREE.Group(); add(root, pines, -5);
-  for (let i = 0; i < 26; i++) { const x = -W / 2 + R() * W, h = 0.7 + R() * 0.9; const sh = new THREE.Shape(); sh.moveTo(-h * 0.28, 0); sh.lineTo(0, h); sh.lineTo(h * 0.28, 0); const m = new THREE.Mesh(new THREE.ShapeGeometry(sh), mat(R() > 0.8 ? 0xc47a4e : 0x4e7a63)); m.position.set(x, -0.55 - R() * 0.35, 0); pines.add(m); }
-  ridge(-0.75, 0.18, 0.9, 5.0, 0x6f9c7e, -4);
-  // lake with moving ripples
-  const lakeMat = new THREE.ShaderMaterial({ depthTest: false, uniforms: { t: { value: 0 }, a: { value: C(0x7fb0a2) }, b: { value: C(0x5b9486) } }, vertexShader: 'varying vec2 v;void main(){v=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-    fragmentShader: 'varying vec2 v;uniform float t;uniform vec3 a,b;void main(){float w=sin(v.y*70.+sin(v.x*9.+t*.6)*1.6-t*.9)*.5+.5;float row=floor(v.y*30.);float f=fract(v.y*30.);float h=fract(sin(row*12.9898)*43758.5453);float dash=smoothstep(.88,.97,sin(v.x*16.+h*40.+t*(.25+h*.3))*.5+.5)*step(.42,f)*step(f,.58);vec3 c=mix(b,a,v.y)+vec3(w*.03)+vec3(dash*.22*smoothstep(.1,.9,v.y));gl_FragColor=vec4(c,1.);\n#include <colorspace_fragment>\n}' });
-  const lake = new THREE.Mesh(new THREE.PlaneGeometry(W + 2, 4.2), lakeMat); lake.position.set(0, -4.5 + 2.1 - 0.2, 0); add(root, lake, -3);
-  // rabbit reading, on the near shore at the left
-  const rab = new THREE.Group(); const rx = -W * 0.3; rab.position.set(rx, -3.2, 0); add(root, rab, 2);
-  const part = (g: THREE.BufferGeometry, c: number, x: number, y: number, z: number, sx = 1, sy = 1, rz = 0, p: THREE.Object3D = rab) => { const m = new THREE.Mesh(g, mat(c)); m.position.set(x, y, 0); m.scale.set(sx, sy, 1); m.rotation.z = rz; add(p, m, z); return m; };
-  const circ = new THREE.CircleGeometry(1, 32);
-  part(circ, 0x84684f, 0.2, -0.78, 0, 2.2, 0.34); // log seat
-  const body = part(circ, 0xfbf7ec, 0, -0.1, 0.1, 0.78, 0.74);
-  part(circ, 0xfbf7ec, -0.78, -0.28, 0.05, 0.24, 0.24); // tail
-  const head = new THREE.Group(); head.position.set(0.05, 0.78, 0); add(rab, head, 0.3);
-  const earL = new THREE.Group(), earR = new THREE.Group(); earL.position.set(-0.17, 0.3, 0); earR.position.set(0.15, 0.3, 0); add(head, earL, -0.1); add(head, earR, -0.1);
-  for (const [e, rz] of [[earL, 0.12], [earR, -0.1]] as [THREE.Group, number][]) { part(circ, 0xfbf7ec, 0, 0.38, 0, 0.14, 0.5, rz, e); part(circ, 0xe9a9a0, 0, 0.36, 0.01, 0.07, 0.34, rz, e); }
-  part(circ, 0xfbf7ec, 0, 0, 0, 0.46, 0.4, 0, head);
-  part(circ, 0x23413a, 0.17, 0.02, 0.2, 0.045, 0.05, 0, head); part(circ, 0xe9a9a0, 0.28, -0.1, 0.2, 0.08, 0.06, 0, head);
-  const bookG = new THREE.Group(); bookG.position.set(0.42, -0.05, 0); add(rab, bookG, 0.5);
-  part(new THREE.PlaneGeometry(1, 1), 0x7d5310, 0, 0, 0, 0.95, 0.62, 0.12, bookG); part(new THREE.PlaneGeometry(1, 1), 0xfbf7ec, -0.23, 0.02, 0.01, 0.42, 0.52, 0.12, bookG); const page = part(new THREE.PlaneGeometry(1, 1), 0xf3e9d2, 0.22, 0.02, 0.01, 0.42, 0.52, 0.12, bookG);
-  // leaves drifting inside the hero band only
-  const N = 34; const leaves = new THREE.InstancedMesh(new THREE.CircleGeometry(0.11, 4), new THREE.MeshBasicMaterial({ depthTest: false, transparent: true }), N); leaves.renderOrder = 60; leaves.frustumCulled = false; root.add(leaves);
-  const cols = [0xc47a4e, 0xd99a55, 0xa83a24, 0xe0b04a, 0x8a6d54]; const L = Array.from({ length: N }, () => ({ x: R() * W - W / 2, y: R() * H - H / 2, v: 0.25 + R() * 0.35, ph: R() * 6.28, sw: 0.3 + R() * 0.6, s: 0.7 + R() * 0.9 }));
-  L.forEach((l, i) => leaves.setColorAt(i, C(cols[i % cols.length]))); const dm = new THREE.Object3D();
-  // fish: jumps every 9s with ripples
-  const fish = new THREE.Group(); const fy = -2.45; add(root, fish, 3);
-  part(circ, 0xd2603a, 0, 0, 0, 0.34, 0.15, 0, fish); const tail = new THREE.Mesh(new THREE.CircleGeometry(0.16, 3), mat(0xb54a2c)); tail.rotation.z = Math.PI; tail.position.set(-0.36, 0, 0); fish.add(tail); part(circ, 0xfbf7ec, 0.18, 0.03, 0.1, 0.03, 0.03, 0, fish);
-  const ring = (w: number) => { const m = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 40), mat(0xfbf7ec, 0)); m.scale.set(1, 0.22, 1); m.position.set(0, fy, 0); add(root, m, -2); return m; };
-  const r1 = ring(1), r2 = ring(1); const fx0 = W * 0.18;
-  const update = (t: number) => {
-    lakeMat.uniforms.t.value = t; ridges.forEach((m, i) => { m.position.x = Math.sin(t * 0.05 + i) * 0.12; }); pines.position.x = Math.sin(t * 0.05 + 1) * 0.1;
-    body.scale.y = 0.74 + 0.012 * Math.sin(t * 1.6); head.rotation.z = -0.1 + 0.015 * Math.sin(t * 1.1); const tw = Math.max(0, Math.sin(t * 0.7 + 1)) ** 12; earR.rotation.z = -0.08 * tw; earL.rotation.z = 0.05 * Math.sin(t * 0.37);
-    page.rotation.z = 0.12 + (((t % 7) > 6.4) ? Math.sin(((t % 7) - 6.4) / 0.6 * Math.PI) * 0.35 : 0);
-    L.forEach((l, i) => { const y = ((l.y - t * l.v + H / 2) % H + H) % H - H / 2; const x = l.x + Math.sin(t * l.sw + l.ph) * 0.45; const hidden = y < -2.5 && x > -W / 2 + 4; dm.position.set(x, y, 0); dm.rotation.z = t * 0.6 + l.ph; dm.scale.setScalar(hidden ? 0.001 : l.s); dm.updateMatrix(); leaves.setMatrixAt(i, dm.matrix); }); leaves.instanceMatrix.needsUpdate = true;
-    const c = t % 9, u = (c - 6.2) / 1.6; // 1.6s airborne
-    if (u >= 0 && u <= 1) { const x = fx0 + (u - 0.5) * 1.8, y = fy + 1.6 * 4 * u * (1 - u); fish.visible = true; fish.position.set(x, y, 0); fish.rotation.z = Math.atan2(1.6 * 4 * (1 - 2 * u), 1.8 * 1.6) ; tail.rotation.z = Math.PI + Math.sin(t * 24) * 0.4; } else fish.visible = false;
-    const rp = (k: number, at: number) => { const v = (c - at) / 1.4; const on = v >= 0 && v <= 1; (k === 1 ? r1 : r2).position.x = fx0 + (k === 1 ? -0.9 : 0.9); (k === 1 ? r1 : r2).scale.set(0.2 + v * 1.1, (0.2 + v * 1.1) * 0.22, 1); ((k === 1 ? r1 : r2).material as THREE.MeshBasicMaterial).opacity = on ? 0.55 * (1 - v) : 0; };
-    rp(1, 6.2); rp(2, 7.8);
-  };
-  return { scene, update, dispose: () => scene.traverse((o: any) => { o.geometry?.dispose?.(); o.material?.dispose?.(); }) };
+// Leaves: shaded, slightly cupped, drifting on the surface with a soft contact shadow.
+function leafTexture(a: string, b: string, vein: string) { const c = document.createElement('canvas'); c.width = 256; c.height = 256; const g = c.getContext('2d')!; const gr = g.createLinearGradient(0, 0, 256, 256); gr.addColorStop(0, a); gr.addColorStop(1, b); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(${40 + Math.random() * 60},${20 + Math.random() * 30},10,${Math.random() * 0.07})`; g.fillRect(Math.random() * 256, Math.random() * 256, 2 + Math.random() * 6, 1 + Math.random() * 3); } g.strokeStyle = vein; g.lineWidth = 2.5; g.beginPath(); g.moveTo(128, 6); g.lineTo(128, 250); g.stroke(); g.lineWidth = 1.2; for (let i = 0; i < 9; i++) { const y = 40 + i * 22; g.beginPath(); g.moveTo(128, y); g.lineTo(40 + (i % 2) * 10, y - 26); g.moveTo(128, y); g.lineTo(216 - (i % 2) * 10, y - 26); g.stroke(); } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; }
+const tex = [leafTexture('#b8341d', '#7d1f12', '#4d140c'), leafTexture('#e08a1f', '#a8501a', '#6a3510'), leafTexture('#cfa52a', '#8d6a1c', '#5b4412'), leafTexture('#9b5a22', '#5e3417', '#3b210e')];
+function leafGeo() { const sh = new THREE.Shape(); sh.moveTo(0, 1); sh.bezierCurveTo(.55, .7, .78, .1, .22, -.78); sh.lineTo(0, -1); sh.lineTo(-.22, -.78); sh.bezierCurveTo(-.78, .1, -.55, .7, 0, 1); const g = new THREE.ShapeGeometry(sh, 14); const p = g.attributes.position as THREE.BufferAttribute; const uv = g.attributes.uv as THREE.BufferAttribute; for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i); p.setZ(i, Math.abs(x) * 0.34 - y * y * 0.06); uv.setXY(i, x * 0.5 + 0.5, y * 0.5 + 0.5); } g.computeVertexNormals(); return g; }
+const geo = leafGeo(); const shadowMat = new THREE.MeshBasicMaterial({ color: 0x06100e, transparent: true, opacity: 0.34, depthWrite: false });
+type Leaf = { m: THREE.Mesh; sh: THREE.Mesh; x: number; y: number; d: number; r: number; ph: number; sp: number; sz: number };
+const leaves: Leaf[] = []; const SPAN = 30;
+for (let i = 0; i < 34; i++) { const sz = 0.45 + Math.random() * 0.75; const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex[i % 4], roughness: 0.78, metalness: 0, side: THREE.DoubleSide })); const sh = new THREE.Mesh(geo, shadowMat); sh.renderOrder = -5; scene.add(sh, m); leaves.push({ m, sh, x: (Math.random() - 0.5) * 12, y: Math.random() * SPAN, d: 0.35 + Math.random() * 0.65, r: Math.random() * 6.28, ph: Math.random() * 6.28, sp: 0.4 + Math.random() * 0.8, sz }); }
+
+// Quiet figures: a fish shadow gliding under the surface, a rabbit silhouette reading on a stone.
+function silhouette(draw: (g: CanvasRenderingContext2D) => void, w: number, h: number) { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d')!; draw(g); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
+const fishTex = silhouette((g) => { g.fillStyle = '#03100e'; g.beginPath(); g.moveTo(10, 64); g.bezierCurveTo(60, 20, 150, 22, 190, 64); g.bezierCurveTo(150, 106, 60, 108, 10, 64); g.fill(); g.beginPath(); g.moveTo(186, 64); g.lineTo(250, 22); g.quadraticCurveTo(232, 64, 250, 106); g.closePath(); g.fill(); }, 256, 128);
+const fish = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.3), new THREE.MeshBasicMaterial({ map: fishTex, transparent: true, opacity: 0.22, depthWrite: false })); fish.renderOrder = -6; scene.add(fish);
+const rabTex = silhouette((g) => { g.fillStyle = '#10241f'; g.beginPath(); g.ellipse(112, 176, 58, 46, 0, 0, 6.3); g.fill(); g.beginPath(); g.ellipse(156, 126, 27, 23, 0, 0, 6.3); g.fill(); g.beginPath(); g.ellipse(148, 74, 8, 32, -0.12, 0, 6.3); g.fill(); g.beginPath(); g.ellipse(172, 76, 8, 30, 0.18, 0, 6.3); g.fill(); g.beginPath(); g.arc(60, 190, 14, 0, 6.3); g.fill(); g.fillStyle = '#e9d9b0'; g.beginPath(); g.moveTo(150, 168); g.lineTo(200, 160); g.lineTo(206, 190); g.lineTo(152, 198); g.closePath(); g.fill(); g.strokeStyle = '#10241f'; g.lineWidth = 2; g.beginPath(); g.moveTo(178, 164); g.lineTo(179, 194); g.stroke(); }, 256, 256);
+const rabbit = new THREE.Group(); const stone = new THREE.Mesh(new THREE.CircleGeometry(1.5, 40), new THREE.MeshStandardMaterial({ color: 0x5b6760, roughness: 0.95 })); stone.scale.set(1, 0.62, 1); const rabM = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), new THREE.MeshBasicMaterial({ map: rabTex, transparent: true })); rabM.position.set(0, 0.62, 0.05); const stShadow = new THREE.Mesh(new THREE.CircleGeometry(1.7, 40), shadowMat); stShadow.scale.set(1.1, 0.7, 1); stShadow.position.set(0.22, -0.2, -0.05); rabbit.add(stShadow, stone, rabM); scene.add(rabbit);
+
+let T = 0, S = 0, target = 0, last = performance.now(), paused = reduce, frames = 0, visible = true; let halfW = 5, halfH = 5;
+function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); water.uniforms.uAsp.value = w / h; halfH = Math.tan((camera.fov * Math.PI) / 360) * camera.position.z; halfW = halfH * camera.aspect; bg.scale.set(1, 1, 1); }
+function place(dt: number) {
+  for (const l of leaves) { const yy = (((l.y - S * 3.2 * l.d + T * 0.05 * l.d) % SPAN) + SPAN) % SPAN - SPAN / 2; const x = l.x * (halfW / 5.5) + Math.sin(T * 0.25 * l.sp + l.ph) * 0.35; const bob = Math.sin(T * 0.8 * l.sp + l.ph);
+    l.m.position.set(x, yy, 0.04 + bob * 0.015); l.m.scale.setScalar(l.sz); l.m.rotation.set(Math.sin(T * 0.5 * l.sp + l.ph) * 0.12, Math.cos(T * 0.43 * l.sp + l.ph) * 0.1, l.r + Math.sin(T * 0.15 * l.sp + l.ph) * 0.5 + S * 0.15 * l.d);
+    l.sh.position.set(x + 0.14 * l.sz, yy - 0.12 * l.sz, 0); l.sh.scale.setScalar(l.sz * 1.04); l.sh.rotation.copy(l.m.rotation); l.sh.rotation.x = 0; l.sh.rotation.y = 0; }
+  fish.position.set(Math.sin(T * 0.07) * halfW * 0.7, ((T * 0.18 - S * 2.2) % 22) - 11, -0.1); fish.rotation.z = Math.cos(T * 0.07) * 0.7 + Math.PI / 2 * 0 - 1.2; fish.scale.setScalar(1 + Math.sin(T * 0.9) * 0.015);
+  rabbit.position.set(-halfW * 0.62, -halfH * 0.52 + S * 0.9 * 0 , 0.02); rabbit.scale.setScalar(Math.min(1, halfW / 4.5) * 0.9); rabM.position.y = 0.62 + Math.sin(T * 1.1) * 0.012;
 }
-
-function buildCatch(W: number): Scene & { setProgress: (p: number) => void } {
-  const scene = new THREE.Scene(); const h = 1.2; let prog = 0;
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(W, h), mat(0xcfe0d6)); water.renderOrder = 0; scene.add(water);
-  const pts = 80; const geo = new THREE.BufferGeometry(); const pos = new Float32Array(pts * 3); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x5b9486, depthTest: false })); line.renderOrder = 1; line.frustumCulled = false; scene.add(line);
-  const fish = new THREE.Group(); const fb = new THREE.Mesh(new THREE.CircleGeometry(1, 24), mat(0xd2603a)); fb.scale.set(0.2, 0.09, 1); fish.add(fb); const ft = new THREE.Mesh(new THREE.CircleGeometry(0.1, 3), mat(0xb54a2c)); ft.rotation.z = Math.PI; ft.position.x = -0.22; fish.add(ft); fish.renderOrder = 3; fb.renderOrder = 3; ft.renderOrder = 3; scene.add(fish);
-  const track = (x: number, t: number) => Math.sin(x * 3 + t * 1.5) * 0.04;
-  const update = (t: number) => { const fxp = -W / 2 + 0.25 + prog * (W - 0.5); for (let i = 0; i < pts; i++) { const x = -W / 2 + (W * i) / (pts - 1); const on = x <= fxp; pos[i * 3] = x; pos[i * 3 + 1] = on ? track(x, t) - 0.02 : track(x, t) - 0.3; pos[i * 3 + 2] = 0; } geo.attributes.position.needsUpdate = true;
-    const lift = prog > 0.97 ? Math.min(1, (prog - 0.97) / 0.03) * 0.25 : 0; fish.position.set(fxp, track(fxp, t) + lift, 0.1); fish.rotation.z = Math.sin(t * 2) * 0.06 + lift * 0.8; ft.rotation.z = Math.PI + Math.sin(t * 14) * 0.3; };
-  return { scene, update, setProgress: (p) => { prog = Math.max(0, Math.min(1, p)); }, dispose: () => scene.traverse((o: any) => { o.geometry?.dispose?.(); o.material?.dispose?.(); }) };
-}
-
-function mount<T extends Scene>(canvas: HTMLCanvasElement, build: (W: number) => T, drawsAlways = false) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'low-power' });
-  const state = { s: null as T | null, W: 0, w: 0, h: 0, visible: true, last: 0 };
-  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, -20, 20);
-  const size = () => { const r = canvas.getBoundingClientRect(); const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height)); if (w === state.w && h === state.h) return; state.w = w; state.h = h; renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5)); renderer.setSize(w, h, false);
-    const vh = build === (buildHero as any) ? H : 1.2; const vw = vh * (w / h); state.W = vw; cam.left = -vw / 2; cam.right = vw / 2; cam.top = vh / 2; cam.bottom = -vh / 2; cam.updateProjectionMatrix(); state.s?.dispose(); state.s = build(vw); if (build === (buildHero as any)) state.s.scene.position.y = 0; };
-  size(); new ResizeObserver(() => { size(); draw(performance.now() / 1000); }).observe(canvas);
-  new IntersectionObserver((e) => { state.visible = e[0].isIntersecting; kick(); }).observe(canvas);
-  const draw = (t: number) => { if (!state.s) return; state.s.update(FIXED_T ?? t); renderer.render(state.s.scene, cam); };
-  return { draw, state, renderer };
-}
-const hero = mount(document.getElementById('scene') as HTMLCanvasElement, buildHero);
-const catchM = mount(document.getElementById('catch') as HTMLCanvasElement, buildCatch as any, true);
-const prog = () => { const d = document.documentElement; return d.scrollTop / Math.max(1, d.scrollHeight - innerHeight); };
-let raf = 0; const t0 = performance.now();
-function frame(now: number) { raf = 0; const t = (now - t0) / 1000; if (!paused && !document.hidden) {
-  if (now - hero.state.last > 33) { hero.state.last = now; if (hero.state.visible) hero.draw(t); }
-  (catchM.state.s as any)?.setProgress(prog()); catchM.draw(t); raf = requestAnimationFrame(frame); } }
-function kick() { const t = (performance.now() - t0) / 1000; (catchM.state.s as any)?.setProgress(prog()); hero.draw(t); catchM.draw(t); if (!paused && !document.hidden && !raf) raf = requestAnimationFrame(frame); }
-addEventListener('scroll', () => { if (paused) kick(); }, { passive: true }); document.addEventListener('visibilitychange', kick); kick();
-(window as any).__motion = { frames: () => hero.renderer.info.render.frame, paused: () => paused };
+function frame(now: number) {
+  requestAnimationFrame(frame); const dt = Math.min(0.05, (now - last) / 1000); last = now; if (!visible || document.hidden) return;
+  if (!paused) T += dt; target = scrollY / innerHeight; S += (target - S) * (1 - Math.exp(-dt * 5.5));
+  water.uniforms.uT.value = T; water.uniforms.uS.value = S; place(dt); renderer.render(scene, camera); frames++; }
+addEventListener('resize', resize); resize(); const q = new URLSearchParams(location.search); if (q.has('t')) T = Number(q.get('t')); if (q.has('s')) { S = target = Number(q.get('s')); }
+requestAnimationFrame(frame);
+const btn = document.getElementById('toggle')!; btn.textContent = paused ? 'Play motion' : 'Pause motion'; btn.addEventListener('click', () => { paused = !paused; btn.textContent = paused ? 'Play motion' : 'Pause motion'; btn.setAttribute('aria-pressed', String(paused)); });
+(window as unknown as { __motion: unknown }).__motion = { frames: () => frames, paused: () => paused, setS: (v: number) => { S = target = v; } };
