@@ -261,3 +261,9 @@ html,body{background:#1d3a38}
 .welcome .hero{display:none}
 .lake,.scene,.marginscene svg,.lakewrap svg{filter:saturate(.5) sepia(.3) brightness(.95) contrast(.96)}
 .mascot{filter:brightness(.3) sepia(.4) saturate(.8) drop-shadow(0 0 1.5px rgba(246,228,186,.95)) drop-shadow(0 0 10px rgba(255,205,130,.35))}
+
+/* Reading progress is a thin line with a small marker, not the old pale lake strip with a fish. */
+.rail{height:4px;background:rgba(20,40,34,.35);border-bottom:0}
+.railsvg{display:none}
+.railfish{width:10px;height:10px;bottom:-3px;border-radius:50%;background:#c4552b;border:1px solid #f6efe0}
+.railfish *{display:none}
