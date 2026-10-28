@@ -5,11 +5,11 @@ const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 async function run(tag, w, h) {
   const email = `synthetic-lake-${tag}-${Date.now()}@example.test`;
-  const page = await (await browser.createBrowserContext()).newPage(); await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 }); await page.emulateTimezone('Asia/Calcutta'); await page.setExtraHTTPHeaders({ 'cf-connecting-ip': '10.9.' + Math.floor(Math.random()*250) + '.' + Math.floor(Math.random()*250) });
+  const page = await (await browser.createBrowserContext()).newPage(); await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 }); await page.emulateTimezone('Asia/Calcutta'); if (!process.env.NOSPOOF) await page.setExtraHTTPHeaders({ 'cf-connecting-ip': '10.9.' + Math.floor(Math.random()*250) + '.' + Math.floor(Math.random()*250) });
   const errs = []; page.on('pageerror', (e) => errs.push(String(e)));
   const click = async (t) => { const [el] = await page.$$(`xpath/.//button[contains(., "${t}")]`); if (!el) throw new Error('no button ' + t); await el.click(); };
   const shot = (n) => page.screenshot({ path: `${out}/${tag}-${n}.png` });
-  await page.goto(base + `?daypart=${process.env.DP}`); await page.waitForSelector('.welcome'); await wait(800); await shot('welcome-day');
+  await page.goto(base + `?daypart=${process.env.DP}`); await page.waitForSelector('.welcome, .hero, h1', {timeout:60000}); await wait(2500); await shot('welcome-day');
   await click("Let's wander"); await page.waitForSelector('form'); await page.type('input[type=email]', email); await page.type('input[type=password]', 'password-synth1'); await click('Start my 3 free days');
   await page.waitForSelector('select'); await click('Next'); await page.waitForSelector('.chips'); await click('everyday life'); await click('Next'); await wait(200); await click('Skip'); await wait(200); await click('A flowing story'); await click('Next'); await wait(200); await click('All set');
   await page.waitForSelector('.nav'); await wait(1000); await shot('explore-day');
