@@ -21,10 +21,10 @@ export function TagGlyph({ tag, size = 22 }: { tag: string; size?: number }) {
 export function Plate({ tags }: { tags: string[] }) {
   const t = tags.slice(0, 3); const xs = t.length === 1 ? [160] : t.length === 2 ? [95, 225] : [60, 160, 260]; const cols = ['var(--moss)', 'var(--amber)', 'var(--coral)'];
   return <svg className="plate" viewBox="0 0 320 120" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
-    <path d="M0 96c40-22 70-22 110-6s80 14 120-4 60-10 90-2V120H0z" fill="var(--bg2)" />
+    <path d="M0 96c40-22 70-22 110-6s80 14 120-4 60-10 90-2V120H0z" fill="var(--grass)" opacity=".6" />
     <path d="M0 100c50-14 90-10 130 2s100 8 190-8" fill="none" stroke="var(--line)" strokeWidth="1.2" />
     {xs.length > 1 && <path d={`M${xs[0]} 64 C ${(xs[0] + xs[xs.length - 1]) / 2} 100, ${(xs[0] + xs[xs.length - 1]) / 2} 30, ${xs[xs.length - 1]} 64`} fill="none" stroke="var(--ctl)" strokeWidth="1.4" strokeDasharray="3 6" strokeLinecap="round" />}
-    {t.map((tag, i) => <g key={tag} transform={`translate(${xs[i] - 24} 36) scale(2)`} style={{ color: cols[i] }}><circle cx="12" cy="12" r="13" fill="var(--bg)" stroke="var(--line)" strokeWidth=".6" /><g fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">{G[tag] ?? FALLBACK}</g></g>)}
+    {t.map((tag, i) => <g key={tag} transform={`translate(${xs[i] - 24} 36) scale(2)`} style={{ color: cols[i] }}><circle cx="12" cy="12" r="13" fill="var(--panel)" stroke="var(--line)" strokeWidth=".6" /><g fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">{G[tag] ?? FALLBACK}</g></g>)}
   </svg>;
 }
 
@@ -38,7 +38,7 @@ export function TrailPath({ n, of = 7 }: { n: number; of?: number }) {
     <path d={d} fill="none" stroke="var(--ctl)" strokeWidth="2" strokeDasharray="2 7" strokeLinecap="round" />
     {done && <path d={done} fill="none" stroke="var(--moss)" strokeWidth="2.4" strokeLinecap="round" />}
     {pts.map((p, i) => <g key={i} transform={`translate(${p.x - 11} ${p.y - 11})`}>
-      <circle cx="11" cy="11" r="17" fill="var(--bg)" stroke={i < k ? 'var(--moss)' : 'var(--ctl)'} strokeWidth="1.4" />
+      <circle cx="11" cy="11" r="17" fill="var(--panel)" stroke={i < k ? 'var(--moss)' : 'var(--ctl)'} strokeWidth="1.4" />
       <g transform="translate(-1 -1)" fill={i < k ? 'var(--moss)' : 'none'} stroke={i < k ? 'var(--moss)' : 'var(--ctl)'} strokeWidth="1.4" style={{ transform: 'translate(-1px,-1px) scale(.95)' }}>{G.animals}</g>
       {i === k - 1 && <circle className="here" cx="11" cy="11" r="19" fill="none" stroke="var(--amber)" strokeWidth="1.4" />}
     </g>)}
@@ -69,16 +69,12 @@ export function BridgeViz({ a, b, via }: { a: string; b: string; via: string }) 
   return <div className="bviz"><span className="n">{a}</span><svg viewBox="0 0 60 30" aria-hidden="true"><path d="M2 24C14 2 46 2 58 24" fill="none" stroke="var(--moss)" strokeWidth="1.6" strokeDasharray="3 4" strokeLinecap="round" /></svg><span className="n via">{via}</span><svg viewBox="0 0 60 30" aria-hidden="true"><path d="M2 24C14 2 46 2 58 24" fill="none" stroke="var(--moss)" strokeWidth="1.6" strokeDasharray="3 4" strokeLinecap="round" /></svg><span className="n">{b}</span></div>;
 }
 
-export function LabArt() {
-  return <svg className="labart" viewBox="0 0 320 90" aria-hidden="true" focusable="false"><circle cx="50" cy="60" r="14" fill="none" stroke="var(--amber)" strokeWidth="1.5" /><circle cx="270" cy="60" r="14" fill="none" stroke="var(--coral)" strokeWidth="1.5" /><path d="M64 56C110 0 210 0 256 56" fill="none" stroke="var(--ctl)" strokeWidth="1.5" strokeDasharray="3 6" strokeLinecap="round" /><text x="160" y="34" textAnchor="middle" className="svgt big">?</text></svg>;
-}
-
 // ---- Trail centrepiece, week row, next mark, month calendar. All from her real read days. ----
 export function Emblem({ n, best }: { n: number; best: number }) {
   const k = Math.min(n, 7); const R = 74;
   return <figure className="emblem"><svg viewBox="0 0 200 200" role="img" aria-label={`${n} day streak. Personal best ${best}.`}>
-    <circle cx="100" cy="100" r="90" fill="var(--bg2)" stroke="var(--line)" strokeWidth="1.2" />
-    <path d="M52 150a48 48 0 0 1 96 0z" fill="var(--bg)" stroke="var(--ctl)" strokeWidth="1.4" />
+    <circle cx="100" cy="100" r="90" fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
+    <path d="M52 150a48 48 0 0 1 96 0z" fill="var(--burrow)" opacity=".85" />
     {Array.from({ length: 7 }, (_, i) => { const a = (-90 + i * (360 / 7)) * Math.PI / 180; const x = 100 + R * Math.cos(a), y = 100 + R * Math.sin(a); const on = i < k;
       return <g key={i} transform={`translate(${x - 9} ${y - 9}) scale(.75)`} fill={on ? 'var(--moss)' : 'none'} stroke={on ? 'var(--moss)' : 'var(--ctl)'} strokeWidth="1.5">{G.animals}</g>; })}
     <text x="100" y="128" textAnchor="middle" className="emn">{n}</text>
@@ -100,7 +96,7 @@ const L = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 export function WeekRow({ cal }: { cal: { today: string; read: string[] } }) {
   const mon = addDays(cal.today, -dow(cal.today)); const days = Array.from({ length: 7 }, (_, i) => addDays(mon, i));
   return <ol className="week" aria-label="This week">{days.map((d, i) => { const r = cal.read.includes(d), f = false, t = d === cal.today, fut = d > cal.today;
-    return <li key={d} className={(r ? 'r ' : '') + (f ? 'f ' : '') + (t ? 't ' : '') + (fut ? 'fut' : '')}><span className="dl mono">{L[i]}</span><span className="dot" aria-label={`${d}${r ? ', read' : f ? ', covered by a freeze' : t ? ', today' : fut ? ', upcoming' : ', no read'}`}>{r ? <svg viewBox="0 0 24 24" width="16" height="16" fill="var(--bg)" aria-hidden="true">{G.animals}</svg> : f ? <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--amber)" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M12 3v18M4 7.500l16 9M20 7.500l-16 9" /></svg> : null}</span></li>; })}</ol>;
+    return <li key={d} className={(r ? 'r ' : '') + (f ? 'f ' : '') + (t ? 't ' : '') + (fut ? 'fut' : '')}><span className="dl mono">{L[i]}</span><span className="dot" aria-label={`${d}${r ? ', read' : f ? ', covered by a freeze' : t ? ', today' : fut ? ', upcoming' : ', no read'}`}>{r ? <svg viewBox="0 0 24 24" width="16" height="16" fill="var(--panel)" aria-hidden="true">{G.animals}</svg> : f ? <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--amber)" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M12 3v18M4 7.500l16 9M20 7.500l-16 9" /></svg> : null}</span></li>; })}</ol>;
 }
 
 export function MonthCalendar({ cal }: { cal: { today: string; read: string[] } }) {
@@ -119,51 +115,126 @@ export function MonthCalendar({ cal }: { cal: { today: string; read: string[] } 
     <p className="fine">A day is marked when you finished that day's story. Unmarked days are just blank, not misses. Freeze days aren't recorded, so they aren't shown here.</p></div>;
 }
 
-// ---- Forest world: trees, and two small scenes. Decorative; the text beside them carries the meaning. ----
-const Pine = ({ x, y, s = 1, near = false }: { x: number; y: number; s?: number; near?: boolean }) => (
-  <g transform={`translate(${x} ${y}) scale(${s})`} fill={near ? 'rgba(168,198,134,.16)' : 'var(--bg2)'} stroke={near ? 'var(--moss)' : 'var(--ctl)'} strokeWidth="1.4" strokeLinejoin="round">
-    <path d="M0 -62 L16 -34 H7 L22 -10 H9 L26 16 H-26 L-9 -10 H-22 L-7 -34 H-16 z" /><path d="M0 16 V30" strokeLinecap="round" fill="none" />
+// ---- The illustrated world: solid soft shapes, rounded trees, an autumn accent here and there. ----
+const PineS = ({ x, y, s = 1, c = 'var(--pine)' }: { x: number; y: number; s?: number; c?: string }) => (
+  <g transform={`translate(${x} ${y}) scale(${s})`} fill={c}>
+    <path d="M0 -78 L20 -42 H9 L26 -14 H11 L30 14 H-30 L-11 -14 H-26 L-9 -42 H-20 z" />
+    <rect x="-3.5" y="14" width="7" height="13" rx="2" fill="var(--wood-dark)" />
   </g>);
-const Round = ({ x, y, s = 1, near = false }: { x: number; y: number; s?: number; near?: boolean }) => (
-  <g transform={`translate(${x} ${y}) scale(${s})`} fill={near ? 'rgba(168,198,134,.16)' : 'var(--bg2)'} stroke={near ? 'var(--moss)' : 'var(--ctl)'} strokeWidth="1.4">
-    <circle cx="0" cy="-26" r="24" /><path d="M0 -2 V28" fill="none" strokeLinecap="round" /><path d="M0 14 l9 -10" fill="none" strokeLinecap="round" />
+const RoundS = ({ x, y, s = 1, c = 'var(--pine)' }: { x: number; y: number; s?: number; c?: string }) => (
+  <g transform={`translate(${x} ${y}) scale(${s})`} fill={c}>
+    <rect x="-3" y="-8" width="6" height="22" rx="2.5" fill="var(--wood-dark)" />
+    <circle cx="0" cy="-26" r="21" /><circle cx="-14" cy="-16" r="13" /><circle cx="14" cy="-16" r="13" />
+  </g>);
+const Cloud = ({ x, y, s = 1, cls = '' }: { x: number; y: number; s?: number; cls?: string }) => (
+  <g className={'cloud ' + cls} transform={`translate(${x} ${y}) scale(${s})`}>
+    <ellipse cx="0" cy="0" rx="36" ry="15" /><ellipse cx="26" cy="-9" rx="23" ry="13" /><ellipse cx="-27" cy="-7" rx="21" ry="11" />
   </g>);
 
-export function Treeline() {
-  return <svg className="treeline" viewBox="0 0 640 70" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
-    <path d="M0 62H640" stroke="var(--line)" strokeWidth="1.2" />
-    {[20, 90, 150, 230, 300, 380, 450, 520, 590].map((x, i) => i % 3 === 1 ? <Round key={x} x={x} y={52} s={.55 + (i % 2) * .15} near={i % 2 === 0} /> : <Pine key={x} x={x} y={46} s={.5 + (i % 3) * .12} near={i % 2 === 0} />)}
+// Fixed full-window backdrop: sun by day (moon and stars at night), drifting clouds, a far pine ridge.
+export function SkyLayer() {
+  const stars: [number, number, number][] = [[120, 90, 1.8], [220, 160, 1.3], [330, 70, 1.6], [470, 130, 1.2], [560, 60, 1.7], [680, 170, 1.2], [840, 70, 1.5], [920, 150, 1.8], [60, 210, 1.2], [400, 200, 1.1]];
+  return <div className="sky" aria-hidden="true">
+    <svg viewBox="0 0 1000 700" preserveAspectRatio="xMidYMax slice">
+      <g className="sunwrap"><circle cx="780" cy="128" r="72" fill="var(--sun)" opacity=".22" /><circle className="sun" cx="780" cy="128" r="46" /></g>
+      <g className="moonwrap"><circle cx="770" cy="120" r="36" fill="var(--moon)" /><circle cx="758" cy="110" r="31" fill="var(--sky)" /></g>
+      {stars.map(([x, y, r], i) => <circle key={i} className="star" cx={x} cy={y} r={r} style={{ animationDelay: `${-i * 0.7}s` }} />)}
+      <Cloud x={140} y={120} s={1.15} cls="c1" /><Cloud x={520} y={80} s={.8} cls="c2" /><Cloud x={820} y={190} s={1} cls="c3" />
+      <g opacity=".35">
+        {[40, 130, 235, 350, 470, 590, 700, 820, 930].map((x, i) => <PineS key={x} x={x} y={700} s={.8 + (i % 3) * .3} c="var(--pine-far)" />)}
+        <path d="M0 676 Q 240 640 500 670 T 1000 664 V700 H0 Z" fill="var(--pine-far)" />
+      </g>
+    </svg>
+  </div>;
+}
+
+const Fish = ({ x, y, s = 1, c = 'var(--lake-deep)', flip = false, cls = '' }: { x: number; y: number; s?: number; c?: string; flip?: boolean; cls?: string }) => (
+  <g className={cls} transform={`translate(${x} ${y}) scale(${flip ? -s : s} ${s})`} fill={c}>
+    <path d="M0 0 C 9 -8 24 -8 33 0 C 24 8 9 8 0 0 Z" /><path d="M2 0 L-9 -7 L-9 7 Z" /><circle cx="26" cy="-1.6" r="1.6" fill="var(--lake)" />
+  </g>);
+
+// The pier by the lake: the rabbit reads (or simply fishes) among pines and autumn colour.
+// progress 0..1 lifts the day's catch toward the surface as a story is read; 1 means caught.
+export function LakeScene({ pose = 'fish', progress = 0, hero = false }: { pose?: 'read' | 'fish'; progress?: number; hero?: boolean }) {
+  const caught = progress >= 1; const fy = 206 - Math.min(progress, 1) * 56;
+  const label = pose === 'read'
+    ? 'The rabbit sits on a wooden pier by the lake, reading a book. A fishing line rests in the water' + (progress > 0 ? (caught ? ', and the day\'s catch is on the hook.' : ', and a fish rises as you read.') : '.')
+    : 'The rabbit sits on a wooden pier by the lake, fishing among the trees.';
+  return <svg className={'lake' + (caught ? ' caught' : '')} viewBox="0 0 640 240" role="img" aria-label={label}>
+    <RoundS x={84} y={128} s={.9} c="var(--autumn)" /><PineS x={140} y={126} s={1.05} /><RoundS x={238} y={130} s={.7} c="var(--pine)" />
+    <PineS x={470} y={124} s={1.2} /><RoundS x={548} y={130} s={.95} c="var(--autumn2)" /><PineS x={612} y={128} s={.85} />
+    <rect x="0" y="134" width="640" height="106" fill="var(--lake)" />
+    <rect x="0" y="208" width="640" height="32" fill="var(--lake-deep)" opacity=".35" />
+    <path className="ripple" d="M252 172 q10 -4 20 0 M420 196 q10 -4 20 0" /><path className="ripple r2" d="M330 214 q12 -5 24 0 M120 186 q10 -4 20 0" /><path className="ripple r3" d="M520 168 q10 -4 20 0 M210 220 q10 -4 20 0" />
+    <Fish x={388} y={182} s={.8} cls="swim" /><Fish x={520} y={212} s={.65} flip cls="swim s2" />
+    {!caught && <Fish x={316} y={fy} s={.9} c="var(--coral)" cls="catchfish" />}
+    <g stroke="var(--pine)" strokeWidth="2.4" strokeLinecap="round" fill="none"><path d="M22 134 q2 -12 -3 -20 M30 134 q0 -14 5 -22 M40 134 q-2 -10 3 -18" /></g>
+    <g><rect x="56" y="112" width="5" height="16" rx="2" fill="var(--wood-dark)" /><ellipse cx="58.5" cy="106" rx="4.5" ry="10" fill="var(--autumn2)" /></g>
+    <rect x="6" y="120" width="200" height="15" rx="4" fill="var(--wood)" />
+    <path d="M34 120v15M70 120v15M106 120v15M142 120v15M178 120v15" stroke="var(--wood-dark)" strokeWidth="1.6" opacity=".7" />
+    <rect x="26" y="135" width="10" height="58" rx="3" fill="var(--wood-dark)" /><rect x="172" y="135" width="10" height="64" rx="3" fill="var(--wood-dark)" />
+    {/* the rabbit, side view, sitting at the pier's end */}
+    <g transform="translate(148 120)">
+      <circle cx="-22" cy="-12" r="7.5" fill="#fdfdf8" />
+      <ellipse cx="-2" cy="-22" rx="24" ry="21" fill="#fdfdf8" />
+      <ellipse cx="-8" cy="-8" rx="15" ry="9" fill="#fdfdf8" />
+      <g className="ear-t"><ellipse cx="9" cy="-70" rx="5.5" ry="18" fill="#fdfdf8" transform="rotate(-13 9 -52)" /><ellipse cx="9" cy="-68" rx="2.6" ry="11" fill="var(--coral)" opacity=".55" transform="rotate(-13 9 -52)" /></g>
+      <ellipse cx="20" cy="-73" rx="5.5" ry="19" fill="#fdfdf8" transform="rotate(-4 20 -54)" /><ellipse cx="20" cy="-71" rx="2.6" ry="12" fill="var(--coral)" opacity=".55" transform="rotate(-4 20 -54)" />
+      <circle cx="17" cy="-47" r="16.5" fill="#fdfdf8" />
+      <circle cx="23" cy="-49" r="2.2" fill="#2f2823" /><circle cx="29.5" cy="-42" r="3.4" fill="var(--coral)" opacity=".45" />
+      <ellipse cx="31.5" cy="-45.5" rx="2" ry="1.5" fill="#2f2823" />
+      <path d="M2 -38 q12 9 27 3 l-2 9 q-13 5 -26 -4 z" fill="var(--autumn2)" />
+      <ellipse cx="18" cy="-22" rx="10" ry="5.5" fill="#f3eee2" transform="rotate(-18 18 -22)" />
+      {pose === 'read' ? (
+        <g transform="translate(50 -26) rotate(-8)">
+          <path d="M0 0 L-19 -4 L-19 14 L0 18 Z" fill="var(--coral)" /><path d="M0 0 L19 -4 L19 14 L0 18 Z" fill="var(--coral)" />
+          <path d="M0 1 L-16.5 -2 L-16.5 12.5 L0 15.5 Z" fill="#fffdf4" />
+          <g className="pageflip"><path d="M0 1 L16.5 -2 L16.5 12.5 L0 15.5 Z" fill="#fffdf4" /><path d="M3 4 L13 2.4 M3 7.5 L13 5.9 M3 11 L10 10" stroke="var(--line)" strokeWidth="1.1" strokeLinecap="round" /></g>
+          <path d="M0 0 L0 18" stroke="var(--wood-dark)" strokeWidth="1.2" />
+        </g>
+      ) : (
+        <g transform="translate(24 -28)"><ellipse cx="0" cy="0" rx="8" ry="5" fill="#f3eee2" transform="rotate(-24)" /></g>
+      )}
+    </g>
+    {/* the rod, propped toward the water */}
+    <path d="M168 96 L262 40" stroke="var(--wood-dark)" strokeWidth="3.5" strokeLinecap="round" />
+    <circle cx="176" cy="90" r="4.5" fill="none" stroke="var(--wood-dark)" strokeWidth="2" />
+    <g className="line-end" transform="translate(262 40)"><path d="M0 0 C 3 34 -5 72 1 106" fill="none" stroke="var(--cloud)" strokeWidth="1.6" /></g>
+    {caught && <g className="catchfish"><Fish x={266} y={158} s={1} c="var(--coral)" /><path d="M262 146 q3 6 2 10" stroke="var(--cloud)" strokeWidth="1.6" fill="none" /></g>}
+    <g className="splash" stroke="var(--cloud)" strokeWidth="2" strokeLinecap="round" fill="none"><path d="M250 152 q4 -8 8 0 M266 148 q4 -8 8 0 M282 152 q4 -8 8 0" /></g>
+    {hero && <PineS x={30} y={126} s={1.3} />}
   </svg>;
 }
 
+// ---- Forest scenes for streak moments, in the same illustrated language. ----
 function Bunny({ x, y, eat = false, peek = false }: { x: number; y: number; eat?: boolean; peek?: boolean }) {
   const ink = '#3b2a20';
   return <g transform={`translate(${x} ${y})`} className={eat ? 'bunny eat' : 'bunny'}>
-    <g className="rears"><ellipse cx="-11" cy="-62" rx="7" ry="20" fill="#f1ebdd" /><ellipse cx="-11" cy="-60" rx="3" ry="12" fill="#d98e7b" /><ellipse cx="11" cy="-62" rx="7" ry="20" fill="#f1ebdd" /><ellipse cx="11" cy="-60" rx="3" ry="12" fill="#d98e7b" /></g>
-    {!peek && <ellipse cx="0" cy="-8" rx="34" ry="28" fill="#f1ebdd" />}
-    <g className="rhead"><circle cx="0" cy="-34" r="24" fill="#f1ebdd" /><circle cx="-9" cy="-37" r="2.8" fill={ink} /><circle cx="9" cy="-37" r="2.8" fill={ink} /><circle cx="-17" cy="-28" r="4" fill="#d98e7b" opacity=".7" /><circle cx="17" cy="-28" r="4" fill="#d98e7b" opacity=".7" /><ellipse cx="0" cy="-30" rx="2.4" ry="1.8" fill="#d98e7b" /><path d="M-5 -26 Q0 -21 5 -26" stroke={ink} strokeWidth="1.8" fill="none" strokeLinecap="round" /></g>
+    <g className="rears"><ellipse cx="-11" cy="-62" rx="7" ry="20" fill="#fdfdf8" /><ellipse cx="-11" cy="-60" rx="3" ry="12" fill="var(--coral)" opacity=".55" /><ellipse cx="11" cy="-62" rx="7" ry="20" fill="#fdfdf8" /><ellipse cx="11" cy="-60" rx="3" ry="12" fill="var(--coral)" opacity=".55" /></g>
+    {!peek && <ellipse cx="0" cy="-8" rx="34" ry="28" fill="#fdfdf8" />}
+    <g className="rhead"><circle cx="0" cy="-34" r="24" fill="#fdfdf8" /><circle cx="-9" cy="-37" r="2.8" fill={ink} /><circle cx="9" cy="-37" r="2.8" fill={ink} /><circle cx="-17" cy="-28" r="4" fill="var(--coral)" opacity=".5" /><circle cx="17" cy="-28" r="4" fill="var(--coral)" opacity=".5" /><ellipse cx="0" cy="-30" rx="2.4" ry="1.8" fill="var(--coral)" /><path d="M-5 -26 Q0 -21 5 -26" stroke={ink} strokeWidth="1.8" fill="none" strokeLinecap="round" /></g>
   </g>;
 }
 
 export function ForestScene({ kind }: { kind: 'carrot' | 'fox' }) {
   const label = kind === 'carrot' ? 'The rabbit sits among the trees, happily eating a carrot.' : 'A red fox trots past the trees while the rabbit watches safely from its burrow.';
   return <svg className={'scene ' + kind} viewBox="0 0 320 190" role="img" aria-label={label}>
-    <Pine x={30} y={128} s={1.1} /><Pine x={288} y={126} s={1.2} /><Round x={76} y={132} s={.9} /><Pine x={250} y={132} s={.8} />
-    <path d="M0 150c60-10 120-8 160-2s110 6 160-4V190H0z" fill="var(--bg2)" /><path d="M0 152c60-10 120-8 160-2s110 6 160-4" fill="none" stroke="var(--line)" strokeWidth="1.2" />
-    <Pine x={14} y={150} s={1.5} near /><Round x={306} y={152} s={1.3} near />
+    <PineS x={30} y={128} s={1.1} /><PineS x={288} y={126} s={1.2} /><RoundS x={76} y={132} s={.9} c="var(--autumn)" /><PineS x={250} y={132} s={.8} />
+    <path d="M0 150c60-10 120-8 160-2s110 6 160-4V190H0z" fill="var(--grass)" /><path d="M0 152c60-10 120-8 160-2s110 6 160-4" fill="none" stroke="var(--line)" strokeWidth="1.2" />
+    <PineS x={14} y={150} s={1.5} /><RoundS x={306} y={152} s={1.3} c="var(--autumn2)" />
     {kind === 'carrot' ? <>
       <Bunny x={160} y={150} eat />
-      <g transform="translate(160 134)"><g className="carrot"><path d="M-14 -10 L6 -6 L-8 22 z" fill="#e9b96e" /><path d="M-9 -6 l4 1 M-6 3 l4 1" stroke="var(--bg)" strokeWidth="1" opacity=".5" /><path d="M-16 -12 l-4 -9 M-14 -10 l-8 -4 M-12 -8 l-9 1" stroke="var(--moss)" strokeWidth="2.4" strokeLinecap="round" /></g></g>
-      <g className="crumbs" fill="#e9b96e"><circle cx="138" cy="146" r="1.8" /><circle cx="184" cy="150" r="1.6" /><circle cx="130" cy="138" r="1.4" /></g>
+      <g transform="translate(160 134)"><g className="carrot"><path d="M-14 -10 L6 -6 L-8 22 z" fill="#e8913f" /><path d="M-9 -6 l4 1 M-6 3 l4 1" stroke="#fdfdf8" strokeWidth="1" opacity=".6" /><path d="M-16 -12 l-4 -9 M-14 -10 l-8 -4 M-12 -8 l-9 1" stroke="var(--moss)" strokeWidth="2.4" strokeLinecap="round" /></g></g>
+      <g className="crumbs" fill="#e8913f"><circle cx="138" cy="146" r="1.8" /><circle cx="184" cy="150" r="1.6" /><circle cx="130" cy="138" r="1.4" /></g>
     </> : <>
-      <path d="M232 168 c0-26 56-26 56 0z" fill="var(--bg)" stroke="var(--ctl)" strokeWidth="1.4" />
+      <path d="M232 168 c0-26 56-26 56 0z" fill="var(--burrow)" />
       <Bunny x={260} y={176} peek />
-      <path d="M232 168 c0-26 56-26 56 0z" fill="var(--bg)" stroke="var(--ctl)" strokeWidth="1.4" />
+      <path d="M232 168 c0-26 56-26 56 0z" fill="var(--burrow)" opacity=".35" />
       <g className="foxg"><g transform="translate(70 150)">
-        <g className="tail"><path d="M-8 -10 C-44 -26 -52 -2 -34 8 C-24 12 -14 6 -8 -4z" fill="#d98e7b" /><path d="M-34 8 C-42 2 -46 -8 -40 -14 C-50 -6 -46 6 -34 8z" fill="#f1ebdd" /></g>
-        <ellipse cx="12" cy="-12" rx="28" ry="15" fill="#d98e7b" /><path d="M-4 0 v14 M22 0 v14 M8 0 v14" stroke="#3b2a20" strokeWidth="4" strokeLinecap="round" />
-        <path d="M32 -22 L38 -42 L48 -26z" fill="#d98e7b" /><path d="M38 -22 L48 -40 L52 -22z" fill="#d98e7b" />
-        <path d="M30 -24 C36 -34 56 -34 66 -22 L72 -16 L58 -8 C46 -6 34 -10 30 -24z" fill="#d98e7b" /><path d="M58 -8 L72 -16 L64 -4z" fill="#f1ebdd" /><circle cx="73" cy="-16" r="2.4" fill="#3b2a20" /><circle cx="52" cy="-22" r="2" fill="#3b2a20" />
+        <g className="tail"><path d="M-8 -10 C-44 -26 -52 -2 -34 8 C-24 12 -14 6 -8 -4z" fill="#c95f43" /><path d="M-34 8 C-42 2 -46 -8 -40 -14 C-50 -6 -46 6 -34 8z" fill="#fdfdf8" /></g>
+        <ellipse cx="12" cy="-12" rx="28" ry="15" fill="#c95f43" /><path d="M-4 0 v14 M22 0 v14 M8 0 v14" stroke="#3b2a20" strokeWidth="4" strokeLinecap="round" />
+        <path d="M32 -22 L38 -42 L48 -26z" fill="#c95f43" /><path d="M38 -22 L48 -40 L52 -22z" fill="#c95f43" />
+        <path d="M30 -24 C36 -34 56 -34 66 -22 L72 -16 L58 -8 C46 -6 34 -10 30 -24z" fill="#c95f43" /><path d="M58 -8 L72 -16 L64 -4z" fill="#fdfdf8" /><circle cx="73" cy="-16" r="2.4" fill="#3b2a20" /><circle cx="52" cy="-22" r="2" fill="#3b2a20" />
       </g></g>
     </>}
   </svg>;

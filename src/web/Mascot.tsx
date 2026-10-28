@@ -27,7 +27,7 @@ export function Mascot({ state }: { state: MascotState }) {
     <div className={`mascot m-${state}`} role="img" aria-label={LABEL[state]} data-state={state}>
       <svg viewBox="0 0 200 140" width="100%" height="100%" aria-hidden="true">
         <defs><clipPath id="above"><rect x="0" y="0" width="200" height="125" /></clipPath></defs>
-        <ellipse cx="100" cy="124" rx="52" ry="12" fill="#0b0e0a" />
+        <ellipse cx="100" cy="124" rx="52" ry="12" fill="var(--burrow)" opacity=".4" />
         <g clipPath="url(#above)">
           <g className="pos"><g className="bob" transform="translate(40 4)">
             <g className="ears"><ellipse cx="44" cy="30" rx="9" ry="24" fill="#fff" stroke="#e9d6c3" /><ellipse cx="44" cy="32" rx="4.5" ry="16" fill="#ffb7a3" />
@@ -44,8 +44,8 @@ export function Mascot({ state }: { state: MascotState }) {
             {state === 'finder_found' && <g className="spark"><path d="M96 70 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3z" fill="#ffb347" /></g>}
           </g></g>
         </g>
-        <path d="M44 126 Q100 108 156 126 L160 140 L40 140 Z" fill="#242b22" /><path d="M44 126 Q100 108 156 126" stroke="#3e4a3a" strokeWidth="3" fill="none" />
-        <circle cx="62" cy="132" r="2" fill="#3e4a3a" /><circle cx="138" cy="134" r="2.4" fill="#3e4a3a" /><circle cx="110" cy="131" r="1.6" fill="#3e4a3a" />
+        <path d="M44 126 Q100 108 156 126 L160 140 L40 140 Z" fill="var(--burrow)" /><path d="M44 126 Q100 108 156 126" stroke="var(--wood-dark)" strokeWidth="3" fill="none" />
+        <circle cx="62" cy="132" r="2" fill="var(--wood-dark)" /><circle cx="138" cy="134" r="2.4" fill="var(--wood-dark)" /><circle cx="110" cy="131" r="1.6" fill="var(--wood-dark)" />
       </svg>
     </div>
   );

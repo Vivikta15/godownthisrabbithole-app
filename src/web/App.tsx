@@ -1,4 +1,4 @@
-import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, LabArt, Emblem, NextMark, WeekRow, MonthCalendar, ForestScene, Treeline } from './visuals';
+import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, Emblem, NextMark, WeekRow, MonthCalendar, ForestScene, SkyLayer, LakeScene } from './visuals';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { Mascot, useMascot } from './Mascot';
@@ -28,19 +28,13 @@ export function App() {
   else if (me === null) body = stage === 'welcome' ? <Welcome send={send} onStart={() => { setAuthMode('signup'); setStage('auth'); }} onLogin={() => { setAuthMode('login'); setStage('auth'); }} /> : <Auth initial={authMode} onDone={refresh} send={send} recovery={!!cfg.emailRecovery} onBack={() => setStage('welcome')} />;
   else if (!me.user.onboarded || redo) body = <Quiz cfg={cfg} me={me} redo={redo} onDone={() => { setRedo(false); refresh(); }} onCancel={redo ? () => setRedo(false) : undefined} send={send} />;
   else { nav = true; body = <Main me={me} cfg={cfg} refresh={refresh} send={send} onRedo={() => setRedo(true)} />; }
-  return <div className={nav ? 'shell has-nav' : 'shell'}>{body}<div className="dock" aria-hidden="true" /><Mascot state={mascot} /></div>;
+  return <div className={nav ? 'shell has-nav' : 'shell'}><SkyLayer />{body}<div className="dock" aria-hidden="true" /><Mascot state={mascot} /></div>;
 }
 
 function Welcome({ onStart, onLogin, send }: { onStart: () => void; onLogin: () => void; send: Send }) {
   useEffect(() => { send('onboarding_start'); }, [send]);
   return <main className="welcome">
-    <svg className="foliage" viewBox="0 0 400 120" aria-hidden="true" preserveAspectRatio="xMidYMax slice">
-      <g fill="none" stroke="#2c3a2a" strokeWidth="1.6" strokeLinecap="round">
-        <path d="M20 120C24 90 18 60 40 30M40 30c-12 4-20 14-22 28M40 30c10 0 20 8 22 18M28 82c-10-2-18 4-22 14M30 70c9-4 18-2 24 6" />
-        <path d="M360 120c-4-34 4-60-14-88M346 32c12 2 20 12 22 26M346 32c-10 2-18 10-20 22M352 84c10-4 18 0 22 10" />
-        <path d="M120 120c2-20-4-34 6-52M126 68c-9 0-14 7-16 15M126 68c8 1 13 6 15 14" opacity=".7" />
-      </g>
-    </svg>
+    <div className="hero"><LakeScene pose="read" hero /></div>
     <p className="kicker">godownthisrabbithole</p>
     <h1 className="display">Curiosity looks good on you.</h1>
     <p className="deck">Leave the scroll behind. Follow something interesting.</p>
@@ -180,7 +174,7 @@ function SaveButton({ topicId, initial }: { topicId: string; initial: boolean })
 }
 
 function Peek() {
-  return <svg className="peek" width="64" height="40" viewBox="0 0 64 40" aria-hidden="true"><path d="M2 40Q32 14 62 40Z" fill="#1b211b" stroke="#343b32" /><g fill="#f1ebdd" stroke="#a5ada0" strokeWidth=".6"><ellipse cx="26" cy="14" rx="3.200" ry="9" /><ellipse cx="37" cy="14" rx="3.200" ry="9" /></g><g fill="#d98e7b"><ellipse cx="26" cy="15" rx="1.200" ry="6" /><ellipse cx="37" cy="15" rx="1.200" ry="6" /></g><ellipse cx="31.500" cy="30" rx="9" ry="6" fill="#f1ebdd" /><circle cx="28.500" cy="29" r="1" fill="#3b2a20" /><circle cx="34.500" cy="29" r="1" fill="#3b2a20" /></svg>;
+  return <svg className="peek" width="64" height="40" viewBox="0 0 64 40" aria-hidden="true"><path d="M2 40Q32 14 62 40Z" fill="var(--burrow)" /><g fill="#fdfdf8" stroke="var(--ctl)" strokeWidth=".6"><ellipse cx="26" cy="14" rx="3.200" ry="9" /><ellipse cx="37" cy="14" rx="3.200" ry="9" /></g><g fill="var(--coral)"><ellipse cx="26" cy="15" rx="1.200" ry="6" /><ellipse cx="37" cy="15" rx="1.200" ry="6" /></g><ellipse cx="31.500" cy="30" rx="9" ry="6" fill="#fdfdf8" /><circle cx="28.500" cy="29" r="1" fill="#3b2a20" /><circle cx="34.500" cy="29" r="1" fill="#3b2a20" /></svg>;
 }
 
 function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; send: Send; goTab: (t: Tab) => void }) {
@@ -203,8 +197,8 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
   </section>;
   if (!d) return <p className="note" role="status">Digging up today's detour…</p>;
   const h = d.hole; const done = !!(res || d.readToday);
-  if (extra) return <article className="reading"><p className="kicker">Another trail</p><Story hole={extra} /><Sources hole={extra} /><p><button type="button" className="go" onClick={closeBonus}>I'm back up</button></p></article>;
-  if (reading) return <article className="reading"><ReadProgress /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Plate tags={h.tags} />
+  if (extra) return <article className="reading"><ReadingRiver /><p className="kicker">Another trail</p><Story hole={extra} /><Sources hole={extra} /><p><button type="button" className="go" onClick={closeBonus}>I'm back up</button></p></article>;
+  if (reading) return <article className="reading"><ReadProgress /><ReadingRiver /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Plate tags={h.tags} />
     <Story hole={h} /><Related hole={h} />
     <aside className="takeaway"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside>
     {h.shortened && <p className="note">Short version: some details are left out. Pick "A good chew" in your answers to read the full story.</p>}
@@ -231,7 +225,7 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
     {done && me.streak.bonusHoles > 0 && <section className="strip"><p className="kicker">Another trail</p><p>You have {me.streak.bonusHoles} extra.</p><button type="button" className="ghost" onClick={openBonus}>One tiny detour?</button>{bmsg && <p className="note" role="status">{bmsg}</p>}</section>}
     <section className="strip"><p className="kicker">Connections</p><p className="serif">Two words. One strange bridge.</p><p className="note">Try "moon" and "cheese". The rabbit looks for a link both Wikipedia pages mention. It's an early version.</p><button type="button" className="ghost" onClick={() => goTab('connections')}>Open the lab</button></section>
     <section className="strip row"><div><p className="kicker">Trail</p><Paws n={me.streak.current} /><p className="mono-note">day {me.streak.current}</p></div><div><p className="kicker">Saved</p><button type="button" className="ghost" onClick={() => goTab('you')}>{savedN === null ? 'Saved discoveries' : savedN ? `${savedN} saved` : 'Nothing saved yet'}</button></div></section>
-    <p className="fine">That's all for today. Nothing else to scroll.</p><Treeline />
+    <p className="fine">That's all for today. Nothing else to scroll.</p><div className="lakewrap"><LakeScene pose="fish" /></div>
   </div>;
 }
 
@@ -243,7 +237,7 @@ function Sources({ hole }: { hole: any }) {
 function StoryView({ topicId, onBack }: { topicId: string; onBack: () => void }) {
   const [h, setH] = useState<any>(null); const [err, setErr] = useState('');
   useEffect(() => { api(`/story/${topicId}`).then((r) => (r.ok ? setH(r.data.hole) : setErr(r.data.message || r.data.error))); }, [topicId]);
-  return <article className="reading"><p><button type="button" className="ghost" onClick={onBack}>Back</button></p>
+  return <article className="reading"><ReadingRiver /><p><button type="button" className="ghost" onClick={onBack}>Back</button></p>
     {err && <p className="err" role="alert">{err}</p>}{!h && !err && <p className="note" role="status">Finding it again…</p>}
     {h && <><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Story hole={h} /><aside className="takeaway"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside><Sources hole={h} /><p className="row-actions"><SaveButton topicId={h.topicId} initial={h.saved} /></p><p className="note">Re-reading does not change your streak.</p></>}
   </article>;
@@ -273,10 +267,19 @@ function Story({ hole }: { hole: any }) {
   </>;
 }
 
-function ReadProgress() {
+function useReadProgress() {
   const [p, setP] = useState(0);
-  useEffect(() => { const f = () => { const m = document.documentElement.scrollHeight - window.innerHeight; setP(m > 0 ? Math.min(100, Math.round((window.scrollY / m) * 100)) : 100); }; f(); window.addEventListener('scroll', f, { passive: true }); return () => window.removeEventListener('scroll', f); }, []);
-  return <div className="progress" role="progressbar" aria-label="Reading progress" aria-valuenow={p} aria-valuemin={0} aria-valuemax={100}><i style={{ width: p + '%' }} /></div>;
+  useEffect(() => { const f = () => { const m = document.documentElement.scrollHeight - window.innerHeight; setP(m > 0 ? Math.min(1, window.scrollY / m) : 1); }; f(); window.addEventListener('scroll', f, { passive: true }); return () => window.removeEventListener('scroll', f); }, []);
+  return p;
+}
+function ReadProgress() {
+  const p = useReadProgress();
+  return <div className="progress" role="progressbar" aria-label="Reading progress" aria-valuenow={Math.round(p * 100)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: p * 100 + '%' }} /></div>;
+}
+// The pier stays at the foot of the window while a story scrolls: the rabbit reads along, and the day's catch rises with the scroll.
+function ReadingRiver() {
+  const p = useReadProgress();
+  return <div className="readbg" aria-hidden="true"><LakeScene pose="read" progress={p} /></div>;
 }
 
 const PAIRS = [['moon', 'cheese'], ['honey', 'Venus'], ['wombat', 'cube'], ['tea', 'railway'], ['octopus', 'copper'], ['monsoon', 'sailor']];
@@ -291,11 +294,11 @@ function Finder({ me, send }: { me: Me; send: Send }) {
   const line = found ? `${found.a.title} and ${found.b.title} both point to ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}" / "${found.bridge.sentB}").` : '';
   async function copy() { try { await navigator.clipboard.writeText(line); setCopied(true); } catch { setCopied(false); } }
   return <section className="lab">
-    <LabArt /><p className="kicker">Connections · early version</p><h1 className="story-title">The curiosity lab.</h1>
+    <LakeScene pose="read" /><p className="kicker">Connections · early version</p><h1 className="story-title">The curiosity lab.</h1>
     <p className="deck">Give it two things that have nothing to do with each other. The rabbit looks for a topic that both Wikipedia pages mention and shows you the sentences. Some pairs have no bridge, and then it says so.</p>
     <form onSubmit={go} className="pair-form">
       <div className="pair"><label>Thing one<input type="text" placeholder="moon" value={a} onChange={(e) => setA(e.target.value)} /></label>
-        <button type="button" className="swap" aria-label="Swap the two words" onClick={() => { setA(b); setB(a); }}>⇄</button>
+        <button type="button" className="swap" aria-label="Swap the two words" onClick={() => { setA(b); setB(a); }}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5" /></svg></button>
         <label>Thing two<input type="text" placeholder="cheese" value={b} onChange={(e) => setB(e.target.value)} /></label></div>
       <p className="row-actions"><button type="button" className="ghost" onClick={random}>Surprise me with a pair</button><button className="go" disabled={busy || !a.trim() || !b.trim()}>{busy ? 'Following the thread…' : 'Find the connection'}</button></p>
     </form>
@@ -340,7 +343,7 @@ function Trail({ me, onOpen }: { me: Me; onOpen: (id: string) => void }) {
     <label>Have a friend's code?<input type="text" value={join} onChange={(e) => setJoin(e.target.value)} /></label>
     <p><button type="button" className="ghost" onClick={async () => { const r = await api('/join', { code: join }); setMsg(r.ok ? 'Friend added!' : r.data.error); if (r.ok) load(); }}>Add friend</button></p>
     {msg && <p className="note" role="status">{msg}</p>}
-    <Treeline />
+    <div className="lakewrap"><LakeScene pose="fish" /></div>
   </section>;
 }
 
