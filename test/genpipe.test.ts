@@ -53,3 +53,14 @@ describe('guided extraction (no model)', () => {
     expect(r.outcome).not.toEqual({ ok: false, reason: 'too_few_sources' });
   });
 });
+
+describe('failure capture and judge format (replay, no model)', () => {
+  const S = (id: string, g: string, text: string) => ({ id, url: `https://${g}.test`, publisher: g, license: 'unknown' as const, groupId: g, text });
+  const A = S('a', 'a', 'The tram line opened in 1873 and is run by WBTC.'), B = S('b', 'b', 'Trams began in 1873. WBTC runs them.');
+  const ext = (t: string) => (t === A.text ? 'opened | 1873 | opened in 1873\noperator | WBTC | run by WBTC' : 'opened | 1873 | began in 1873\noperator | WBTC | WBTC runs them');
+  const mk = (write: string, judge = 'SUPPORTED') => { const notes: string[] = []; const run = { extract: async (_t: string, t: string) => ext(t), outline: async () => 'paragraph 1: open | c1 c3', write: async () => write, judge: async () => judge, review: async () => 'none', reserve: () => true, note: (m: string) => notes.push(m) }; return { run, notes }; };
+  it('records an uncited sentence with every failing check', async () => { const { run, notes } = mk('It opened in 1873. || c99'); const r = await runCandidate('T', [A, B], run); expect(r.outcome).toEqual({ ok: false, reason: 'unsupported_sentence' }); expect(notes.some((n) => n.startsWith('REJECT first=no_valid_citation'))).toBe(true); expect(notes.some((n) => n.startsWith('WRITE'))).toBe(true); expect(notes.some((n) => n.startsWith('LEDGER'))).toBe(true); });
+  it('records a number that is not in the quotes', async () => { const { run, notes } = mk('It opened in 1874. || c1'); await runCandidate('T', [A, B], run); expect(notes.some((n) => n.includes('number_not_in_quotes:1874'))).toBe(true); });
+  it('records the judge raw answer and a non-supported verdict', async () => { const { run, notes } = mk('It opened in 1873. || c1', 'NOT'); const r = await runCandidate('T', [A, B], run); expect(r.outcome.ok).toBe(false); expect(notes.some((n) => n.startsWith('JUDGE_RAW "NOT"'))).toBe(true); });
+  it('a judge answer with trailing punctuation or different case still counts as the word', async () => { const { run, notes } = mk('It opened in 1873. || c1', 'Supported.'); await runCandidate('T', [A, B], run); expect(notes.some((n) => n.startsWith('JUDGE_RAW "Supported."'))).toBe(true); expect(notes.some((n) => n.startsWith('JUDGE '))).toBe(false); });
+});

@@ -49,23 +49,24 @@ export async function runCandidate(title: string, sources: (Source & { text: str
   void status;
   const quotesOf = (ids: string[]) => ids.map((i) => claims.find((c) => c.id === i)).filter(Boolean).map((c) => `[${c!.id}] ${c!.quote}`).join('\n');
   const ledger = claims.map((c) => `${c.id}: ${c.key} = ${c.value}, ${byClaim.get(c.id)}`).join('\n');
+  run.note?.(`LEDGER ${claims.map((c) => `${c.id}:${c.key}=${c.value}:${byClaim.get(c.id)}`).join(' ; ').slice(0, 480)}`);
   if (!run.reserve('outline')) return fail('cap_reached');
-  const plan = await run.outline(PROMPTS.outline(title, ledger, 'India')).catch(() => null); if (plan === null) return fail('provider_error');
+  const plan = await run.outline(PROMPTS.outline(title, ledger, 'India')).catch(() => null); if (plan === null) return fail('provider_error'); run.note?.(`PLAN ${plan.slice(0, 480)}`);
   const paragraphs: string[] = []; const used = new Set<string>(); const usedClaims = new Set<string>();
   for (const line of plan.split('\n').filter((l) => /paragraph/i.test(l))) {
     const purpose = line.replace(/^paragraph \d+:\s*/i, '').split('|')[0].trim(); const ids = (line.split('|')[1] ?? '').split(/[,\s]+/).filter(Boolean);
     if (!run.reserve('write')) return fail('cap_reached');
     const raw = await run.write(PROMPTS.write(purpose, quotesOf(ids))).catch(() => null); if (raw === null) return fail('provider_error');
-    const sents = parseWrite(raw); if (!sents.length) continue; const kept: string[] = [];
+    run.note?.(`WRITE ${raw.slice(0, 480)}`); const sents = parseWrite(raw); if (!sents.length) continue; const kept: string[] = [];
     for (const s of sents) {
-      const cited = s.ids.filter((i) => claims.some((c) => c.id === i)); const why = (w: string) => { run.note?.(`REJECT ${w}: ${s.t.slice(0, 200)}`); return fail('unsupported_sentence'); }; if (!cited.length) return why('no_valid_citation');
+      const cited = s.ids.filter((i) => claims.some((c) => c.id === i)); const why = (w: string) => { const all: string[] = []; if (!cited.length) all.push('no_valid_citation'); if (cited.some((i) => byClaim.get(i) === 'single') && !/according to|\bsays\b/i.test(s.t)) all.push('single_not_attributed'); const qq = quotesOf(cited); const bad = nums(s.t).filter((x) => !nums(qq).includes(x)); if (bad.length) all.push('number_not_in_quotes:' + bad.join(',')); run.note?.(`REJECT first=${w} all=[${all.join(' | ')}] ids=${s.ids.join(',')} sentence=${s.t.slice(0, 220)} quotes=${qq.slice(0, 200)}`); return fail('unsupported_sentence'); }; if (!cited.length) return why('no_valid_citation');
       const sts = cited.map((i) => byClaim.get(i)!); const q = quotesOf(cited);
       if (sts.includes('disputed') && !DISAGREE.test(s.t)) return fail('disputed_stated_as_fact');
       if (sts.includes('single') && !/according to|\bsays\b/i.test(s.t)) return why('single_not_attributed'); // single-source facts must be attributed
       if (nums(s.t).some((x) => !nums(q).includes(x))) return why('number_not_in_quotes ' + nums(s.t).filter((x) => !nums(q).includes(x)).join(','));
       if (cited.some((i) => used.has(i))) return fail('repeated_fact');
       if (!run.reserve('judge')) return fail('cap_reached');
-      const v = (await run.judge(PROMPTS.judge(s.t, q)).catch(() => 'error')).trim().toLowerCase();
+      const vraw = (await run.judge(PROMPTS.judge(s.t, q)).catch(() => 'error')); run.note?.(`JUDGE_RAW ${JSON.stringify(vraw.slice(0, 40))}`); const v = vraw === 'error' ? 'error' : (vraw.trim().toLowerCase().match(/^[a-z]+/)?.[0] ?? ''); // exact word still required; only trailing punctuation or a leading quote no longer fails it
       if (v === 'error') return fail('provider_error'); if (v !== 'supported') { run.note?.(`JUDGE ${v.slice(0, 20)}: ${s.t.slice(0, 200)} // ${q.slice(0, 300)}`); return fail(v.startsWith('partly') ? 'qualifier_dropped' : 'unsupported_sentence'); }
       kept.push(s.t); cited.forEach((i) => usedClaims.add(i));
     }
