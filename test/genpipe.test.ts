@@ -72,3 +72,15 @@ describe('judge verdict strictness', () => {
   for (const ok of ['SUPPORTED', 'Supported.', ' supported\n', '"Supported"']) it(`accepts ${JSON.stringify(ok)}`, async () => expect((await go(ok)).some((n) => n.startsWith('JUDGE '))).toBe(false));
   for (const bad of ['Supported, but the year is not stated', 'SUPPORTED however the claim adds a date', 'Not supported', 'NOT', 'Supported or not?', '']) it(`rejects ${JSON.stringify(bad)}`, async () => expect((await go(bad)).some((n) => n.startsWith('JUDGE '))).toBe(true));
 });
+
+describe('writer sees status and publisher', () => {
+  it('a single-source fact reaches the writer marked single with the publisher to attribute', async () => {
+    const S = (id: string, g: string, text: string) => ({ id, url: `https://${g}.test`, publisher: g === 'a' ? 'Wikipedia' : 'Other', license: 'unknown' as const, groupId: g, text });
+    const A = S('a', 'a', 'The word monsoon comes from Arabic mawsim. The season ends in September.'), B = S('b', 'b', 'The season ends in September.');
+    const prompts: string[] = []; const notes: string[] = [];
+    const run = { extract: async (_t: string, t: string) => (t === A.text ? 'origin | Arabic | comes from Arabic mawsim\nend | September | ends in September' : 'end | September | ends in September'), outline: async () => 'paragraph 1: open | c1 c2', write: async (p: string) => { prompts.push(p); return 'According to Wikipedia, the word monsoon comes from Arabic. || c1'; }, judge: async () => 'SUPPORTED', review: async () => 'none', reserve: () => true, note: (m: string) => notes.push(m) };
+    await runCandidate('T', [A, B], run);
+    expect(prompts[0]).toContain('(single; write "according to Wikipedia")'); expect(prompts[0]).toContain('(central)'.slice(0, 1) === '(' ? '[c1] (single' : '');
+    expect(notes.some((n) => n.startsWith('REJECT'))).toBe(false);
+  });
+});

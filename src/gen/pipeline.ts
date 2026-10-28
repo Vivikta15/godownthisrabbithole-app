@@ -48,6 +48,8 @@ export async function runCandidate(title: string, sources: (Source & { text: str
   if (!groups.some((g) => g.status === 'central') || new Set(claims.map((c) => sources.find((s) => s.id === c.sourceId)!.groupId)).size < 2) return fail('too_few_sources');
   void status;
   const quotesOf = (ids: string[]) => ids.map((i) => claims.find((c) => c.id === i)).filter(Boolean).map((c) => `[${c!.id}] ${c!.quote}`).join('\n');
+  // The writer must see each fact's status and publisher, or it cannot follow the 'single must say according to <publisher>' rule. The judge still gets bare quotes.
+  const factsFor = (ids: string[]) => ids.map((i) => claims.find((c) => c.id === i)).filter(Boolean).map((c) => `[${c!.id}] (${byClaim.get(c!.id)}${byClaim.get(c!.id) === 'single' ? `; write "according to ${sources.find((x) => x.id === c!.sourceId)!.publisher}"` : ''}) ${c!.quote}`).join('\n');
   const ledger = claims.map((c) => `${c.id}: ${c.key} = ${c.value}, ${byClaim.get(c.id)}`).join('\n');
   run.note?.(`LEDGER ${claims.map((c) => `${c.id}:${c.key}=${c.value}:${byClaim.get(c.id)}`).join(' ; ').slice(0, 480)}`);
   if (!run.reserve('outline')) return fail('cap_reached');
@@ -56,7 +58,7 @@ export async function runCandidate(title: string, sources: (Source & { text: str
   for (const line of plan.split('\n').filter((l) => /paragraph/i.test(l))) {
     const purpose = line.replace(/^paragraph \d+:\s*/i, '').split('|')[0].trim(); const ids = (line.split('|')[1] ?? '').split(/[,\s]+/).filter(Boolean);
     if (!run.reserve('write')) return fail('cap_reached');
-    const raw = await run.write(PROMPTS.write(purpose, quotesOf(ids))).catch(() => null); if (raw === null) return fail('provider_error');
+    const raw = await run.write(PROMPTS.write(purpose, factsFor(ids))).catch(() => null); if (raw === null) return fail('provider_error');
     run.note?.(`WRITE ${raw.slice(0, 480)}`); const sents = parseWrite(raw); if (!sents.length) continue; const kept: string[] = [];
     for (const s of sents) {
       const cited = s.ids.filter((i) => claims.some((c) => c.id === i)); const why = (w: string) => { const all: string[] = []; if (!cited.length) all.push('no_valid_citation'); if (cited.some((i) => byClaim.get(i) === 'single') && !/according to|\bsays\b/i.test(s.t)) all.push('single_not_attributed'); const qq = quotesOf(cited); const bad = nums(s.t).filter((x) => !nums(qq).includes(x)); if (bad.length) all.push('number_not_in_quotes:' + bad.join(',')); run.note?.(`REJECT first=${w} all=[${all.join(' | ')}] ids=${s.ids.join(',')} sentence=${s.t.slice(0, 220)} quotes=${qq.slice(0, 200)}`); return fail('unsupported_sentence'); }; if (!cited.length) return why('no_valid_citation');

@@ -20,7 +20,7 @@ function world(opts: { judge?: (claim: string) => string } = {}) {
       const usage = { input_tokens: 300, output_tokens: 5 }; const reply = (t: string) => ({ ok: true, json: async () => ({ content: [{ text: t }], usage }) });
       if (p.startsWith('You are extracting')) return reply(FACTS.map((q, i) => `${KEYS[i]} | ${VALS[i]} | ${q}`).join('\n'));
       if (p.startsWith('Plan a 7')) return reply([1, 2, 3, 4, 5].map((n) => `paragraph ${n}: purpose ${n} | c${n}`).join('\n'));
-      if (p.startsWith('Write one paragraph')) { const m = p.match(/\[(c\d+)\] (.*)$/m)!; return reply(`${m[2]}. || ${m[1]}`); }
+      if (p.startsWith('Write one paragraph')) { const m = p.match(/\[(c\d+)\] (?:\([^)]*\) )?(.*)$/m)!; return reply(`${m[2]}. || ${m[1]}`); }
       if (p.startsWith('Find defects')) return reply('none');
       if (p.startsWith('For each numbered')) return reply('1. What opened first?\n2. How are the tracks laid?\n3. Which scripts appear?');
       if (p.startsWith('SOURCE:')) { const claim = p.match(/CLAIM: (.*)\n/)![1]; return reply(opts.judge ? opts.judge(claim) : bad.has(claim) ? 'NOT' : 'SUPPORTED'); }
