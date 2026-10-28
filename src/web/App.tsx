@@ -234,7 +234,7 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
 
 function Sources({ hole }: { hole: any }) {
   const s: any[] = hole.sources || [];
-  return <p className="note sources">{hole.sourceCheck === 'manual' ? `Sample story. Compared by hand against the source text on ${hole.checked.date} (${s.length > 1 ? 'main claims also checked against the other sources listed' : 'one source, not independent verification'}). Sources: ` : 'Sample story. Its sources have not been checked by the app yet: '}{s.map((x, i) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a>{i < s.length - 1 ? ', ' : ''}</span>)}</p>;
+  return <p className="note sources">{hole.sourceCheck === 'machine' ? `${hole.machine?.label ?? ''} Sources: ` : hole.sourceCheck === 'manual' ? `Sample story. Compared by hand against the source text on ${hole.checked.date} (${s.length > 1 ? 'main claims also checked against the other sources listed' : 'one source, not independent verification'}). Sources: ` : 'Sample story. Its sources have not been checked by the app yet: '}{s.map((x, i) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a>{i < s.length - 1 ? ', ' : ''}</span>)}</p>;
 }
 
 function StoryView({ topicId, onBack }: { topicId: string; onBack: () => void }) {

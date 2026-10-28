@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
+import { syncSeed, tick, status as genStatus } from './genrun';
 import { SEED, TOPIC_TAGS, FORMATS, WHY_READ, COUNTRIES, COUNTRIES_WITH_STORIES } from '../content/seed';
 import { PLANS } from '../shared/config';
 import { accessFor, finderUsesAllowed, type Account } from '../shared/entitlements';
@@ -15,7 +16,7 @@ import { judge } from './judge';
 import { shapeBeats } from '../shared/shape';
 import { fetchCondition } from './weather';
 
-type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; BONUS_CHANCE?: string; DODO_API_KEY?: string; MAIL_ENABLED?: string; REQUIRE_VERIFIED_EMAIL?: string; IP_SIGNUP_MAX?: string; DODO_ENV?: string; AI?: any; AI_ENABLED?: string; AI_PLAN_CONFIRMED?: string; FINDER_MODEL?: string; APP_URL?: string; CHECKOUT_ENABLED?: string; WEATHER_CONTACT?: string };
+type Env = { GEN_ENABLED?: string; ANTHROPIC_API_KEY?: string; DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; BONUS_CHANCE?: string; DODO_API_KEY?: string; MAIL_ENABLED?: string; REQUIRE_VERIFIED_EMAIL?: string; IP_SIGNUP_MAX?: string; DODO_ENV?: string; AI?: any; AI_ENABLED?: string; AI_PLAN_CONFIRMED?: string; FINDER_MODEL?: string; APP_URL?: string; CHECKOUT_ENABLED?: string; WEATHER_CONTACT?: string };
 type Vars = { uid: string };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
@@ -56,6 +57,7 @@ app.use('/api/*', async (c, next) => {
   const row = await c.env.DB.prepare('SELECT user_id FROM sessions WHERE id=? AND expires_at>?').bind(sid, Date.now()).first<{ user_id: string }>();
   if (!row) return c.json({ error: 'auth' }, 401);
   c.set('uid', row.user_id);
+  await syncSeed(c.env.DB).catch(() => {});
   return next();
 });
 
@@ -271,7 +273,7 @@ app.get('/api/today', async (c) => {
   let whyModes: string[] = []; try { whyModes = JSON.parse(pref.quiz_answers || '{}').why ?? []; } catch { /* ignore */ }
   why = matched.length ? `Because you like ${matched.join(' and ')}.` : 'A fresh corner to explore, to keep things from getting samey.';
   if (reason) why = reason;
-  return c.json({ hole: { id: row.id, title: seed.title, format: row.format, hook: seed.hook, story: pref.length_pref === 'short' ? seed.story.slice(0, 2) : seed.story, beats: seed.beats, length: pref.length_pref ?? 'medium', sources: seed.sources, why, whyModes, topicId: seed.id, tags: seed.tags, minutes: readMinutes(pref.length_pref === 'short' ? seed.story.slice(0, 2) : seed.story), saved: !!(await c.env.DB.prepare('SELECT 1 x FROM saved WHERE user_id=? AND topic_id=?').bind(u.id, seed.id).first()), related: seed.related ? (() => { const r = SEED.find((x) => x.id === seed.related!.id); return r ? { id: r.id, title: r.title, sentence: seed.related!.sentence, page: seed.related!.page } : null; })() : null, shortened: pref.length_pref === 'short' && seed.story.length > 2, sourceCheck: seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null }, readToday: s.last_read_day === day });
+  return c.json({ hole: { id: row.id, title: seed.title, format: row.format, hook: seed.hook, story: pref.length_pref === 'short' ? seed.story.slice(0, 2) : seed.story, beats: seed.beats, length: pref.length_pref ?? 'medium', sources: seed.sources, why, whyModes, topicId: seed.id, tags: seed.tags, minutes: readMinutes(pref.length_pref === 'short' ? seed.story.slice(0, 2) : seed.story), saved: !!(await c.env.DB.prepare('SELECT 1 x FROM saved WHERE user_id=? AND topic_id=?').bind(u.id, seed.id).first()), related: seed.related ? (() => { const r = SEED.find((x) => x.id === seed.related!.id); return r ? { id: r.id, title: r.title, sentence: seed.related!.sentence, page: seed.related!.page } : null; })() : null, shortened: pref.length_pref === 'short' && seed.story.length > 2, sourceCheck: seed.machine ? 'machine' : seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null, machine: seed.machine ?? null }, readToday: s.last_read_day === day });
 });
 
 // Optional, reader-chosen: open the story that today's story points to. Read-only: no streak, read event, or "seen" change.
@@ -283,7 +285,7 @@ app.get('/api/related/:id', async (c) => {
   const cur = row && SEED.find((t) => t.id === row.topic_id);
   if (!cur?.related || cur.related.id !== c.req.param('id')) return c.json({ error: 'not found' }, 404);
   const t = SEED.find((x) => x.id === cur.related!.id)!;
-  return c.json({ hole: { id: t.id, title: t.title, story: t.story, beats: t.beats, format: 'narrative', sources: t.sources, hook: t.hook, whyModes: [], sourceCheck: t.checked ? 'manual' : 'pending', checked: t.checked ?? null } });
+  return c.json({ hole: { id: t.id, title: t.title, story: t.story, beats: t.beats, format: 'narrative', sources: t.sources, hook: t.hook, whyModes: [], sourceCheck: t.machine ? 'machine' : t.checked ? 'manual' : 'pending', checked: t.checked ?? null, machine: t.machine ?? null } });
 });
 
 // ---- Saved discoveries, learning history, and reading a story you have already met (read-only; no streak or read events) ----
@@ -327,6 +329,11 @@ app.get('/api/creator/library', async (c) => {
   if (!creator) return c.json({ error: 'not found' }, 404);
   return c.json({ stories: SEED.filter((t, i) => SEED.findIndex((x) => x.id === t.id) === i && t.story?.length).map((t) => ({ id: t.id, title: t.title, tags: t.tags, countries: t.countries ?? [], hook: t.hook })) });
 });
+app.get('/api/creator/gen-status', async (c) => {
+  const { creator } = await loadAll(c);
+  if (!creator) return c.json({ error: 'not found' }, 404);
+  return c.json(await genStatus(c.env.DB, c.env));
+});
 app.get('/api/story/:id', async (c) => {
   const { u, sub, pref, creator } = await loadAll(c);
   if (!accessOf(u, sub, creator).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
@@ -334,7 +341,7 @@ app.get('/api/story/:id', async (c) => {
   // Creator accounts may preview any story. Read-only: no rabbit_holes row, read event, streak or "seen" change.
   if (!t || !(creator || await canOpen(c, u.id, t.id, u.timezone))) return c.json({ error: 'not found' }, 404);
   const saved = !!(await c.env.DB.prepare('SELECT 1 x FROM saved WHERE user_id=? AND topic_id=?').bind(u.id, t.id).first());
-  return c.json({ hole: { id: t.id, topicId: t.id, title: t.title, story: pref?.length_pref === 'short' ? t.story.slice(0, 2) : t.story, beats: t.beats, format: creator ? ((() => { try { return JSON.parse(pref?.formats || '[]')[0]; } catch { return null; } })() ?? 'narrative') : 'narrative', sources: t.sources, hook: t.hook, tags: t.tags, minutes: readMinutes(t.story), saved, whyModes: [], sourceCheck: t.checked ? 'manual' : 'pending', checked: t.checked ?? null } });
+  return c.json({ hole: { id: t.id, topicId: t.id, title: t.title, story: pref?.length_pref === 'short' ? t.story.slice(0, 2) : t.story, beats: t.beats, format: creator ? ((() => { try { return JSON.parse(pref?.formats || '[]')[0]; } catch { return null; } })() ?? 'narrative') : 'narrative', sources: t.sources, hook: t.hook, tags: t.tags, minutes: readMinutes(t.story), saved, whyModes: [], sourceCheck: t.machine ? 'machine' : t.checked ? 'manual' : 'pending', checked: t.checked ?? null, machine: t.machine ?? null } });
 });
 
 app.post('/api/read', async (c) => {
@@ -378,7 +385,7 @@ app.post('/api/bonus/redeem', async (c) => {
   const seed = SEED.find((t) => t.id === pick.topic.id)!; const id = rid();
   await c.env.DB.prepare('INSERT INTO rabbit_holes (id,user_id,day,topic_id,format,title,body,sources,verified) VALUES (?,?,?,?,?,?,?,?,0)')
     .bind(id, u.id, `${day}#bonus-${id.slice(0, 6)}`, seed.id, pick.format, seed.title, JSON.stringify({ hook: seed.hook, beats: seed.beats }), JSON.stringify(seed.sources)).run();
-  return c.json({ hole: { id, title: seed.title, format: pick.format, hook: seed.hook, story: pref.length_pref === 'short' ? seed.story.slice(0, 2) : seed.story, beats: seed.beats, length: pref.length_pref ?? 'medium', sources: seed.sources, why: 'A bonus rabbit hole you earned.', shortened: pref.length_pref === 'short' && seed.story.length > 2, sourceCheck: seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null, bonus: true } });
+  return c.json({ hole: { id, title: seed.title, format: pick.format, hook: seed.hook, story: pref.length_pref === 'short' ? seed.story.slice(0, 2) : seed.story, beats: seed.beats, length: pref.length_pref ?? 'medium', sources: seed.sources, why: 'A bonus rabbit hole you earned.', shortened: pref.length_pref === 'short' && seed.story.length > 2, sourceCheck: seed.machine ? 'machine' : seed.checked ? 'manual' : 'pending', checked: seed.checked ?? null, machine: seed.machine ?? null, bonus: true } });
 });
 
 app.post('/api/finder', async (c) => {
@@ -474,4 +481,4 @@ app.get('/api/weather', async (c) => {
 });
 
 app.all('*', (c) => c.env.ASSETS.fetch(c.req.raw));
-export default app;
+export default { fetch: app.fetch, scheduled: (_e: ScheduledController, env: Env, ctx: ExecutionContext) => { ctx.waitUntil(tick(env).catch(() => {})); } };
