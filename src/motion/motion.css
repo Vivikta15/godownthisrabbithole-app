@@ -9,5 +9,6 @@
 .panel h1{font:700 clamp(28px,6vw,38px)/1.14 var(--serif);margin:0 0 16px;letter-spacing:-.01em}
 .panel p{margin:0 0 1.1em}.panel p:last-child{margin-bottom:0}
 .panel.last{margin-bottom:0;font-size:15px;color:var(--soft)}
-#toggle{position:fixed;top:12px;right:12px;z-index:3;font:500 14px var(--sans);color:var(--ink);background:rgba(248,242,228,.94);border:0;border-radius:999px;padding:8px 14px;min-height:44px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+#bar{position:fixed;top:0;left:0;right:0;height:68px;z-index:3;background:#1d3a38;box-shadow:0 6px 14px rgba(8,22,20,.45);display:flex;justify-content:flex-end;align-items:flex-start;padding:10px 12px;pointer-events:none}
+#toggle{pointer-events:auto;font:500 14px var(--sans);color:var(--ink);background:rgba(248,242,228,.94);border:0;border-radius:999px;padding:8px 14px;min-height:44px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 @media (prefers-reduced-motion:reduce){.panel{transition:none;opacity:1;transform:none}}
