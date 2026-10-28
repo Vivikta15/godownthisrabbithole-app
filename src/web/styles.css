@@ -241,3 +241,18 @@ html[data-daypart=dusk][data-weather]{--coral:#7f2916}
 html{transition:background-color .8s ease}
 button,.go,.ghost,a{transition:background-color .2s ease,color .2s ease,border-color .2s ease,transform .15s ease}
 .reading p{line-height:1.75}
+
+/* Lake world (approved 28 Oct): a fixed Three.js lake behind every screen. Content sits on still paper panels, in the day palette, whatever the time of day. */
+html,body{background:#1d3a38}
+.lake-world{position:fixed;inset:0;width:100vw;height:100vh;height:100lvh;display:block;z-index:0;pointer-events:none}
+.shell:not(.has-nav){padding-top:max(20px,env(safe-area-inset-top))}
+.shell>main,.nav{
+  --ink:#1f3a34;--soft:#3f5a50;--line:#c9bf9f;--ctl:#6f9c8a;--amber:#7d5310;--moss:#2f6842;--coral:#a83a24;--on-accent:#fff8ee;
+  --panel:#f8f2e4;--sky:#cfe4da;--sky2:#e6f0e3;--bg:#f8f2e4;--bg2:#ece3cc;--cloud:#fbf7ec;--lake:#7fb0a2;--lake-deep:#5b9486;
+  --pine:#4e7a63;--pine-far:#93baa6;--grass:#a9cbb4;--autumn:#d99a55;--autumn2:#c47a4e;--sun:#f2c14e;--moon:#efe9d4;color-scheme:light;color:var(--ink)}
+.shell>main{background:#f8f2e4;border-radius:8px;padding:26px 22px;margin-top:max(0px,calc(18vh - 20px));box-shadow:0 1px 0 #fff8 inset,0 2px 3px rgba(10,25,22,.25),0 18px 40px rgba(8,22,20,.38)}
+.shell:has(.reading)>main{margin-top:12px}
+.nav{background:#f8f2e4;border-color:#d8cdb0}
+.shell>.note{color:#f3e6c8;text-shadow:0 1px 8px rgba(0,0,0,.45)}
+@media (max-width:899px){.shell>main{margin-top:min(20vh,150px)}.shell:has(.reading)>main{margin-top:12px}}
+@media (min-width:900px){.shell>main{margin-top:0}}

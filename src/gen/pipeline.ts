@@ -28,7 +28,7 @@ export function parseWrite(raw: string): { t: string; ids: string[] }[] {
 export type Runners = {
   extract: (title: string, text: string) => Promise<string>; outline: (prompt: string) => Promise<string>; write: (prompt: string) => Promise<string>;
   judge: (prompt: string) => Promise<string>; review: (prompt: string) => Promise<string>;
-  reserve: (stage: string) => boolean; // false when the hard cap refuses; the pipeline must stop, not continue unchecked
+  note?: (msg: string) => void; reserve: (stage: string) => boolean; // false when the hard cap refuses; the pipeline must stop, not continue unchecked
 };
 export type Candidate = { title: string; paragraphs: string[]; claimIds: string[]; sourceUrls: string[]; licenceFlags: string[]; label: string; status: 'candidate' };
 export const LABEL = 'Written by AI from several sources. Each sentence was machine-checked against quoted source text. Not verified by a person and not independently proven.';
@@ -39,7 +39,9 @@ export async function runCandidate(title: string, sources: (Source & { text: str
   for (const s of sources) {
     if (!run.reserve('extract')) return fail('cap_reached');
     let raw: string; try { raw = await run.extract(title, s.text); } catch { return fail('provider_error'); }
-    for (const c of parseExtract(raw)) if (quoteInSource(c.quote, s.text)) claims.push({ id: `c${++n}`, sourceId: s.id, key: c.key, value: c.value, quote: c.quote });
+    const parsed = parseExtract(raw); let kept = 0;
+    for (const c of parsed) if (quoteInSource(c.quote, s.text)) { kept++; claims.push({ id: `c${++n}`, sourceId: s.id, key: c.key, value: c.value, quote: c.quote }); }
+    run.note?.(`${s.groupId} rawLen=${raw.length} parsed=${parsed.length} quoteKept=${kept} textLen=${s.text.length} rawHead=${JSON.stringify(raw.slice(0, 160))}`);
   }
   const groups = classifyClaims(sources, claims); const status = new Map<string, string>();
   const byClaim = new Map<string, string>(); for (const g of groups) for (const v of g.values) for (const id of v.claimIds) byClaim.set(id, g.status);

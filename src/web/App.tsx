@@ -1,3 +1,4 @@
+import { LakeBackdrop } from './LakeBackdrop';
 import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, Emblem, NextMark, WeekRow, MonthCalendar, ForestScene, SkyLayer, LakeScene } from './visuals';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
@@ -30,7 +31,7 @@ export function App() {
   else if (me === null) body = stage === 'welcome' ? <Welcome send={send} onStart={() => { setAuthMode('signup'); setStage('auth'); }} onLogin={() => { setAuthMode('login'); setStage('auth'); }} /> : <Auth initial={authMode} onDone={refresh} send={send} recovery={!!cfg.emailRecovery} onBack={() => setStage('welcome')} />;
   else if (!me.user.onboarded || redo) body = <Quiz cfg={cfg} me={me} redo={redo} onDone={() => { setRedo(false); refresh(); }} onCancel={redo ? () => setRedo(false) : undefined} send={send} />;
   else { nav = true; body = <Main me={me} cfg={cfg} refresh={refresh} send={send} onRedo={() => setRedo(true)} />; }
-  return <div className={nav ? 'shell has-nav' : 'shell'}><SkyLayer />{body}<div className="dock" aria-hidden="true" /><Mascot state={mascot} /></div>;
+  return <div className={nav ? 'shell has-nav' : 'shell'}><LakeBackdrop />{body}<div className="dock" aria-hidden="true" /><Mascot state={mascot} /></div>;
 }
 
 function Welcome({ onStart, onLogin, send }: { onStart: () => void; onLogin: () => void; send: Send }) {
