@@ -68,7 +68,7 @@ input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{ou
 .strip{border-top:1px solid var(--line);padding:16px 0;margin-top:22px}.strip.row{display:flex;gap:28px;flex-wrap:wrap}.strip p{margin:.2em 0}
 .paws{display:flex;gap:6px;margin:10px 0}.paws svg{fill:none;stroke:var(--ctl);stroke-width:1.4}.paws svg.on{fill:var(--moss);stroke:var(--moss)}
 .marks{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.marks span{font-family:var(--mono);font-size:.78rem;border:1px solid var(--line);color:var(--soft);padding:4px 10px;border-radius:999px}.marks span.on{border-color:var(--moss);color:var(--moss)}
-.reading{max-width:62ch;margin:0 auto;padding-bottom:210px}.reading.inline{margin-top:1em;border-top:1px solid var(--line);padding-top:1em;padding-bottom:40px}
+.reading{max-width:62ch;margin:0 auto;padding-bottom:240px}.reading.inline{margin-top:1em;border-top:1px solid var(--line);padding-top:1em;padding-bottom:40px}
 .progress{position:fixed;left:0;right:0;top:0;height:3px;background:transparent;z-index:40}.progress i{display:block;height:100%;background:var(--coral);width:0;transition:width .2s}
 .story p{font-size:1.1rem;line-height:1.8;margin:0 0 1.15em}.story p:first-child::first-letter{font-family:var(--serif);font-weight:700;font-size:3.2rem;float:left;line-height:.85;padding:6px 8px 0 0;color:var(--coral)}
 .takeaway,.connection,.recap,.bridge{border-left:3px solid var(--amber);padding:2px 0 2px 16px;margin:1.8em 0}.takeaway .serif{font-size:1.25rem;line-height:1.4;margin:.2em 0}
@@ -183,7 +183,8 @@ html[data-daypart=night] .sky .star{opacity:.9}
 .lake .ear-t{transform-box:fill-box;transform-origin:bottom center;animation:twitch 4.2s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.lake *,.sky *{animation:none!important}}
 /* Fixed reading companion: the pier and lake stay at the foot of the viewport while the story scrolls. */
-.readbg{position:fixed;left:0;right:0;bottom:var(--navh);z-index:0;pointer-events:none;-webkit-mask-image:linear-gradient(transparent,black 38%);mask-image:linear-gradient(transparent,black 38%)}
+.readbg{position:fixed;left:0;right:0;bottom:var(--navh);z-index:5;pointer-events:none;background:linear-gradient(var(--sky),var(--sky2)) fixed}
+.readbg::before{content:'';position:absolute;left:0;right:0;bottom:100%;height:34px;background:linear-gradient(var(--sky),var(--sky2)) fixed;-webkit-mask-image:linear-gradient(transparent,black);mask-image:linear-gradient(transparent,black)}
 .readbg .lake{width:min(680px,100%);margin:0 auto}
 @media (min-width:900px){.readbg{left:224px;bottom:0}}
 /* hero on the welcome screen */
