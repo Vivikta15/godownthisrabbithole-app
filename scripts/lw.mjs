@@ -10,7 +10,7 @@ await page.type('input[type=email]', `lw${Date.now()}@example.test`); await page
 await click('Start my 3 free days'); await wait(2500); console.log((await page.evaluate(()=>document.body.innerText)).slice(0,300)); await shot('quiz');
 await page.select('select','IN').catch(()=>{}); await click('Next'); await wait(400); await click('space'); await click('Next'); await wait(400); await click('Next').catch(()=>{}); await wait(400);
 for (let i=0;i<4;i++){ const t=await page.evaluate(()=>[...document.querySelectorAll('button.go')].map(b=>b.textContent)); if(t.includes('All set')){await click('All set');break;} if(t.length) await click(t[0]); await wait(500); }
-await page.waitForSelector('.card h1',{timeout:15000}); await shot('today');
+await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>/Jump in/.test(b.textContent)),{timeout:15000}); await shot('today');
 await click('Jump in'); await wait(1500); await page.evaluate(() => window.scrollTo(0, 400)); await shot('reading');
 await page.evaluate(() => window.scrollTo(0, 0));
 for (const t of ['Today','Connect', 'Streaks', 'Plan']) { await click(t); await shot(t); }

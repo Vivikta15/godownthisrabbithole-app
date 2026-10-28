@@ -256,3 +256,8 @@ html,body{background:#1d3a38}
 .shell>.note{color:#f3e6c8;text-shadow:0 1px 8px rgba(0,0,0,.45)}
 @media (max-width:899px){.shell>main{margin-top:min(20vh,150px)}.shell:has(.reading)>main{margin-top:12px}}
 @media (min-width:900px){.shell>main{margin-top:0}}
+
+/* Legacy illustrations graded into the lake world: muted, warm and dark-toned instead of bright flat cartoon colour. Fox and carrot scenes keep their motion. */
+.welcome .hero{display:none}
+.lake,.scene,.marginscene svg,.lakewrap svg{filter:saturate(.5) sepia(.3) brightness(.95) contrast(.96)}
+.mascot{filter:brightness(.3) sepia(.4) saturate(.8) drop-shadow(0 0 1.5px rgba(246,228,186,.95)) drop-shadow(0 0 10px rgba(255,205,130,.35))}
