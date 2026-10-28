@@ -58,15 +58,15 @@ export async function runCandidate(title: string, sources: (Source & { text: str
     const raw = await run.write(PROMPTS.write(purpose, quotesOf(ids))).catch(() => null); if (raw === null) return fail('provider_error');
     const sents = parseWrite(raw); if (!sents.length) continue; const kept: string[] = [];
     for (const s of sents) {
-      const cited = s.ids.filter((i) => claims.some((c) => c.id === i)); if (!cited.length) return fail('unsupported_sentence');
+      const cited = s.ids.filter((i) => claims.some((c) => c.id === i)); const why = (w: string) => { run.note?.(`REJECT ${w}: ${s.t.slice(0, 200)}`); return fail('unsupported_sentence'); }; if (!cited.length) return why('no_valid_citation');
       const sts = cited.map((i) => byClaim.get(i)!); const q = quotesOf(cited);
       if (sts.includes('disputed') && !DISAGREE.test(s.t)) return fail('disputed_stated_as_fact');
-      if (sts.includes('single') && !/according to|\bsays\b/i.test(s.t)) return fail('unsupported_sentence'); // single-source facts must be attributed
-      if (nums(s.t).some((x) => !nums(q).includes(x))) return fail('unsupported_sentence');
+      if (sts.includes('single') && !/according to|\bsays\b/i.test(s.t)) return why('single_not_attributed'); // single-source facts must be attributed
+      if (nums(s.t).some((x) => !nums(q).includes(x))) return why('number_not_in_quotes ' + nums(s.t).filter((x) => !nums(q).includes(x)).join(','));
       if (cited.some((i) => used.has(i))) return fail('repeated_fact');
       if (!run.reserve('judge')) return fail('cap_reached');
       const v = (await run.judge(PROMPTS.judge(s.t, q)).catch(() => 'error')).trim().toLowerCase();
-      if (v === 'error') return fail('provider_error'); if (v !== 'supported') return fail(v.startsWith('partly') ? 'qualifier_dropped' : 'unsupported_sentence');
+      if (v === 'error') return fail('provider_error'); if (v !== 'supported') { run.note?.(`JUDGE ${v.slice(0, 20)}: ${s.t.slice(0, 200)} // ${q.slice(0, 300)}`); return fail(v.startsWith('partly') ? 'qualifier_dropped' : 'unsupported_sentence'); }
       kept.push(s.t); cited.forEach((i) => usedClaims.add(i));
     }
     sents.forEach((s) => s.ids.forEach((i) => used.add(i))); paragraphs.push(kept.join(' '));
