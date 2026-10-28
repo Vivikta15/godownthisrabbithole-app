@@ -111,6 +111,10 @@ export async function tick(env: GenEnv, fetchFn: typeof fetch = fetch, now = Dat
   await db.prepare("INSERT OR IGNORE INTO gen_control (k,v,updated_at) VALUES ('lease','0',0)").run();
   const lease = await db.prepare("UPDATE gen_control SET v=?, updated_at=? WHERE k='lease' AND CAST(v AS INTEGER) < ?").bind(String(now + LEASE_MS), now, now).run();
   if (!lease.meta.changes) return 'busy';
+  try { return await tickLocked(env, fetchFn, now); } finally { await db.prepare("UPDATE gen_control SET v='0' WHERE k='lease'").run().catch(() => {}); }
+}
+async function tickLocked(env: GenEnv, fetchFn: typeof fetch, now: number): Promise<string> {
+  const db = env.DB;
   let cur: Cur | null = JSON.parse((await getC(db, 'current')) || 'null');
   if (!cur) {
     const h = await health(db, now), d = decide(h);

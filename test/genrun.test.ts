@@ -69,6 +69,7 @@ describe('autonomous generator end to end, fixture world', () => {
     expect(await tick({ DB: db, ANTHROPIC_API_KEY: 'k' }, w.f)).toBe('disabled'); expect(await tick({ DB: db, GEN_ENABLED: 'true' }, w.f)).toBe('disabled');
     raw.prepare("INSERT INTO gen_control VALUES ('kill_switch','1',0)").run(); expect(await tick(on(db), w.f)).toBe('kill_switch'); expect(w.log.anthropic + w.log.external).toBe(0);
   });
+  it('the lease is released after every tick so a 3-minute cron is never skipped', async () => { const { db, raw } = mkdb(); const w = world(); await tick(on(db), w.f, Date.UTC(2026, 9, 28, 8)); expect((raw.prepare("SELECT v FROM gen_control WHERE k='lease'").get() as any).v).toBe('0'); expect(await tick(on(db), w.f, Date.UTC(2026, 9, 28, 8) + 3 * 60_000)).not.toBe('busy'); });
   it('a full cap stops everything before any network call', async () => {
     const { db, raw } = mkdb(); const w = world(); raw.prepare("INSERT INTO gen_spend_log VALUES ('full', ?, ?, 'settled', '')").run(Date.UTC(2026, 9, 20), WORKING_CAP_MICRO);
     const r = await tick(on(db), w.f, Date.UTC(2026, 9, 28, 8)); expect(r).toMatch(/cap_exhausted/); expect(w.log.anthropic + w.log.external).toBe(0);
