@@ -11,3 +11,19 @@ describe('bridge candidates', () => {
     expect(candidates(P('X', 'Short text without the topic at all, just filler words to pass length limits ok.', ['Mead']), b)).toEqual([]);
   });
 });
+import { directMention, boring } from './bridge';
+describe('direct mentions and boring topics', () => {
+  const wombat = P('Wombat', 'Wombats are marsupials from Australia. Wombats leave distinctive cube-shaped faeces, which they stack to mark territory.', []);
+  const cube = P('Cube', 'A cube is a three-dimensional solid object bounded by six square faces, facets or sides, with three meeting at each vertex.', []);
+  it('copies the exact sentence where one page names the other page subject', () => {
+    const s = directMention(wombat, cube); expect(s).toContain('cube-shaped'); expect(wombat.text.includes(s!)).toBe(true);
+    expect(directMention(cube, wombat)).toBeNull();
+  });
+  it('does not match inside longer words', () => {
+    expect(directMention(P('X', 'The discube and other cubicles are not the same thing as the shape in question here at all.', []), cube)).toBeNull();
+  });
+  it('flags language roots and generic science words but keeps specific topics', () => {
+    for (const t of ['Proto-Indo-European', 'Old English', 'Density', 'Hellenistic period']) expect(boring(t)).toBe(true);
+    for (const t of ['Pigment', 'Intertropical Convergence Zone', 'Haitian Revolution']) expect(boring(t)).toBe(false);
+  });
+});

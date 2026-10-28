@@ -303,11 +303,11 @@ function Finder({ me, send }: { me: Me; send: Send }) {
     const r = await api('/finder', { a, b }); setBusy(false); if (r.data.ok) { setFound(r.data); send('finder_result'); } else { setMsg(r.data.message || r.data.error || ''); send('tab_change_other'); }
   }
   const random = () => { const p = PAIRS[Math.floor(Math.random() * PAIRS.length)]; setA(p[0]); setB(p[1]); };
-  const line = found ? `${found.a.title} and ${found.b.title} both point to ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}" / "${found.bridge.sentB}").` : '';
+  const line = !found ? '' : found.bridge.kind === 'direct' ? `${found.bridge.from === 'b' ? found.b.title : found.a.title} mentions ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}").` : found.bridge.kind === 'chain' ? `${found.a.title} and ${found.b.title} connect through ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}" / "${found.bridge.sentB}").` : `${found.a.title} and ${found.b.title} both point to ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}" / "${found.bridge.sentB}").`;
   async function copy() { try { await navigator.clipboard.writeText(line); setCopied(true); } catch { setCopied(false); } }
   return <section className="lab">
     <LakeScene pose="read" /><p className="kicker">Connections · early version</p><h1 className="story-title">The curiosity lab.</h1>
-    <p className="deck">Give it two things that have nothing to do with each other. The rabbit looks for a topic that both Wikipedia pages mention and shows you the sentences. Some pairs have no bridge, and then it says so.</p>
+    <p className="deck">Give it two things that have nothing to do with each other. The rabbit reads both Wikipedia pages and shows you the sentences that tie them together: one page mentioning the other, a topic they share, or a short two-step route. Some pairs have no bridge, and then it says so.</p>
     <form onSubmit={go} className="pair-form">
       <div className="pair"><label>Thing one<input type="text" placeholder="moon" value={a} onChange={(e) => setA(e.target.value)} /></label>
         <button type="button" className="swap" aria-label="Swap the two words" onClick={() => { setA(b); setB(a); }}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5" /></svg></button>
@@ -315,15 +315,28 @@ function Finder({ me, send }: { me: Me; send: Send }) {
       <p className="row-actions"><button type="button" className="ghost" onClick={random}>Surprise me with a pair</button><button className="go" disabled={busy || !a.trim() || !b.trim()}>{busy ? 'Following the thread…' : 'Find the connection'}</button></p>
     </form>
     {msg && <p className="note bubble" role="status">{msg}</p>}
-    {found && <article className="bridge" role="status"><p className="kicker">A sourced bridge</p><BridgeViz a={found.a.title} b={found.b.title} via={found.bridge.via} />
-      <h2 className="serif"><em>{found.a.title}</em> and <em>{found.b.title}</em> both point to <em>{found.bridge.via}</em>.</h2>
-      <p className="note">These sentences are copied from the two Wikipedia pages, and each mentions "{found.bridge.via}".</p>
-      <blockquote>“{found.bridge.sentA}”<cite><a href={found.a.url} target="_blank" rel="noreferrer">{found.a.title} (Wikipedia)</a></cite></blockquote>
-      <blockquote>“{found.bridge.sentB}”<cite><a href={found.b.url} target="_blank" rel="noreferrer">{found.b.title} (Wikipedia)</a></cite></blockquote>
+    {found && (() => {
+      const br = found.bridge; const kind = br.kind || 'shared'; const sw = br.from === 'b';
+      const src = sw ? found.b : found.a, oth = sw ? found.a : found.b;
+      return <article className="bridge" role="status"><p className="kicker">{kind === 'direct' ? 'A direct mention' : kind === 'chain' ? 'A two-step route' : 'A sourced bridge'}</p>
+      {kind === 'direct' ? <><BridgeViz a={src.title} b={oth.title} via="mentions" />
+        <h2 className="serif"><em>{src.title}</em> mentions <em>{oth.title}</em> directly.</h2>
+        <p className="note">This sentence is copied from the {src.title} page on Wikipedia.</p>
+        <blockquote>“{br.sentA}”<cite><a href={src.url} target="_blank" rel="noreferrer">{src.title} (Wikipedia)</a></cite></blockquote></>
+      : kind === 'chain' ? <><BridgeViz a={src.title} b={oth.title} via={br.via} />
+        <h2 className="serif"><em>{src.title}</em> leads to <em>{br.via}</em>, which leads to <em>{oth.title}</em>.</h2>
+        <p className="note">Two sentences copied from Wikipedia. The first links {src.title} to {br.via}. The second, from the {br.via} page, links it to {oth.title}.</p>
+        <blockquote>“{br.sentA}”<cite><a href={src.url} target="_blank" rel="noreferrer">{src.title} (Wikipedia)</a></cite></blockquote>
+        <blockquote>“{br.sentB}”<cite><a href={br.viaUrl} target="_blank" rel="noreferrer">{br.via} (Wikipedia)</a></cite></blockquote></>
+      : <><BridgeViz a={found.a.title} b={found.b.title} via={br.via} />
+        <h2 className="serif"><em>{found.a.title}</em> and <em>{found.b.title}</em> both point to <em>{br.via}</em>.</h2>
+        <p className="note">These sentences are copied from the two Wikipedia pages, and each mentions "{br.via}".</p>
+        <blockquote>“{br.sentA}”<cite><a href={found.a.url} target="_blank" rel="noreferrer">{found.a.title} (Wikipedia)</a></cite></blockquote>
+        <blockquote>“{br.sentB}”<cite><a href={found.b.url} target="_blank" rel="noreferrer">{found.b.title} (Wikipedia)</a></cite></blockquote></>}
       {found.inference && <p><span className="tag">Rabbit's guess, not sourced</span> {found.inference}</p>}
-      {found.alternatives?.length > 0 && <p className="note">Other shared topics: {found.alternatives.join(', ')}.</p>}
-      <p className="note">Both pages mentioning a topic is a lead, not proof the two things are closely related.</p>
-      <p className="row-actions"><a className="ghost btn" href={found.a.url} target="_blank" rel="noreferrer">Tell me more: {found.a.title}</a><a className="ghost btn" href={found.b.url} target="_blank" rel="noreferrer">{found.b.title}</a><button type="button" className="ghost" onClick={copy}>{copied ? 'Copied' : 'Copy a line to share'}</button></p></article>}
+      {found.alternatives?.length > 0 && <p className="note">Other routes to try: {found.alternatives.join(', ')}.</p>}
+      <p className="note">A page mentioning something is a lead, not proof the two things are closely related.</p>
+      <p className="row-actions"><a className="ghost btn" href={found.a.url} target="_blank" rel="noreferrer">Tell me more: {found.a.title}</a><a className="ghost btn" href={found.b.url} target="_blank" rel="noreferrer">{found.b.title}</a><button type="button" className="ghost" onClick={copy}>{copied ? 'Copied' : 'Copy a line to share'}</button></p></article>; })()}
     <aside className="fine-block"><p className="kicker">How this works for now</p><ul className="ticks"><li>Every bridge shows the sentences it came from, with links, so you can check it.</li><li>If there is no bridge, the rabbit says so instead of making one up.</li><li>Anything the rabbit adds is labelled as its own guess.</li></ul>{q && <p className="mono-note">Your plan: {q.limit} {q.limit === 1 ? 'try' : 'tries'} per {q.period}.</p>}</aside>
   </section>;
 }

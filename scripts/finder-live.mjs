@@ -4,11 +4,11 @@ const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', hea
 const page = await (await b.createBrowserContext()).newPage(); await page.setViewport({ width: 390, height: 780 });
 const click = async (t) => { const [el] = await page.$$(`xpath/.//button[contains(., "${t}")]`); if (!el) throw new Error('no button ' + t); await el.evaluate((x) => x.click()); await wait(500); };
 page.on('response', async (r) => { if (r.url().includes('/api/finder')) console.log('finder', r.status(), (await r.text()).slice(0, 700)); });
-await page.goto(base + '?daypart=day'); await page.waitForSelector('.welcome'); await wait(2000);
+if (!process.env.NOSPOOF) await page.setExtraHTTPHeaders({ 'cf-connecting-ip': '10.3.' + Math.floor(Math.random() * 250) + '.9' }); await page.goto(base + '?daypart=day'); await page.waitForSelector('.welcome'); await wait(2000);
 await click("Let's wander"); await page.waitForSelector('form'); await page.type('input[type=email]', `synthetic-finder-${Date.now()}@example.test`); await page.type('input[type=password]', 'password-synth1'); await click('Start my 3 free days');
 await page.waitForSelector('select'); await click('Next'); await page.waitForSelector('.chips'); await click('everyday life'); await click('Next'); await click('Skip'); await click('A flowing story'); await click('Next'); await click('All set'); await page.waitForSelector('.nav'); await wait(800);
 await page.evaluate(() => [...document.querySelectorAll('.nav button')].find((x) => x.textContent.includes('Connections')).click()); await wait(800);
 const ins = await page.$$('input[type=text], input:not([type])'); console.log('inputs', ins.length);
-await ins[0].type('moon'); await ins[1].type('cheese'); await click('Find the connection'); await wait(15000);
+await ins[0].type(process.env.WA||'moon'); await ins[1].type(process.env.WB||'cheese'); await click('Find the connection'); await wait(9000);
 console.log((await page.evaluate(() => document.querySelector('main').innerText)).slice(0, 900));
-await page.screenshot({ path: '/tmp/finder.png' }); await b.close();
+await page.screenshot({ path: '/tmp/finder-'+(process.env.WA||'moon')+'.png', fullPage: true }); await b.close();

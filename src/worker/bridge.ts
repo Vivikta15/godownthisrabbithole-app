@@ -6,7 +6,7 @@ import { guardedRun, type AiEnv } from './ai';
 import { cleanWord } from './finder';
 const UA = 'godownthisrabbithole/0.1 (https://rabbithole-app.godownthisrabbithole.workers.dev; small personal reading app)';
 export type Page = { title: string; url: string; text: string; links: Set<string> };
-export type Bridge = { via: string; sentA: string; sentB: string };
+export type Bridge = { via: string; sentA: string; sentB: string; kind?: 'shared' | 'direct' | 'chain'; from?: 'a' | 'b'; viaUrl?: string };
 export type BridgeResult =
   | { ok: true; a: { title: string; url: string }; b: { title: string; url: string }; bridge: Bridge; inference: string | null; alternatives: string[] }
   | { ok: false; reason: 'bad_words' | 'no_page' | 'no_bridge' | 'wiki_error' | 'ai_unavailable'; message: string };
@@ -61,6 +61,35 @@ export function candidates(a: Page, b: Page, max = 12): Bridge[] {
   const score = (x: Bridge) => { const base = x.via.replace(/ \(.*\)$/, ''); return Math.min(count(a.text, base), count(b.text, base)) * 100 + x.via.length; };
   return out.sort((x, y) => score(y) - score(x)).slice(0, max);
 }
+
+// Topics that "connect" almost any two pages and are rarely interesting: language roots, basic science words, calendar words.
+const BORING = /^(proto-|old |middle |ancient |classical |medieval |latin|greek|sanskrit|arabic|french|german|english|spanish|italian|chinese|japanese|hindi|persian|dutch|russian|turkish|portuguese|language|etymology|word|name|history|culture|society|science|technology|chemistry|physics|biology|mathematics|density|convection|weather|nitrogen|oxygen|carbon|hydrogen|water|energy|heat|temperature|pressure|gas|liquid|solid|metal|mass|volume|speed|time|year|month|day|century|millennium|species|animal|plant|human|people|population|city|town|village|country|capital|ocean|sea|river|island|mountain|climate|season|summer|winter|spring|autumn|period|era|age|empire|dynasty|religion|christianity|islam|buddhism|hinduism)\b/i;
+export const boring = (t: string) => { const b = t.replace(/ \(.*\)$/, ''); return BORING.test(b) || /\b(period|era|age|empire|dynasty|languages?)$/i.test(b); };
+const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const baseOf = (t: string) => t.replace(/ \(.*\)$/, '');
+// A page that says the other page's subject in one of its own sentences ("the Moon page mentions cheese").
+export function directMention(from: Page, other: Page): string | null {
+  const base = baseOf(other.title); if (base.length < 4 || generic(other.title)) return null;
+  const re = new RegExp('(^|[^\\p{L}])' + esc(base) + '(s|es)?([^\\p{L}]|$)', 'iu');
+  const hits = sentences(from.text).filter((x) => re.test(x) && x.length < 420);
+  return hits[0] ?? null;
+}
+// Two-step route: the source page names a topic C in one sentence, and C's own page names the target in another.
+async function chainVia(db: any, from: Page, other: Page, f: typeof fetch): Promise<Bridge | null> {
+  const count = (t: string, term: string) => (t.match(new RegExp('(^|[^\\p{L}])' + esc(term) + '([^\\p{L}]|$)', 'giu')) ?? []).length;
+  const cands = [...from.links].filter((t) => !generic(t) && !boring(t) && t !== from.title && t !== other.title && sentenceWith(from.text, baseOf(t)))
+    .map((t) => ({ t, n: count(from.text, baseOf(t)) })).sort((x, y) => y.n - x.n || y.t.length - x.t.length).slice(0, 18).map((x) => x.t);
+  if (!cands.length) return null;
+  let j: any; try { j = await wget(f, api('action=query&prop=extracts&exintro=1&explaintext=1&exlimit=max&titles=' + encodeURIComponent(cands.join('|')))); } catch { return null; }
+  const pages: any[] = Object.values(j?.query?.pages ?? {});
+  const re = new RegExp('(^|[^\\p{L}])' + esc(baseOf(other.title)) + '(s|es)?([^\\p{L}]|$)', 'iu');
+  for (const t of cands) {
+    const pg = pages.find((p) => p.title === t); if (!pg?.extract) continue;
+    const hit = sentences(String(pg.extract)).find((x) => re.test(x) && x.length < 420); if (!hit) continue;
+    return { via: t, sentA: sentenceWith(from.text, baseOf(t))!, sentB: hit, kind: 'chain', viaUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(t.replace(/ /g, '_')) };
+  }
+  return null;
+}
 const SYS = 'You help pick the most surprising, interesting bridge between two Wikipedia pages from a numbered list of real candidates. Reply JSON only: {"pick": <number>, "take": "one short sentence of your own inference about why the link is interesting"}. Do not state new facts. If none is interesting reply {"pick":null}.';
 export async function findBridge(env: AiEnv & { FINDER_MODEL?: string }, wa: string, wb: string, f: typeof fetch = fetch): Promise<BridgeResult & { aiUsed?: boolean }> {
   const a0 = cleanWord(wa), b0 = cleanWord(wb);
@@ -68,7 +97,15 @@ export async function findBridge(env: AiEnv & { FINDER_MODEL?: string }, wa: str
   let A: Page | null, B: Page | null;
   try { [A, B] = await Promise.all([loadPageCached(env.DB, a0, f), loadPageCached(env.DB, b0, f)]); } catch { return { ok: false, reason: 'wiki_error', message: 'Could not reach the source library just now. Try again in a moment.' }; }
   if (!A || !B) return { ok: false, reason: 'no_page', message: `I could not find a good source page for "${!A ? a0 : b0}". Try a more common name.` };
-  const cands = candidates(A, B);
+  const all = candidates(A, B);
+  const goodShared = all.filter((x) => !boring(x.via)).map((x) => ({ ...x, kind: 'shared' as const }));
+  const dAB = directMention(A, B), dBA = directMention(B, A);
+  const direct: Bridge[] = [];
+  if (dAB) direct.push({ via: B.title, sentA: dAB, sentB: '', kind: 'direct', from: 'a' });
+  if (dBA) direct.push({ via: A.title, sentA: dBA, sentB: '', kind: 'direct', from: 'b' });
+  let cands: Bridge[] = [...direct, ...goodShared];
+  if (!cands.length) { const c1 = await chainVia(env.DB, A, B, f); const c2 = c1 ? null : await chainVia(env.DB, B, A, f); const c = c1 || (c2 && { ...c2, from: 'b' as const }); if (c) cands = [{ ...c, from: c.from ?? 'a' }]; }
+  if (!cands.length) cands = all.map((x) => ({ ...x, kind: 'shared' as const }));
   if (!cands.length) return { ok: false, reason: 'no_bridge', message: `I could not find a specific, sourced bridge between ${A.title} and ${B.title}. Their pages do not point to the same specific topic, and I won't invent one.` };
   let pick = 0; let inference: string | null = null; let aiUsed = false;
   const list = cands.map((c, i) => `${i + 1}. ${c.via}`).join('\n');
