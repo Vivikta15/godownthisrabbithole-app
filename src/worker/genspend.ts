@@ -7,6 +7,10 @@ export const RATES: Record<string, { in: number; out: number; thinkingOff: 'disa
   'claude-sonnet-5': { in: 2, out: 10, thinkingOff: 'disabled' },
   'claude-sonnet-5-5': { in: 2, out: 10, thinkingOff: 'between_tools' },
 };
+// Rates are list prices read on RATES_VERIFIED_ON. Provider prices can change and the Models API does not report prices, so: (1) every cost is counted at RATE_MARGIN times list price,
+// (2) if the rates are older than RATE_MAX_AGE_DAYS the generator refuses to call until someone re-reads the pricing page and updates this date.
+export const RATES_VERIFIED_ON = '2026-10-28'; export const RATE_MAX_AGE_DAYS = 45; export const RATE_MARGIN = 1.5;
+export const ratesFresh = (now = Date.now()) => now - Date.parse(RATES_VERIFIED_ON + 'T00:00:00Z') <= RATE_MAX_AGE_DAYS * 86_400_000;
 export const MAX_PROMPT_BYTES = 40_000; // keeps Haiku 5.5 well under its 100k-token cheap tier even at 1 token per byte
 export const monthStartMs = (now: number) => { const d = new Date(now); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1); };
 const DAY = 86_400_000;
@@ -17,8 +21,8 @@ export const RESERVE_SQL = `INSERT INTO gen_spend_log (id, ts, micro, state, not
 // failure loop cannot burn the month in a day. The month and trailing-30-day caps above remain the real limits.
 export const dayCapMicro = (cap: number) => Math.floor((2 * cap) / 30);
 export const dayStartMs = (now: number) => { const d = new Date(now); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()); };
-export const worstCaseMicro = (model: string, promptBytes: number, maxOut: number): number | null => { const r = Object.prototype.hasOwnProperty.call(RATES, model) ? RATES[model] : undefined; return r ? Math.ceil(promptBytes * r.in + maxOut * r.out) : null; };
-export const actualMicro = (model: string, usage: { input_tokens?: number; output_tokens?: number } | undefined): number | null => { const r = Object.prototype.hasOwnProperty.call(RATES, model) ? RATES[model] : undefined; if (!r || !usage || typeof usage.input_tokens !== 'number' || typeof usage.output_tokens !== 'number') return null; return Math.ceil(usage.input_tokens * r.in + usage.output_tokens * r.out); };
+export const worstCaseMicro = (model: string, promptBytes: number, maxOut: number): number | null => { const r = Object.prototype.hasOwnProperty.call(RATES, model) ? RATES[model] : undefined; return r ? Math.ceil((promptBytes * r.in + maxOut * r.out) * RATE_MARGIN) : null; };
+export const actualMicro = (model: string, usage: { input_tokens?: number; output_tokens?: number } | undefined): number | null => { const r = Object.prototype.hasOwnProperty.call(RATES, model) ? RATES[model] : undefined; if (!r || !usage || typeof usage.input_tokens !== 'number' || typeof usage.output_tokens !== 'number') return null; return Math.ceil((usage.input_tokens * r.in + usage.output_tokens * r.out) * RATE_MARGIN); };
 
 export async function reserve(db: D1Database, id: string, micro: number, note: string, now = Date.now(), cap = WORKING_CAP_MICRO): Promise<boolean> {
   if (!(micro > 0) || cap > HARD_CEILING_MICRO) return false;
@@ -40,11 +44,12 @@ export async function spentMicro(db: D1Database, now = Date.now()): Promise<{ mo
 }
 
 export type GenEnv = { DB: D1Database; GEN_ENABLED?: string; ANTHROPIC_API_KEY?: string };
-export type CallResult = { ok: true; text: string; micro: number } | { ok: false; reason: 'disabled' | 'no_key' | 'paused' | 'bad_model' | 'prompt_too_long' | 'over_cap' | 'provider_error' };
+export type CallResult = { ok: true; text: string; micro: number } | { ok: false; reason: 'disabled' | 'no_key' | 'rates_stale' | 'paused' | 'bad_model' | 'prompt_too_long' | 'over_cap' | 'provider_error' };
 // One paid call: gates, reserve, one fetch (no automatic retry; a retry is a new reservation), settle. Thinking is switched off where the model allows it, and max_tokens bounds any output anyway.
 export async function callModel(env: GenEnv, req: { model: string; system?: string; prompt: string; maxTokens: number; id: string; note: string }, fetchFn: typeof fetch = fetch): Promise<CallResult> {
   if (env.GEN_ENABLED !== 'true') return { ok: false, reason: 'disabled' };
   if (!env.ANTHROPIC_API_KEY) return { ok: false, reason: 'no_key' };
+  if (!ratesFresh()) return { ok: false, reason: 'rates_stale' };
   const paused = await env.DB.prepare("SELECT v FROM gen_control WHERE k IN ('paused_overage','kill_switch') AND v='1'").first(); if (paused) return { ok: false, reason: 'paused' };
   const rate = Object.prototype.hasOwnProperty.call(RATES, req.model) ? RATES[req.model] : undefined; if (!rate) return { ok: false, reason: 'bad_model' };
   const body = JSON.stringify({ model: req.model, max_tokens: req.maxTokens, ...(req.system ? { system: req.system } : {}), thinking: { type: rate.thinkingOff }, messages: [{ role: 'user', content: req.prompt }] });
