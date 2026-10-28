@@ -322,13 +322,19 @@ app.post('/api/save', async (c) => {
   else await c.env.DB.prepare('DELETE FROM saved WHERE user_id=? AND topic_id=?').bind(u.id, b.topicId).run();
   return c.json({ ok: true, saved: !!b.saved });
 });
+app.get('/api/creator/library', async (c) => {
+  const { creator } = await loadAll(c);
+  if (!creator) return c.json({ error: 'not found' }, 404);
+  return c.json({ stories: SEED.filter((t, i) => SEED.findIndex((x) => x.id === t.id) === i && t.story?.length).map((t) => ({ id: t.id, title: t.title, tags: t.tags, countries: t.countries ?? [], hook: t.hook })) });
+});
 app.get('/api/story/:id', async (c) => {
   const { u, sub, pref, creator } = await loadAll(c);
   if (!accessOf(u, sub, creator).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
   const t = SEED.find((x) => x.id === c.req.param('id'));
-  if (!t || !(await canOpen(c, u.id, t.id, u.timezone))) return c.json({ error: 'not found' }, 404);
+  // Creator accounts may preview any story. Read-only: no rabbit_holes row, read event, streak or "seen" change.
+  if (!t || !(creator || await canOpen(c, u.id, t.id, u.timezone))) return c.json({ error: 'not found' }, 404);
   const saved = !!(await c.env.DB.prepare('SELECT 1 x FROM saved WHERE user_id=? AND topic_id=?').bind(u.id, t.id).first());
-  return c.json({ hole: { id: t.id, topicId: t.id, title: t.title, story: pref?.length_pref === 'short' ? t.story.slice(0, 2) : t.story, beats: t.beats, format: 'narrative', sources: t.sources, hook: t.hook, tags: t.tags, minutes: readMinutes(t.story), saved, whyModes: [], sourceCheck: t.checked ? 'manual' : 'pending', checked: t.checked ?? null } });
+  return c.json({ hole: { id: t.id, topicId: t.id, title: t.title, story: pref?.length_pref === 'short' ? t.story.slice(0, 2) : t.story, beats: t.beats, format: creator ? ((() => { try { return JSON.parse(pref?.formats || '[]')[0]; } catch { return null; } })() ?? 'narrative') : 'narrative', sources: t.sources, hook: t.hook, tags: t.tags, minutes: readMinutes(t.story), saved, whyModes: [], sourceCheck: t.checked ? 'manual' : 'pending', checked: t.checked ?? null } });
 });
 
 app.post('/api/read', async (c) => {

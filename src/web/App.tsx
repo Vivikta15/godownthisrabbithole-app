@@ -234,7 +234,7 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
 
 function Sources({ hole }: { hole: any }) {
   const s: any[] = hole.sources || [];
-  return <p className="note sources">{hole.sourceCheck === 'manual' ? `Sample story. Compared by hand against the source text on ${hole.checked.date} (one source, not independent verification). Source: ` : 'Sample story. Its sources have not been checked by the app yet: '}{s.map((x, i) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a>{i < s.length - 1 ? ', ' : ''}</span>)}</p>;
+  return <p className="note sources">{hole.sourceCheck === 'manual' ? `Sample story. Compared by hand against the source text on ${hole.checked.date} (${s.length > 1 ? 'main claims also checked against the other sources listed' : 'one source, not independent verification'}). Sources: ` : 'Sample story. Its sources have not been checked by the app yet: '}{s.map((x, i) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a>{i < s.length - 1 ? ', ' : ''}</span>)}</p>;
 }
 
 function StoryView({ topicId, onBack }: { topicId: string; onBack: () => void }) {
@@ -373,7 +373,8 @@ function Trail({ me, onOpen }: { me: Me; onOpen: (id: string) => void }) {
 }
 
 function You({ me, cfg, onRedo, onOpen }: { me: Me; cfg: Cfg; onRedo: () => void; onOpen: (id: string) => void }) {
-  const [saved, setSaved] = useState<any[] | null>(null); const [hist, setHist] = useState<any>(null);
+  const [saved, setSaved] = useState<any[] | null>(null); const [hist, setHist] = useState<any>(null); const [lib, setLib] = useState<any[] | null>(null);
+  useEffect(() => { if (me.access.plan === 'creator') api('/creator/library').then((r) => r.ok && setLib(r.data.stories)); }, [me.access.plan]);
   useEffect(() => { api('/saved').then((r) => r.ok && setSaved(r.data.items)); api('/history').then((r) => r.ok && setHist(r.data)); }, []);
   const p = me.prefs; const fmtName = (id: string) => cfg.formats.find((f) => f.id === id)?.label ?? id;
   const mins = hist ? Math.round(hist.recorded.seconds / 60) : 0;
@@ -382,6 +383,8 @@ function You({ me, cfg, onRedo, onOpen }: { me: Me; cfg: Cfg; onRedo: () => void
     <h2 className="serif">How you like your stories</h2>
     {p ? <dl className="prefs"><dt>Topics</dt><dd>{p.interestTags.join(', ')}</dd><dt>Shape</dt><dd>{p.formats.map(fmtName).join(', ')}</dd><dt>Length</dt><dd>{p.length === 'short' ? 'A quick nibble' : 'A good chew'}</dd>{p.quiz?.country && <><dt>Country</dt><dd>{(cfg.countries ?? []).find((c) => c.code === p.quiz.country)?.name ?? p.quiz.country}</dd></>}</dl> : <p className="note">No answers yet.</p>}
     <p><button type="button" className="ghost" onClick={onRedo}>Change my answers</button></p>
+    {lib && <><h2 className="serif">Creator library</h2><p className="note">Every story, for testing. Opening one here is a read-only preview: it does not count as today's read, change your streak or your history.</p>
+      <ul className="journal">{lib.map((x) => <li key={x.id}><button type="button" className="linklike" onClick={() => onOpen(x.id)}>{x.title}</button><span className="note"> {x.tags.join(', ')}{x.countries.length ? ' · ' + x.countries.join(', ') : ''}</span></li>)}</ul></>}
     <h2 className="serif">Saved discoveries</h2>
     {saved === null ? <p className="note" role="status">Checking your shelf…</p> : saved.length === 0 ? <p className="note">Nothing saved yet. Use "Save for later" on a story you want to find again.</p>
       : <ul className="journal">{saved.map((x) => <li key={x.topicId}><button type="button" className="linklike" onClick={() => onOpen(x.topicId)}>{x.title}</button><span className="note"> {x.hook}</span></li>)}</ul>}
