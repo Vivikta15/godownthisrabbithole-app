@@ -341,7 +341,7 @@ app.get('/api/story/:id', async (c) => {
   // Creator accounts may preview any story. Read-only: no rabbit_holes row, read event, streak or "seen" change.
   if (!t || !(creator || await canOpen(c, u.id, t.id, u.timezone))) return c.json({ error: 'not found' }, 404);
   const saved = !!(await c.env.DB.prepare('SELECT 1 x FROM saved WHERE user_id=? AND topic_id=?').bind(u.id, t.id).first());
-  return c.json({ hole: { id: t.id, topicId: t.id, title: t.title, story: pref?.length_pref === 'short' ? t.story.slice(0, 2) : t.story, beats: t.beats, format: creator ? ((() => { try { return JSON.parse(pref?.formats || '[]')[0]; } catch { return null; } })() ?? 'narrative') : 'narrative', sources: t.sources, hook: t.hook, tags: t.tags, minutes: readMinutes(t.story), saved, whyModes: [], sourceCheck: t.machine ? 'machine' : t.checked ? 'manual' : 'pending', checked: t.checked ?? null, machine: t.machine ?? null } });
+  return c.json({ hole: { id: t.id, topicId: t.id, title: t.title, story: pref?.length_pref === 'short' ? t.story.slice(0, 2) : t.story, beats: t.beats, format: creator ? ((() => { try { return JSON.parse(pref?.formats || '[]')[0]; } catch { return null; } })() ?? 'narrative') : 'narrative', sources: t.sources, hook: t.hook, tags: t.tags, minutes: readMinutes(pref?.length_pref === 'short' ? t.story.slice(0, 2) : t.story), saved, whyModes: [], sourceCheck: t.machine ? 'machine' : t.checked ? 'manual' : 'pending', checked: t.checked ?? null, machine: t.machine ?? null } });
 });
 
 app.post('/api/read', async (c) => {
