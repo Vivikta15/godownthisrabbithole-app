@@ -13,7 +13,7 @@ export const WRITER = 'claude-haiku-5-5', JUDGE = 'claude-sonnet-5';
 export const MAX_EXTERNAL_PER_TICK = 8, MAX_TICKS_PER_ATTEMPT = 40, MAX_ATTEMPTS_PER_DAY = 4, TARGET_POOL = 30, LOW_WATER = 5, MIN_GAP_MS = 20 * 60_000, LEASE_MS = 4 * 60_000;
 class Yield extends Error {}
 type Cur = { id: string; kind: 'attempt' | 'canary'; topic?: string; tags?: string[]; countries?: string[]; ticks: number; micro: number; calls?: number; started: number };
-type Ctx = { env: GenEnv; fetchFn: typeof fetch; cache: Map<string, string>; used: number; max: number; yielded: boolean; stop: string | null; micro: number; calls: number; attemptId: string; kind: string };
+type Ctx = { env: GenEnv; fetchFn: typeof fetch; cache: Map<string, string>; used: number; max: number; yielded: boolean; stop: string | null; micro: number; calls: number; diag: string[]; attemptId: string; kind: string };
 
 const fnv = (s: string) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(16); };
 async function getC(db: D1Database, k: string): Promise<string | null> { const r = await db.prepare('SELECT v FROM gen_control WHERE k=?').bind(k).first<{ v: string }>(); return r ? r.v : null; }
@@ -38,8 +38,8 @@ function model(ctx: Ctx, stage: string, m: string, system: string, prompt: strin
 function cachedFetch(ctx: Ctx): typeof fetch {
   return (async (input: any, init?: any) => {
     const url = String(input); const raw = await cached(ctx, 'f:' + url, async () => {
-      try { const r = await ctx.fetchFn(url, init); const ct = r.headers.get('content-type') || ''; return JSON.stringify({ ok: r.ok, url: r.url || url, ct, body: (await r.text()).slice(0, 600_000) }); }
-      catch { return JSON.stringify({ ok: false, url, ct: '', body: '' }); }
+      try { const fx = ctx.fetchFn; const r = await fx(url, init); const ct = r.headers.get('content-type') || ''; const body = (await r.text()).slice(0, 600_000); ctx.diag.push(`${r.status} ${url.slice(8, 60)} ${body.length}`); return JSON.stringify({ ok: r.ok, url: r.url || url, ct, body }); }
+      catch (e) { ctx.diag.push(`ERR ${url.slice(8, 60)} ${String(e).slice(0, 60)}`); return JSON.stringify({ ok: false, url, ct: '', body: '' }); }
     });
     const o = JSON.parse(raw);
     return { ok: o.ok, url: o.url, headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? o.ct : null) }, json: async () => JSON.parse(o.body), text: async () => o.body } as any;
@@ -105,7 +105,7 @@ async function finishAttempt(db: D1Database, cur: Cur, outcome: 'accepted' | 're
   ]);
 }
 
-export async function tick(env: GenEnv, fetchFn: typeof fetch = fetch, now = Date.now()): Promise<string> {
+export async function tick(env: GenEnv, fetchFn: typeof fetch = (...a) => fetch(...a), now = Date.now()): Promise<string> {
   const db = env.DB;
   if (env.GEN_ENABLED !== 'true' || !env.ANTHROPIC_API_KEY) return 'disabled';
   if ((await getC(db, 'kill_switch')) === '1') return 'kill_switch';
@@ -133,7 +133,7 @@ async function tickLocked(env: GenEnv, fetchFn: typeof fetch, now: number): Prom
     await setC(db, 'current', JSON.stringify(cur), now);
   }
   const cache = new Map<string, string>(); for (const r of (await db.prepare('SELECT k,v FROM gen_cache WHERE attempt=?').bind(cur.id).all<{ k: string; v: string }>()).results ?? []) cache.set(r.k, r.v);
-  const ctx: Ctx = { env, fetchFn, cache, used: 0, max: MAX_EXTERNAL_PER_TICK, yielded: false, stop: null, micro: 0, calls: 0, attemptId: cur.id, kind: cur.kind };
+  const ctx: Ctx = { env, fetchFn, cache, used: 0, max: MAX_EXTERNAL_PER_TICK, yielded: false, stop: null, micro: 0, calls: 0, diag: [], attemptId: cur.id, kind: cur.kind };
   cur.ticks++;
   const park = async () => { cur!.micro += ctx.micro; cur!.calls = (cur!.calls ?? 0) + ctx.calls; await setC(db, 'current', JSON.stringify(cur), now); };
   try {
@@ -145,6 +145,7 @@ async function tickLocked(env: GenEnv, fetchFn: typeof fetch, now: number): Prom
     }
     const docs = await acquireSources(cur.topic!, cachedFetch(ctx)); if (ctx.yielded) throw new Yield();
     let outcome: { ok: boolean; reason?: string } = { ok: false, reason: 'too_few_sources' }; let seed: Seed | null = null;
+    if (!docs || docs.length < 2) await setC(db, 'src_diag', JSON.stringify({ topic: cur.topic, docs: docs ? docs.map((d) => d.groupId) : null, fetched: ctx.diag.slice(0, 12) }), now); // what the network actually returned, kept for diagnosis
     if (docs && docs.length >= 2) {
       const res = await runCandidate(cur.topic!, docs, runners(ctx)); if (ctx.yielded) throw new Yield();
       if (ctx.stop) outcome = { ok: false, reason: ctx.stop === 'over_cap' ? 'cap_reached' : 'provider_error' };
