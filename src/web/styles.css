@@ -198,12 +198,12 @@ html:has(.reading) .sky .sunwrap,html:has(.reading) .sky .moonwrap,html:has(.rea
 html[data-weather=cloudy] .sky .wx-cloudy,html[data-weather=rain] .sky .wx-cloudy{opacity:1}
 html[data-weather=rain] .sky .cloud{fill:#d3dcd9}
 html[data-weather=cloudy] .sky .sunwrap,html[data-weather=rain] .sky .sunwrap{opacity:.4}
-html[data-weather=rain] .sky .wx-rain{opacity:1}
 html[data-weather=mist] .sky .wx-mist{opacity:.8}
 html[data-weather=rain] .sky{filter:saturate(.75) brightness(.97)}
-.sky .drop{stroke:var(--soft);stroke-width:2;stroke-linecap:round;opacity:.45;animation:rainfall 1.1s linear infinite}
-@keyframes rainfall{from{transform:translateY(-60px)}to{transform:translateY(660px)}}
-@media (prefers-reduced-motion:reduce){.sky .drop{animation:none}}
+.drop{stroke:var(--soft);stroke-width:2;stroke-linecap:round;opacity:.45;animation:rainfall 1.1s linear infinite}
+@keyframes rainfall{from{transform:translateY(0)}to{transform:translateY(114px)}}
+.lakerain{opacity:0;transition:opacity 1.2s ease}html[data-weather=rain] .lakerain{opacity:1}
+@media (prefers-reduced-motion:reduce){.drop{animation:none}}
 html:has(.reading) .sky .wx{opacity:0!important}
 .citybox input[type=text]{width:100%;max-width:340px;margin:4px 0}
 .cityhits{list-style:none;margin:6px 0;padding:0}.cityhits li{padding:4px 0}
@@ -211,3 +211,10 @@ html:has(.reading) .sky .wx{opacity:0!important}
 html[data-daypart=night] .sky::after{background:linear-gradient(#0b171e,#17333a)}
 html[data-weather=cloudy] .sky::after{opacity:.3}html[data-weather=rain] .sky::after{opacity:.4}html[data-weather=mist] .sky::after{opacity:.25;background:linear-gradient(#e9efe6,#f2f4ea)}
 html[data-daypart=night][data-weather=mist] .sky::after{background:linear-gradient(#22343b,#2c4249)}
+/* Long text pages: the mascot steps aside so it never covers a paragraph. */
+.shell:has(.you) .mascot{display:none}
+/* Weather tints soften the sky, so text colours step up a notch to keep the same contrast. */
+html[data-weather]:not([data-daypart=night]){--coral:#8f2f1b;--soft:#2f4d45}
+html[data-daypart=night][data-weather]{--coral:#f08c7b}
+html[data-weather=cloudy] .sky::after{opacity:.2}html[data-weather=rain] .sky::after{opacity:.26}html[data-weather=mist] .sky::after{opacity:.2}
+html[data-daypart=dusk][data-weather]{--coral:#7f2916}

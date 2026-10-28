@@ -8,7 +8,7 @@ await page.setExtraHTTPHeaders({ 'cf-connecting-ip': '10.' + Math.floor(Math.ran
 const active = () => page.evaluate(() => { const e = document.activeElement; const cs = getComputedStyle(e); return { tag: e.tagName, name: (e.getAttribute('aria-label') || e.innerText || e.placeholder || e.type || '').slice(0, 30), outline: cs.outlineStyle + ' ' + cs.outlineWidth }; });
 const tabTo = async (pred, max = 25) => { for (let i = 0; i < max; i++) { await page.keyboard.press('Tab'); const a = await active(); if (pred(a)) return a; } throw new Error('tab target not found; last focus ' + JSON.stringify(await active())); };
 const log = []; const L = (...a) => { log.push(a.join(' ')); console.error('LOG', a.join(' ').slice(0, 300)); };
-await page.goto(base + (process.env.DAYPART ? '?daypart=' + process.env.DAYPART : '')); await page.waitForSelector('.welcome');
+await page.goto(base + '?' + (process.env.DAYPART ? 'daypart=' + process.env.DAYPART : '') + (process.env.WEATHER ? '&weather=' + process.env.WEATHER : '')); await page.waitForSelector('.welcome');
 let a = await tabTo((x) => x.name.includes("Let's wander")); L('welcome focus:', JSON.stringify(a)); await page.keyboard.press('Enter');
 await page.waitForSelector('form.auth');
 await tabTo((x) => x.tag === 'INPUT' && x.name.includes('text')); await page.keyboard.type('Synth');

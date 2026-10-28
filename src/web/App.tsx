@@ -354,7 +354,7 @@ function You({ me, cfg, onRedo, onOpen }: { me: Me; cfg: Cfg; onRedo: () => void
   useEffect(() => { api('/saved').then((r) => r.ok && setSaved(r.data.items)); api('/history').then((r) => r.ok && setHist(r.data)); }, []);
   const p = me.prefs; const fmtName = (id: string) => cfg.formats.find((f) => f.id === id)?.label ?? id;
   const mins = hist ? Math.round(hist.recorded.seconds / 60) : 0;
-  return <section>
+  return <section className="you">
     <p className="kicker">You</p><h1 className="story-title">{me.user.name ? `${me.user.name}'s corner.` : 'Your corner.'}</h1><p className="mono-note">{me.user.email}</p>
     <h2 className="serif">How you like your stories</h2>
     {p ? <dl className="prefs"><dt>Topics</dt><dd>{p.interestTags.join(', ')}</dd><dt>Shape</dt><dd>{p.formats.map(fmtName).join(', ')}</dd><dt>Length</dt><dd>{p.length === 'short' ? 'A quick nibble' : 'A good chew'}</dd>{p.quiz?.country && <><dt>Country</dt><dd>{(cfg.countries ?? []).find((c) => c.code === p.quiz.country)?.name ?? p.quiz.country}</dd></>}</dl> : <p className="note">No answers yet.</p>}

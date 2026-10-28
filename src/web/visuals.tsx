@@ -142,7 +142,6 @@ export function SkyLayer() {
       <Cloud x={140} y={120} s={1.15} cls="c1" /><Cloud x={520} y={80} s={.8} cls="c2" /><Cloud x={820} y={190} s={1} cls="c3" />
       <defs><linearGradient id="mistg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--cloud)" stopOpacity="0" /><stop offset=".45" stopColor="var(--cloud)" stopOpacity=".9" /><stop offset="1" stopColor="var(--cloud)" stopOpacity="0" /></linearGradient></defs>
       <g className="wx wx-cloudy"><Cloud x={360} y={110} s={2.2} cls="c2" /><Cloud x={540} y={210} s={2.6} cls="c1" /><Cloud x={660} y={100} s={2.1} cls="c3" /><Cloud x={400} y={330} s={2} cls="c3" /></g>
-      <g className="wx wx-rain">{[330, 365, 400, 435, 470, 505, 540, 575, 610, 645, 680].map((x, i) => <path key={x} className="drop" d={`M${x} 60 l-9 32`} style={{ animationDelay: `${-((i * 0.29) % 1.1)}s` }} />)}</g>
       <rect className="wx wx-mist" x="-600" y="170" width="2200" height="480" fill="url(#mistg)" />
       <g opacity=".35">
         {[40, 130, 235, 350, 470, 590, 700, 820, 930].map((x, i) => <PineS key={x} x={x} y={700} s={.8 + (i % 3) * .3} c="var(--pine-far)" />)}
@@ -165,8 +164,10 @@ export function LakeScene({ pose = 'fish', progress = 0, hero = false }: { pose?
     ? 'The rabbit sits on a wooden pier by the lake, reading a book. A fishing line rests in the water' + (progress > 0 ? (caught ? ', and the day\'s catch is on the hook.' : ', and a fish rises as you read.') : '.')
     : 'The rabbit sits on a wooden pier by the lake, fishing among the trees.';
   return <svg className={'lake' + (caught ? ' caught' : '')} viewBox="0 0 640 240" role="img" aria-label={label}>
+    <defs><clipPath id="lakeclip"><rect x="0" y="0" width="640" height="134" /></clipPath></defs>
     <RoundS x={84} y={128} s={.9} c="var(--autumn)" /><PineS x={140} y={126} s={1.05} /><RoundS x={238} y={130} s={.7} c="var(--pine)" />
     <PineS x={470} y={124} s={1.2} /><RoundS x={548} y={130} s={.95} c="var(--autumn2)" /><PineS x={612} y={128} s={.85} />
+    <g className="lakerain" clipPath="url(#lakeclip)">{[20, 70, 120, 175, 225, 280, 335, 390, 445, 500, 555, 610].map((x, i) => <path key={x} className="drop" d={`M${x} 0 l-6 20`} style={{ animationDelay: `${-((i * 0.31) % 1.1)}s` }} />)}</g>
     <rect x="0" y="134" width="640" height="106" fill="var(--lake)" />
     <rect x="0" y="208" width="640" height="32" fill="var(--lake-deep)" opacity=".35" />
     <path className="ripple" d="M252 172 q10 -4 20 0 M420 196 q10 -4 20 0" /><path className="ripple r2" d="M330 214 q12 -5 24 0 M120 186 q10 -4 20 0" /><path className="ripple r3" d="M520 168 q10 -4 20 0 M210 220 q10 -4 20 0" />
