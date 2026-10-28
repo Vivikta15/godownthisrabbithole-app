@@ -445,10 +445,12 @@ async function findCity(c: any, id: number) {
   return cityList!.find((x) => x[0] === id) ?? null;
 }
 app.get('/api/city', async (c) => {
+  if (!c.env.WEATHER_CONTACT) return c.json({ error: 'off' }, 404);
   const row = await c.env.DB.prepare('SELECT name,country FROM user_city WHERE user_id=?').bind(c.get('uid')).first<{ name: string; country: string }>();
   return c.json({ city: row ?? null });
 });
 app.post('/api/city', async (c) => {
+  if (!c.env.WEATHER_CONTACT) return c.json({ error: 'off' }, 404);
   const b: any = await c.req.json(); const uid = c.get('uid');
   if (b.id === null) { await c.env.DB.prepare('DELETE FROM user_city WHERE user_id=?').bind(uid).run(); return c.json({ ok: true, city: null }); }
   const city = Number.isInteger(b.id) ? await findCity(c, b.id) : null;
