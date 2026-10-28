@@ -13,8 +13,9 @@ import { createCheckout } from './checkout';
 import { findBridge } from './bridge';
 import { judge } from './judge';
 import { shapeBeats } from '../shared/shape';
+import { fetchCondition } from './weather';
 
-type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; BONUS_CHANCE?: string; DODO_API_KEY?: string; MAIL_ENABLED?: string; REQUIRE_VERIFIED_EMAIL?: string; IP_SIGNUP_MAX?: string; DODO_ENV?: string; AI?: any; AI_ENABLED?: string; AI_PLAN_CONFIRMED?: string; FINDER_MODEL?: string; APP_URL?: string; CHECKOUT_ENABLED?: string };
+type Env = { DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; BONUS_CHANCE?: string; DODO_API_KEY?: string; MAIL_ENABLED?: string; REQUIRE_VERIFIED_EMAIL?: string; IP_SIGNUP_MAX?: string; DODO_ENV?: string; AI?: any; AI_ENABLED?: string; AI_PLAN_CONFIRMED?: string; FINDER_MODEL?: string; APP_URL?: string; CHECKOUT_ENABLED?: string; WEATHER_CONTACT?: string };
 type Vars = { uid: string };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
@@ -64,7 +65,7 @@ async function startSession(c: any, uid: string) {
   setCookie(c, 'sid', sid, { httpOnly: true, secure: new URL(c.req.url).protocol === 'https:', sameSite: 'Lax', path: '/', maxAge: 30 * 86400 });
 }
 
-app.get('/api/config', (c) => c.json({ topics: TOPIC_TAGS, formats: FORMATS, whyRead: WHY_READ, countries: COUNTRIES, countriesWithStories: COUNTRIES_WITH_STORIES(), plans: PLANS, finderGenerator: false, emailRecovery: !!getMailer(c.env), payments: c.env.CHECKOUT_ENABLED === 'true' && c.env.DODO_API_KEY && c.env.DODO_ENV !== 'live_mode' ? 'test_mode' : 'not_configured' }));
+app.get('/api/config', (c) => c.json({ topics: TOPIC_TAGS, formats: FORMATS, whyRead: WHY_READ, countries: COUNTRIES, countriesWithStories: COUNTRIES_WITH_STORIES(), plans: PLANS, finderGenerator: false, weather: !!c.env.WEATHER_CONTACT, emailRecovery: !!getMailer(c.env), payments: c.env.CHECKOUT_ENABLED === 'true' && c.env.DODO_API_KEY && c.env.DODO_ENV !== 'live_mode' ? 'test_mode' : 'not_configured' }));
 
 // Per-IP throttle (security, not a product rule). The IP is stored only as a truncated SHA-256 in login_attempts.
 async function ipKey(c: any, action: string) {
@@ -434,6 +435,33 @@ app.post('/api/webhooks/dodo', async (c) => {
     if (exists) await c.env.DB.prepare('INSERT INTO subscriptions (user_id,plan,status,dodo_subscription_id,paid_through,updated_at) VALUES (?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,status=excluded.status,dodo_subscription_id=excluded.dodo_subscription_id,paid_through=excluded.paid_through,updated_at=excluded.updated_at').bind(u.userId, u.plan, u.status, u.dodoSubscriptionId, u.paidThrough, Date.now()).run();
   }
   return c.json({ ok: true });
+});
+
+// Optional weather city. The city list is a static asset (GeoNames, CC BY 4.0) searched in the browser; only the chosen id reaches us.
+// Weather is switched on only when WEATHER_CONTACT (the public contact MET Norway requires in the User-Agent) is configured.
+let cityList: any[] | null = null;
+async function findCity(c: any, id: number) {
+  if (!cityList) { const r = await c.env.ASSETS.fetch(new Request(new URL('/cities.json', c.req.url))); cityList = await r.json(); }
+  return cityList!.find((x) => x[0] === id) ?? null;
+}
+app.get('/api/city', async (c) => {
+  const row = await c.env.DB.prepare('SELECT name,country FROM user_city WHERE user_id=?').bind(c.get('uid')).first<{ name: string; country: string }>();
+  return c.json({ city: row ?? null });
+});
+app.post('/api/city', async (c) => {
+  const b: any = await c.req.json(); const uid = c.get('uid');
+  if (b.id === null) { await c.env.DB.prepare('DELETE FROM user_city WHERE user_id=?').bind(uid).run(); return c.json({ ok: true, city: null }); }
+  const city = Number.isInteger(b.id) ? await findCity(c, b.id) : null;
+  if (!city) return c.json({ error: 'unknown city' }, 400);
+  await c.env.DB.prepare('INSERT INTO user_city (user_id,city_id,name,country,lat,lon,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET city_id=excluded.city_id,name=excluded.name,country=excluded.country,lat=excluded.lat,lon=excluded.lon,updated_at=excluded.updated_at').bind(uid, city[0], city[1], city[3], city[4], city[5], Date.now()).run();
+  return c.json({ ok: true, city: { name: city[1], country: city[3] } });
+});
+app.get('/api/weather', async (c) => {
+  if (!c.env.WEATHER_CONTACT) return c.json({ enabled: false, condition: null });
+  const row = await c.env.DB.prepare('SELECT lat,lon FROM user_city WHERE user_id=?').bind(c.get('uid')).first<{ lat: number; lon: number }>();
+  if (!row) return c.json({ enabled: true, condition: null });
+  let condition = null; try { condition = await fetchCondition(row.lat, row.lon, c.env.WEATHER_CONTACT, (globalThis as any).caches?.default); } catch { /* fall back to the time-of-day look */ }
+  return c.json({ enabled: true, condition });
 });
 
 app.all('*', (c) => c.env.ASSETS.fetch(c.req.raw));

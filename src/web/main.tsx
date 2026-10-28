@@ -15,6 +15,8 @@ function applyDaypart() {
   document.documentElement.dataset.daypart = dp;
 }
 applyDaypart();
+// ?weather=cloudy|rain|mist previews a sky layer for testing; real weather only ever comes from the signed-in user's saved city.
+{ const w = new URLSearchParams(window.location.search).get('weather'); if (w === 'cloudy' || w === 'rain' || w === 'mist') document.documentElement.dataset.weather = w; }
 window.setInterval(applyDaypart, 15 * 60 * 1000);
 
 createRoot(document.getElementById('root')!).render(<App />);

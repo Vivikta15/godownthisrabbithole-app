@@ -1,11 +1,11 @@
 import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, Emblem, NextMark, WeekRow, MonthCalendar, ForestScene, SkyLayer, LakeScene } from './visuals';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import { Mascot, useMascot } from './Mascot';
 import type { MascotEvent } from '../shared/mascot';
 
 type Me = { user: { email: string; name: string | null; onboarded: boolean }; access: { plan: string; rabbitHoles: boolean; finderQuota: { period: string; limit: number } | null; trialEndsAt: string }; streak: { current: number; longest: number; freezesLeft: number; bonusHoles: number; readToday: boolean }; prefs: any };
-type Cfg = { topics: string[]; formats: { id: string; label: string }[]; plans: any; payments?: string; emailRecovery?: boolean; whyRead?: { id: string; label: string }[]; countries?: { code: string; name: string }[]; countriesWithStories?: string[] };
+type Cfg = { weather?: boolean; topics: string[]; formats: { id: string; label: string }[]; plans: any; payments?: string; emailRecovery?: boolean; whyRead?: { id: string; label: string }[]; countries?: { code: string; name: string }[]; countriesWithStories?: string[] };
 type Send = (e: MascotEvent) => void;
 // Move keyboard and screen-reader focus to the page heading when the view changes, so the next Tab starts at the top of the new content.
 function useFocusHeading(dep: unknown, skipFirst = true) {
@@ -18,7 +18,9 @@ export function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [cfg, setCfg] = useState<Cfg | null>(null);
   const [mascot, send] = useMascot(); const [redo, setRedo] = useState(false); const [stage, setStage] = useState<'welcome' | 'auth'>('welcome'); const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
+  const loadWeather = useCallback(async () => { const r = await api('/weather'); document.documentElement.dataset.weather = r.ok && r.data.condition ? r.data.condition : ''; }, []);
   const refresh = useCallback(async () => { const r = await api('/me'); setMe(r.ok ? r.data : null); }, []);
+  useEffect(() => { if (!me || !cfg?.weather) return; loadWeather(); const t = window.setInterval(loadWeather, 30 * 60 * 1000); window.addEventListener('city-changed', loadWeather); return () => { window.clearInterval(t); window.removeEventListener('city-changed', loadWeather); }; }, [!!me, cfg?.weather]);
   useEffect(() => { refresh(); api('/config').then((r) => setCfg(r.data)); }, [refresh]);
 
   const q = new URLSearchParams(window.location.search); const rt = q.get('reset'), vt = q.get('verify');
@@ -360,6 +362,7 @@ function You({ me, cfg, onRedo, onOpen }: { me: Me; cfg: Cfg; onRedo: () => void
     <h2 className="serif">Saved discoveries</h2>
     {saved === null ? <p className="note" role="status">Checking your shelf…</p> : saved.length === 0 ? <p className="note">Nothing saved yet. Use "Save for later" on a story you want to find again.</p>
       : <ul className="journal">{saved.map((x) => <li key={x.topicId}><button type="button" className="linklike" onClick={() => onOpen(x.topicId)}>{x.title}</button><span className="note"> {x.hook}</span></li>)}</ul>}
+    {cfg.weather && <CitySetting />}
     <h2 className="serif">Learning history and privacy</h2>
     <p>What the app keeps about your reading: which story you were shown each day, how long you had it open, and whether you finished. It uses topic tags from stories you finish to choose what comes next, along with your answers above. Time spent is not treated as how much you learned.</p>
     {hist && <p className="mono-note">{hist.recorded.reads} opened · {hist.recorded.completed} finished · about {mins} min total</p>}
@@ -369,6 +372,32 @@ function You({ me, cfg, onRedo, onOpen }: { me: Me; cfg: Cfg; onRedo: () => void
     <h2 className="serif">Plan</h2>
     <Plan me={me} cfg={cfg} />
   </section>;
+}
+
+type City = [number, string, string, string, number, number];
+let cityCache: City[] | null = null;
+const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+// Optional weather city. The list is a static file searched here in the browser: what you type never leaves your device. Only the chosen city is saved.
+function CitySetting() {
+  const [cur, setCur] = useState<{ name: string; country: string } | null | undefined>(undefined);
+  const [q, setQ] = useState(''); const [list, setList] = useState<City[] | null>(cityCache); const [msg, setMsg] = useState('');
+  const names = useMemo(() => { try { return new Intl.DisplayNames(['en'], { type: 'region' }); } catch { return null; } }, []);
+  useEffect(() => { api('/city').then((r) => setCur(r.ok ? r.data.city : null)); }, []);
+  async function open() { if (list) return; const r = await fetch('/cities.json'); cityCache = await r.json(); setList(cityCache); }
+  const hits = useMemo(() => { const n = norm(q.trim()); if (!list || n.length < 2) return []; const out: City[] = []; for (const c of list) { if (norm(c[1]).startsWith(n) || (c[2] && norm(c[2]).startsWith(n))) { out.push(c); if (out.length >= 6) break; } } return out; }, [q, list]);
+  async function save(id: number | null) { const r = await api('/city', { id }); if (r.ok) { setCur(r.data.city); setQ(''); setMsg(id === null ? 'City removed. The sky goes back to the time of day.' : 'Saved. The sky will follow the weather there.'); window.dispatchEvent(new Event('city-changed')); } else setMsg('Could not save that city.'); }
+  const cn = (cc: string) => names?.of(cc) ?? cc;
+  return <div className="citybox">
+    <h2 className="serif">Weather in the sky</h2>
+    <p className="note">Optional. Pick a nearby city and the lake can turn cloudy, rainy or misty with the weather there, still in autumn colours. No GPS or device location is used. What you type stays in your browser; only the city you pick is saved to your account, and only its rounded position (about 1 km) goes to the weather service.</p>
+    {cur ? <p>Your city: <strong>{cur.name}, {cn(cur.country)}</strong> <button type="button" className="ghost" onClick={() => save(null)}>Remove</button></p> : cur === null && <p className="note">No city set. The sky follows the time of day only.</p>}
+    <label htmlFor="cityq">Search for a city</label>
+    <input id="cityq" type="text" autoComplete="off" value={q} placeholder="for example Delhi" onFocus={open} onChange={(e) => { setQ(e.target.value); open(); }} />
+    {hits.length > 0 && <ul className="cityhits">{hits.map((c) => <li key={c[0]}><button type="button" className="linklike" onClick={() => save(c[0])}>{c[1]}, {cn(c[3])}</button></li>)}</ul>}
+    {q.trim().length >= 2 && list && hits.length === 0 && <p className="note">No match. Cities under 15,000 people are not listed; try a bigger one nearby.</p>}
+    {msg && <p className="note" role="status">{msg}</p>}
+    <p className="mono-note">Weather: Data from MET Norway. City list: GeoNames (CC BY 4.0).</p>
+  </div>;
 }
 
 function Plan({ me, cfg }: { me: Me; cfg: Cfg }) {

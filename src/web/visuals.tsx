@@ -140,6 +140,10 @@ export function SkyLayer() {
       <g className="moonwrap"><circle cx="770" cy="120" r="36" fill="var(--moon)" /><circle cx="758" cy="110" r="31" fill="var(--sky)" /></g>
       {stars.map(([x, y, r], i) => <circle key={i} className="star" cx={x} cy={y} r={r} style={{ animationDelay: `${-i * 0.7}s` }} />)}
       <Cloud x={140} y={120} s={1.15} cls="c1" /><Cloud x={520} y={80} s={.8} cls="c2" /><Cloud x={820} y={190} s={1} cls="c3" />
+      <defs><linearGradient id="mistg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--cloud)" stopOpacity="0" /><stop offset=".45" stopColor="var(--cloud)" stopOpacity=".9" /><stop offset="1" stopColor="var(--cloud)" stopOpacity="0" /></linearGradient></defs>
+      <g className="wx wx-cloudy"><Cloud x={360} y={110} s={2.2} cls="c2" /><Cloud x={540} y={210} s={2.6} cls="c1" /><Cloud x={660} y={100} s={2.1} cls="c3" /><Cloud x={400} y={330} s={2} cls="c3" /></g>
+      <g className="wx wx-rain">{[330, 365, 400, 435, 470, 505, 540, 575, 610, 645, 680].map((x, i) => <path key={x} className="drop" d={`M${x} 60 l-9 32`} style={{ animationDelay: `${-((i * 0.29) % 1.1)}s` }} />)}</g>
+      <rect className="wx wx-mist" x="-600" y="170" width="2200" height="480" fill="url(#mistg)" />
       <g opacity=".35">
         {[40, 130, 235, 350, 470, 590, 700, 820, 930].map((x, i) => <PineS key={x} x={x} y={700} s={.8 + (i % 3) * .3} c="var(--pine-far)" />)}
         <path d="M0 676 Q 240 640 500 670 T 1000 664 V700 H0 Z" fill="var(--pine-far)" />

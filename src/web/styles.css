@@ -192,3 +192,22 @@ html[data-daypart=night] .sky .star{opacity:.9}
 /* Reading: sun, moon, stars and clouds fade away so nothing sits behind or crosses the text column. */
 .sky .sunwrap,.sky .moonwrap,.sky .star,.sky .cloud{transition:opacity .6s ease}
 html:has(.reading) .sky .sunwrap,html:has(.reading) .sky .moonwrap,html:has(.reading) .sky .star,html:has(.reading) .sky .cloud{opacity:0}
+
+/* Weather layers (optional city). Calm and autumn: no snow scenes. Hidden while reading, like the sun and moon. */
+.sky .wx{opacity:0;transition:opacity 1.2s ease}
+html[data-weather=cloudy] .sky .wx-cloudy,html[data-weather=rain] .sky .wx-cloudy{opacity:1}
+html[data-weather=rain] .sky .cloud{fill:#d3dcd9}
+html[data-weather=cloudy] .sky .sunwrap,html[data-weather=rain] .sky .sunwrap{opacity:.4}
+html[data-weather=rain] .sky .wx-rain{opacity:1}
+html[data-weather=mist] .sky .wx-mist{opacity:.8}
+html[data-weather=rain] .sky{filter:saturate(.75) brightness(.97)}
+.sky .drop{stroke:var(--soft);stroke-width:2;stroke-linecap:round;opacity:.45;animation:rainfall 1.1s linear infinite}
+@keyframes rainfall{from{transform:translateY(-60px)}to{transform:translateY(660px)}}
+@media (prefers-reduced-motion:reduce){.sky .drop{animation:none}}
+html:has(.reading) .sky .wx{opacity:0!important}
+.citybox input[type=text]{width:100%;max-width:340px;margin:4px 0}
+.cityhits{list-style:none;margin:6px 0;padding:0}.cityhits li{padding:4px 0}
+.sky::after{content:'';position:absolute;inset:0;background:linear-gradient(#8fa3a0,#c3cdc6);opacity:0;transition:opacity 1.2s ease;pointer-events:none}
+html[data-daypart=night] .sky::after{background:linear-gradient(#0b171e,#17333a)}
+html[data-weather=cloudy] .sky::after{opacity:.3}html[data-weather=rain] .sky::after{opacity:.4}html[data-weather=mist] .sky::after{opacity:.25;background:linear-gradient(#e9efe6,#f2f4ea)}
+html[data-daypart=night][data-weather=mist] .sky::after{background:linear-gradient(#22343b,#2c4249)}
