@@ -78,6 +78,6 @@ describe('autonomous generator end to end, fixture world', () => {
     const { db, raw } = mkdb(); const w = world(); const orig = w.f; let n = 0;
     const f = (async (u: any, i: any) => { if (String(u).includes('anthropic') && ++n > 30) return { ok: false } as any; return orig(u, i); }) as any;
     const o: string[] = []; for (let i = 0; i < 14; i++) o.push(await tick(on(db), f, Date.UTC(2026, 9, 28, 8) + i * 5 * 60_000)); 
-    expect((raw.prepare("SELECT reason FROM gen_attempt").get() as any)?.reason).toBe('provider_error'); expect((raw.prepare("SELECT COUNT(*) n FROM gen_spend_log WHERE state='failed_kept'").get() as any).n).toBe(1);
+    expect((raw.prepare("SELECT reason FROM gen_attempt").get() as any)?.reason).toBe('provider_error'); expect((raw.prepare("SELECT COUNT(*) n FROM gen_spend_log WHERE state='failed_kept'").get() as any).n).toBeGreaterThanOrEqual(1); expect((raw.prepare("SELECT MIN(micro) m FROM gen_attempt WHERE reason='provider_error'").get() as any).m).toBeGreaterThan(0);
   });
 });

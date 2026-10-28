@@ -12,8 +12,8 @@ import CANARY from '../gen/canary.json';
 export const WRITER = 'claude-haiku-5-5', JUDGE = 'claude-sonnet-5';
 export const MAX_EXTERNAL_PER_TICK = 8, MAX_TICKS_PER_ATTEMPT = 40, MAX_ATTEMPTS_PER_DAY = 4, TARGET_POOL = 30, LOW_WATER = 5, MIN_GAP_MS = 20 * 60_000, LEASE_MS = 4 * 60_000;
 class Yield extends Error {}
-type Cur = { id: string; kind: 'attempt' | 'canary'; topic?: string; tags?: string[]; countries?: string[]; ticks: number; micro: number; started: number };
-type Ctx = { env: GenEnv; fetchFn: typeof fetch; cache: Map<string, string>; used: number; max: number; yielded: boolean; stop: string | null; micro: number; attemptId: string; kind: string };
+type Cur = { id: string; kind: 'attempt' | 'canary'; topic?: string; tags?: string[]; countries?: string[]; ticks: number; micro: number; calls?: number; started: number };
+type Ctx = { env: GenEnv; fetchFn: typeof fetch; cache: Map<string, string>; used: number; max: number; yielded: boolean; stop: string | null; micro: number; calls: number; attemptId: string; kind: string };
 
 const fnv = (s: string) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(16); };
 async function getC(db: D1Database, k: string): Promise<string | null> { const r = await db.prepare('SELECT v FROM gen_control WHERE k=?').bind(k).first<{ v: string }>(); return r ? r.v : null; }
@@ -28,6 +28,7 @@ async function cached(ctx: Ctx, key: string, fn: () => Promise<string>): Promise
 function model(ctx: Ctx, stage: string, m: string, system: string, prompt: string, maxTokens: number): Promise<string> {
   const key = `m:${stage}:${fnv(m + '\u0000' + system + '\u0000' + prompt)}`;
   return cached(ctx, key, async () => {
+    ctx.calls++;
     const r = await callModel(ctx.env, { model: m, system: system || undefined, prompt, maxTokens, id: `${ctx.attemptId}:${key}`, note: `${ctx.kind} ${stage}` }, ctx.fetchFn);
     if (!r.ok) { ctx.stop = r.reason; throw new Error(r.reason); }
     ctx.micro += r.micro; return r.text;
@@ -89,18 +90,18 @@ export async function health(db: D1Database, now: number): Promise<Health> {
 
 async function pickTopic(db: D1Database) {
   const seedTitles = SEED.filter((s) => !s.id.startsWith('g-')).map((s) => s.title.toLowerCase());
-  const rows = (await db.prepare('SELECT topic, COUNT(*) n, MAX(ts) last FROM gen_attempt GROUP BY topic').all<{ topic: string; n: number; last: number }>()).results ?? [];
+  const rows = (await db.prepare("SELECT topic, COUNT(*) n, MAX(ts) last, SUM(reason='too_few_sources') nf FROM gen_attempt GROUP BY topic").all<{ topic: string; n: number; last: number; nf: number }>()).results ?? [];
   const pub = new Set(((await db.prepare("SELECT title FROM gen_story").all<{ title: string }>()).results ?? []).map((r) => r.title));
   const info = new Map(rows.map((r) => [r.topic, r]));
-  const c = TOPICS.filter((t) => topicAllowed(t) && !pub.has(t.title) && !seedTitles.some((s) => s === t.title.toLowerCase() || s.includes(t.title.toLowerCase())) && (info.get(t.title)?.n ?? 0) < 3);
+  const c = TOPICS.filter((t) => topicAllowed(t) && !pub.has(t.title) && !seedTitles.some((s) => s === t.title.toLowerCase() || s.includes(t.title.toLowerCase())) && (info.get(t.title)?.n ?? 0) < 3 && !(info.get(t.title)?.nf ?? 0)); // a topic without two usable independent sources is not retried
   c.sort((a, b) => (info.get(a.title)?.n ?? 0) - (info.get(b.title)?.n ?? 0) || (info.get(a.title)?.last ?? 0) - (info.get(b.title)?.last ?? 0));
   return c[0] ?? null;
 }
 
 async function finishAttempt(db: D1Database, cur: Cur, outcome: 'accepted' | 'rejected', reason: string | null, now: number) {
   await db.batch([
-    db.prepare('INSERT OR REPLACE INTO gen_attempt (id,ts,topic,outcome,reason,micro) VALUES (?,?,?,?,?,?)').bind(cur.id, now, cur.topic ?? '', outcome, reason, cur.micro),
-    db.prepare('DELETE FROM gen_cache WHERE attempt=?').bind(cur.id), db.prepare("DELETE FROM gen_control WHERE k='current'"), db.prepare("INSERT INTO gen_control (k,v,updated_at) VALUES ('last_end',?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v, updated_at=excluded.updated_at").bind(String(now), now),
+    db.prepare('INSERT OR REPLACE INTO gen_attempt (id,ts,topic,outcome,reason,micro) VALUES (?,?,?,?,?,?)').bind(cur.id, now, cur.topic ?? '', outcome, reason, cur.micro > 0 ? cur.micro : (cur.calls ?? 0) > 0 ? 1 : 0), // a paid call was made even if it failed: its reservation is kept in the ledger
+    db.prepare('DELETE FROM gen_cache WHERE attempt=?').bind(cur.id), db.prepare("DELETE FROM gen_control WHERE k='current'"), db.prepare("INSERT INTO gen_control (k,v,updated_at) VALUES (?,?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v, updated_at=excluded.updated_at").bind((cur.calls ?? 0) > 0 ? 'last_paid_end' : 'last_noop', String(now), now),
   ]);
 }
 
@@ -122,8 +123,8 @@ async function tickLocked(env: GenEnv, fetchFn: typeof fetch, now: number): Prom
     const capLeft = h.cap === 'ok';
     if (canaryStale && capLeft) cur = { id: `canary-${now}`, kind: 'canary', ticks: 0, micro: 0, started: now };
     else if (d.generateAttempts > 0 && capLeft) {
-      const today = (await db.prepare("SELECT COUNT(*) n FROM gen_attempt WHERE ts>=?").bind(dayStartMs(now)).first<{ n: number }>())?.n ?? 0;
-      const lastEnd = Number((await getC(db, 'last_end')) || 0);
+      const today = (await db.prepare("SELECT COUNT(*) n FROM gen_attempt WHERE ts>=? AND micro>0").bind(dayStartMs(now)).first<{ n: number }>())?.n ?? 0;
+      const lastEnd = Number((await getC(db, 'last_paid_end')) || 0); // attempts that failed before any paid call do not need spacing
       if (today >= MAX_ATTEMPTS_PER_DAY) return 'daily_attempt_limit';
       if (now - lastEnd < MIN_GAP_MS) return 'spacing';
       const t = await pickTopic(db); if (!t) return 'topics_exhausted';
@@ -132,9 +133,9 @@ async function tickLocked(env: GenEnv, fetchFn: typeof fetch, now: number): Prom
     await setC(db, 'current', JSON.stringify(cur), now);
   }
   const cache = new Map<string, string>(); for (const r of (await db.prepare('SELECT k,v FROM gen_cache WHERE attempt=?').bind(cur.id).all<{ k: string; v: string }>()).results ?? []) cache.set(r.k, r.v);
-  const ctx: Ctx = { env, fetchFn, cache, used: 0, max: MAX_EXTERNAL_PER_TICK, yielded: false, stop: null, micro: 0, attemptId: cur.id, kind: cur.kind };
+  const ctx: Ctx = { env, fetchFn, cache, used: 0, max: MAX_EXTERNAL_PER_TICK, yielded: false, stop: null, micro: 0, calls: 0, attemptId: cur.id, kind: cur.kind };
   cur.ticks++;
-  const park = async () => { cur!.micro += ctx.micro; await setC(db, 'current', JSON.stringify(cur), now); };
+  const park = async () => { cur!.micro += ctx.micro; cur!.calls = (cur!.calls ?? 0) + ctx.calls; await setC(db, 'current', JSON.stringify(cur), now); };
   try {
     if (cur.kind === 'canary') {
       const res: { corrupted: boolean; accepted: boolean }[] = [];
@@ -151,7 +152,7 @@ async function tickLocked(env: GenEnv, fetchFn: typeof fetch, now: number): Prom
       else { const a = await assemble(ctx, cur, res.candidate!); if (ctx.yielded) throw new Yield(); if (ctx.stop) outcome = { ok: false, reason: 'provider_error' }; else if (!a.ok) outcome = a; else { outcome = { ok: true }; seed = a.seed; } }
     }
     if (ctx.stop && ['disabled', 'no_key', 'paused', 'rates_stale'].includes(ctx.stop)) { await park(); return 'parked:' + ctx.stop; }
-    cur.micro += ctx.micro;
+    cur.micro += ctx.micro; cur.calls = (cur.calls ?? 0) + ctx.calls;
     if (seed) {
       const h = await health(db, now); const pubOk = decide(h).autoPublish && h.canaryOk;
       await db.prepare('INSERT OR IGNORE INTO gen_story (id,title,status,created_at,body,meta) VALUES (?,?,?,?,?,?)').bind(seed.id, seed.title, pubOk ? 'published' : 'held', now, JSON.stringify(seed), JSON.stringify({ attempt: cur.id, micro: cur.micro })).run();
@@ -159,9 +160,9 @@ async function tickLocked(env: GenEnv, fetchFn: typeof fetch, now: number): Prom
     await finishAttempt(db, cur, outcome.ok ? 'accepted' : 'rejected', outcome.ok ? null : outcome.reason ?? 'unknown', now);
     return outcome.ok ? 'accepted' : 'rejected:' + outcome.reason;
   } catch (e) {
-    if (e instanceof Yield || ctx.yielded) { if (cur.ticks >= MAX_TICKS_PER_ATTEMPT) { cur.micro += ctx.micro; await finishAttempt(db, cur, 'rejected', 'stuck', now); return 'stuck'; } await park(); return 'yielded'; }
+    if (e instanceof Yield || ctx.yielded) { if (cur.ticks >= MAX_TICKS_PER_ATTEMPT) { cur.micro += ctx.micro; cur.calls = (cur.calls ?? 0) + ctx.calls; await finishAttempt(db, cur, 'rejected', 'stuck', now); return 'stuck'; } await park(); return 'yielded'; }
     if (ctx.stop && ['disabled', 'no_key', 'paused', 'rates_stale'].includes(ctx.stop)) { await park(); return 'parked:' + ctx.stop; }
-    cur.micro += ctx.micro; await finishAttempt(db, cur, 'rejected', ctx.stop === 'over_cap' ? 'cap_reached' : 'provider_error', now); return 'error';
+    cur.micro += ctx.micro; cur.calls = (cur.calls ?? 0) + ctx.calls; await finishAttempt(db, cur, 'rejected', ctx.stop === 'over_cap' ? 'cap_reached' : 'provider_error', now); return 'error';
   }
 }
 

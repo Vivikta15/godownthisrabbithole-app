@@ -5,7 +5,7 @@ import { apiUrl, parseExtract } from '../content/wikipedia';
 export const UA = 'godownthisrabbithole/0.1 (small personal reading app; https://rabbithole-app.godownthisrabbithole.workers.dev)';
 export type Doc = Source & { text: string; revisionId?: number };
 export const MAX_DOC_CHARS = 9000, MIN_EXT_CHARS = 1500;
-const BAD_HOST = /(^|\.)(wikipedia|wikimedia|wikidata|wikisource|wikibooks|archive|doi|worldcat|jstor|google|youtube|facebook|twitter|x|instagram|amazon|reddit|pinterest|linkedin)\.(org|com|net|co|be)$/i;
+const BAD_HOST = /(^|\.)(wikipedia|wikimedia|wikidata|wikisource|wikibooks|archive|doi|worldcat|jstor|google|youtube|facebook|twitter|x|instagram|amazon|reddit|pinterest|linkedin|blogspot|wordpress|medium|quora|tumblr|substack|fandom|wikia|wixsite|weebly|tripadvisor|slideshare|scribd|blogger)\.(org|com|net|co|be)$/i;
 const SECOND_LEVEL = new Set(['co', 'ac', 'gov', 'org', 'com', 'edu', 'nic', 'net']);
 export function registrable(host: string): string { const p = host.toLowerCase().split('.'); return p.length >= 3 && SECOND_LEVEL.has(p[p.length - 2]) ? p.slice(-3).join('.') : p.slice(-2).join('.'); }
 export function usableRef(u: string): string | null {
