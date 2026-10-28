@@ -199,12 +199,13 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
   </section>;
   if (!d) return <p className="note" role="status">Digging up today's detour…</p>;
   const h = d.hole; const done = !!(res || d.readToday);
-  if (extra) return <article className="reading"><ReadingRiver /><p className="kicker">Another trail</p><Story hole={extra} /><Sources hole={extra} /><p><button type="button" className="go" onClick={closeBonus}>I'm back up</button></p></article>;
-  if (reading) return <article className="reading"><ReadProgress /><ReadingRiver /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Plate tags={h.tags} />
+  if (extra) return <article className="reading"><ReadingRail /><MarginScene /><StartScene /><p className="kicker">Another trail</p><Story hole={extra} /><Sources hole={extra} /><p><button type="button" className="go" onClick={closeBonus}>I'm back up</button></p></article>;
+  if (reading) return <article className="reading"><ReadProgress /><ReadingRail /><MarginScene /><StartScene /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Plate tags={h.tags} />
     <Story hole={h} /><Related hole={h} />
     <aside className="takeaway"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside>
     {h.shortened && <p className="note">Short version: some details are left out. Pick "A good chew" in your answers to read the full story.</p>}
     <Sources hole={h} />
+    <EndScene />
     <p className="row-actions"><SaveButton topicId={h.topicId} initial={h.saved} /><button type="button" className="go" onClick={finish}>I'm done reading</button></p>
   </article>;
   const greeting = me.user.name ? `Where should we wander today, ${me.user.name}?` : 'Where should we wander today?';
@@ -239,7 +240,7 @@ function Sources({ hole }: { hole: any }) {
 function StoryView({ topicId, onBack }: { topicId: string; onBack: () => void }) {
   const [h, setH] = useState<any>(null); const [err, setErr] = useState('');
   useEffect(() => { api(`/story/${topicId}`).then((r) => (r.ok ? setH(r.data.hole) : setErr(r.data.message || r.data.error))); }, [topicId]);
-  return <article className="reading"><ReadingRiver /><p><button type="button" className="ghost" onClick={onBack}>Back</button></p>
+  return <article className="reading"><ReadingRail /><MarginScene /><StartScene /><p><button type="button" className="ghost" onClick={onBack}>Back</button></p>
     {err && <p className="err" role="alert">{err}</p>}{!h && !err && <p className="note" role="status">Finding it again…</p>}
     {h && <><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Story hole={h} /><aside className="takeaway"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside><Sources hole={h} /><p className="row-actions"><SaveButton topicId={h.topicId} initial={h.saved} /></p><p className="note">Re-reading does not change your streak.</p></>}
   </article>;
@@ -278,11 +279,20 @@ function ReadProgress() {
   const p = useReadProgress();
   return <div className="progress" role="progressbar" aria-label="Reading progress" aria-valuenow={Math.round(p * 100)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: p * 100 + '%' }} /></div>;
 }
-// The pier stays at the foot of the window while a story scrolls: the rabbit reads along, and the day's catch rises with the scroll.
-function ReadingRiver() {
+// Reading keeps the page for the words. The rabbit's world frames it: a small pier scene at the start, a fish line along the top edge
+// on narrow screens, the rabbit and a rising fish in the side margin on wide screens, and the catch at the end. Nothing sits over the text.
+const ease = (p: number, from: number) => Math.max(0, Math.min(1, (p - from) / (1 - from)));
+function ReadingRail() {
   const p = useReadProgress();
-  return <div className="readbg" aria-hidden="true"><LakeScene pose="read" progress={p} /></div>;
+  return <div className="rail" aria-hidden="true"><svg className="railsvg" viewBox="0 0 400 28" preserveAspectRatio="none"><path d="M0 20 q25 -6 50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0 V28 H0 Z" fill="var(--lake)" opacity=".55" /></svg>
+    <svg className="railfish" style={{ left: `${p * 100}%` }} viewBox="0 0 40 20" width="30" height="15"><path d="M6 10 C 12 2 28 2 36 10 C 28 18 12 18 6 10 Z" fill="var(--coral)" /><path d="M8 10 L0 4 L0 16 Z" fill="var(--coral)" /><circle cx="30" cy="9" r="1.6" fill="var(--sky)" /></svg></div>;
 }
+function MarginScene() {
+  const p = useReadProgress();
+  return <div className="marginscene" aria-hidden="true"><LakeScene pose="read" progress={p} /></div>;
+}
+function StartScene() { return <div className="lakewrap compact" aria-hidden="true"><LakeScene pose="read" progress={0} /></div>; }
+function EndScene() { const p = useReadProgress(); return <div className="lakewrap compact endscene" aria-hidden="true"><LakeScene pose="read" progress={ease(p, 0.82)} /></div>; }
 
 const PAIRS = [['moon', 'cheese'], ['honey', 'Venus'], ['wombat', 'cube'], ['tea', 'railway'], ['octopus', 'copper'], ['monsoon', 'sailor']];
 function Finder({ me, send }: { me: Me; send: Send }) {
