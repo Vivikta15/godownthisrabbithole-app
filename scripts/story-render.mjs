@@ -11,8 +11,7 @@ const errs = []; page.on('pageerror', (e) => errs.push(String(e)));
 const click = async (t) => { const [el] = await page.$$(`xpath/.//button[contains(., "${t}")]`); if (!el) throw new Error('no button ' + t); await el.click(); };
 await page.goto(base); await page.waitForSelector('h1'); await wait(1500);
 await click("Let's wander"); await page.waitForSelector('form'); await page.type('input[type=email]', email); await page.type('input[type=password]', 'password-synth1'); await click('Start my 3 free days');
-await page.waitForSelector('select'); await click('Next'); await page.waitForSelector('.chips'); await click('history'); await click('Next'); await wait(200); await click('Skip'); await wait(200); await click(FMT); await click('Next'); await wait(300);
-if (LEN === 'short') { try { await click('quick nibble'); } catch (e) { console.log('no length button'); } }
+await page.waitForSelector('select'); await click('Next'); await page.waitForSelector('.chips'); await click('history'); await click('Next'); await wait(200); await click('Skip'); await wait(200); await click(FMT); if (LEN === 'short') await click('quick nibble'); await click('Next'); await wait(300);
 await click('All set'); await page.waitForSelector('.nav'); await wait(800);
 execSync(`npx wrangler d1 execute rabbithole-app --local --command "INSERT INTO creator (user_id, created_at) SELECT id, 1 FROM users WHERE email='${email}'"`, { stdio: 'pipe' });
 await page.reload(); await page.waitForSelector('.nav'); await wait(800);
