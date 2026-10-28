@@ -1,5 +1,5 @@
 import { LakeBackdrop } from './LakeBackdrop';
-import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, Emblem, NextMark, WeekRow, MonthCalendar, ForestScene, SkyLayer, LakeScene } from './visuals';
+import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, Emblem, NextMark, WeekRow, MonthCalendar, ForestScene, SkyLayer } from './visuals';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import { Mascot, useMascot } from './Mascot';
@@ -37,7 +37,7 @@ export function App() {
 function Welcome({ onStart, onLogin, send }: { onStart: () => void; onLogin: () => void; send: Send }) {
   useEffect(() => { send('onboarding_start'); }, [send]);
   return <main className="welcome">
-    <div className="hero"><LakeScene pose="read" hero /></div>
+    
     <p className="kicker">godownthisrabbithole</p>
     <h1 className="display">Curiosity looks good on you.</h1>
     <p className="deck">Leave the scroll behind. Follow something interesting.</p>
@@ -229,7 +229,7 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
     {done && me.streak.bonusHoles > 0 && <section className="strip"><p className="kicker">Another trail</p><p>You have {me.streak.bonusHoles} extra.</p><button type="button" className="ghost" onClick={openBonus}>One tiny detour?</button>{bmsg && <p className="note" role="status">{bmsg}</p>}</section>}
     <section className="strip"><p className="kicker">Connections</p><p className="serif">Two words. One strange bridge.</p><p className="note">Try "moon" and "cheese". The rabbit looks for a link both Wikipedia pages mention. It's an early version.</p><button type="button" className="ghost" onClick={() => goTab('connections')}>Open the lab</button></section>
     <section className="strip row"><div><p className="kicker">Trail</p><Paws n={me.streak.current} /><p className="mono-note">day {me.streak.current}</p></div><div><p className="kicker">Saved</p><button type="button" className="ghost" onClick={() => goTab('you')}>{savedN === null ? 'Saved discoveries' : savedN ? `${savedN} saved` : 'Nothing saved yet'}</button></div></section>
-    <p className="fine">That's all for today. Nothing else to scroll.</p><div className="lakewrap"><LakeScene pose="fish" /></div>
+    <p className="fine">That's all for today. Nothing else to scroll.</p>
   </div>;
 }
 
@@ -288,12 +288,9 @@ function ReadingRail() {
   return <div className="rail" aria-hidden="true"><svg className="railsvg" viewBox="0 0 400 28" preserveAspectRatio="none"><path d="M0 20 q25 -6 50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0 V28 H0 Z" fill="var(--lake)" opacity=".55" /></svg>
     <svg className="railfish" style={{ left: `${p * 100}%` }} viewBox="0 0 40 20" width="30" height="15"><path d="M6 10 C 12 2 28 2 36 10 C 28 18 12 18 6 10 Z" fill="var(--coral)" /><path d="M8 10 L0 4 L0 16 Z" fill="var(--coral)" /><circle cx="30" cy="9" r="1.6" fill="var(--sky)" /></svg></div>;
 }
-function MarginScene() {
-  const p = useReadProgress();
-  return <div className="marginscene" aria-hidden="true"><LakeScene pose="read" progress={p} /></div>;
-}
-function StartScene() { return <div className="lakewrap compact" aria-hidden="true"><LakeScene pose="read" progress={0} /></div>; }
-function EndScene() { const p = useReadProgress(); return <div className="lakewrap compact endscene" aria-hidden="true"><LakeScene pose="read" progress={ease(p, 0.82)} /></div>; }
+function MarginScene() { return null; } // the flat lake illustration was removed; the shared lake backdrop replaces it
+function StartScene() { return null; }
+function EndScene() { return null; }
 
 const PAIRS = [['moon', 'cheese'], ['honey', 'Venus'], ['wombat', 'cube'], ['tea', 'railway'], ['octopus', 'copper'], ['monsoon', 'sailor']];
 function Finder({ me, send }: { me: Me; send: Send }) {
@@ -307,7 +304,7 @@ function Finder({ me, send }: { me: Me; send: Send }) {
   const line = !found ? '' : found.bridge.kind === 'direct' ? `${found.bridge.from === 'b' ? found.b.title : found.a.title} mentions ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}").` : found.bridge.kind === 'chain' ? `${found.a.title} and ${found.b.title} connect through ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}" / "${found.bridge.sentB}").` : `${found.a.title} and ${found.b.title} both point to ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}" / "${found.bridge.sentB}").`;
   async function copy() { try { await navigator.clipboard.writeText(line); setCopied(true); } catch { setCopied(false); } }
   return <section className="lab">
-    <LakeScene pose="read" /><p className="kicker">Connections · early version</p><h1 className="story-title">The curiosity lab.</h1>
+    <p className="kicker">Connections · early version</p><h1 className="story-title">The curiosity lab.</h1>
     <p className="deck">Give it two things that have nothing to do with each other. The rabbit reads both Wikipedia pages and shows you the sentences that tie them together: one page mentioning the other, a topic they share, or a short two-step route. Some pairs have no bridge, and then it says so.</p>
     <form onSubmit={go} className="pair-form">
       <div className="pair"><label>Thing one<input type="text" placeholder="moon" value={a} onChange={(e) => setA(e.target.value)} /></label>
@@ -369,7 +366,7 @@ function Trail({ me, onOpen }: { me: Me; onOpen: (id: string) => void }) {
     <label>Have a friend's code?<input type="text" value={join} onChange={(e) => setJoin(e.target.value)} /></label>
     <p><button type="button" className="ghost" onClick={async () => { const r = await api('/join', { code: join }); setMsg(r.ok ? 'Friend added!' : r.data.error); if (r.ok) load(); }}>Add friend</button></p>
     {msg && <p className="note" role="status">{msg}</p>}
-    <div className="lakewrap"><LakeScene pose="fish" /></div>
+    
   </section>;
 }
 
