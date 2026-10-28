@@ -6,11 +6,12 @@ export interface Account {
   subscriptionStatus: 'none' | 'active' | 'past_due' | 'cancelled'; // set ONLY by verified Dodo webhooks
   paidThrough: Date | null;
 }
-export interface Access { plan: PlanId | 'expired'; rabbitHoles: boolean; finderQuota: { period: 'day' | 'week'; limit: number } | null; trialEndsAt: Date; }
+export interface Access { plan: PlanId | 'expired' | 'creator'; rabbitHoles: boolean; finderQuota: { period: 'day' | 'week'; limit: number } | null; trialEndsAt: Date; }
 
 export function trialEnd(signupAt: Date): Date { return new Date(signupAt.getTime() + TRIAL_DAYS * 86400000); }
 
-export function accessFor(a: Account, now: Date): Access {
+export function accessFor(a: Account, now: Date, creator = false): Access {
+  if (creator) return { plan: 'creator', rabbitHoles: true, finderQuota: null, trialEndsAt: trialEnd(a.signupAt) };
   const trialEndsAt = trialEnd(a.signupAt);
   const paidActive = a.paidPlan !== null && (a.subscriptionStatus === 'active' || ((a.subscriptionStatus === 'cancelled' || a.subscriptionStatus === 'past_due') && a.paidThrough !== null && a.paidThrough > now));
   if (paidActive && a.paidPlan) {
@@ -21,6 +22,7 @@ export function accessFor(a: Account, now: Date): Access {
   return { plan: 'expired', rabbitHoles: false, finderQuota: null, trialEndsAt };
 }
 
-export function finderUsesAllowed(q: Access['finderQuota'], usesInPeriod: number): boolean {
+export function finderUsesAllowed(q: Access['finderQuota'], usesInPeriod: number, creator = false): boolean {
+  if (creator) return true;
   return q !== null && usesInPeriod < q.limit;
 }

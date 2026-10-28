@@ -416,7 +416,7 @@ function Plan({ me, cfg }: { me: Me; cfg: Cfg }) {
   async function buy(plan: string) { const r = await api('/checkout', { plan }); if (r.ok && r.data.url) window.location.href = r.data.url; else setMsg(r.data.message || 'Could not start checkout.'); }
   const per = (x: any) => (x.period === 'day' ? 'a day' : x.period === 'week' ? 'a week' : x.period);
   return <div className="plan-block">
-    <p>{me.access.plan === 'trial' ? 'You are on the free 3-day trial.' : `Current plan: ${me.access.plan}.`}{me.access.plan === 'trial' && <span className="mono-note"> ends {new Date(me.access.trialEndsAt).toLocaleString()}</span>}</p>
+    <p>{me.access.plan === 'creator' ? 'Creator testing access on this account.' : me.access.plan === 'trial' ? 'You are on the free 3-day trial.' : `Current plan: ${me.access.plan}.`}{me.access.plan === 'trial' && <span className="mono-note"> ends {new Date(me.access.trialEndsAt).toLocaleString()}</span>}</p>
     <p className="note">One rabbit hole a day. No endless feed, ever. Paid plans are billed monthly in USD. Renewal and cancellation terms are not set yet, so none are shown. Nothing can be charged.</p>
     <div className="plans">{([['plan3', 'Little burrow', '$3'], ['plan5', 'Deep warren', '$5']] as const).map(([k, l, pr]) => <div className="plan" key={k}>
       <h3 className="serif">{l}</h3><p className="price mono">{pr}<small> / {p[k].billing ?? 'billing period to be decided'}</small></p>

@@ -196,17 +196,18 @@ async function loadAll(c: any) {
   const s = await c.env.DB.prepare('SELECT current,longest,last_read_day,freezes_left,bonus_holes FROM streaks WHERE user_id=?').bind(uid).first();
   const sub = await c.env.DB.prepare('SELECT plan,status,paid_through FROM subscriptions WHERE user_id=?').bind(uid).first();
   const pref = await c.env.DB.prepare('SELECT interest_tags,formats,length_pref,quiz_answers FROM preferences WHERE user_id=?').bind(uid).first();
-  return { u, s, sub, pref };
+  const cr = await c.env.DB.prepare('SELECT 1 x FROM creator WHERE user_id=?').bind(uid).first();
+  return { u, s, sub, pref, creator: !!cr };
 }
-function accessOf(u: any, sub: any) {
+function accessOf(u: any, sub: any, creator = false) {
   const acct: Account = { signupAt: new Date(u.signup_at), paidPlan: sub?.plan ?? null, subscriptionStatus: sub?.status ?? 'none', paidThrough: sub?.paid_through ? new Date(sub.paid_through) : null };
-  return accessFor(acct, new Date());
+  return accessFor(acct, new Date(), creator);
 }
 
 app.get('/api/me', async (c) => {
-  const { u, s, sub, pref } = await loadAll(c);
+  const { u, s, sub, pref, creator } = await loadAll(c);
   const today = localDay(new Date(), u.timezone);
-  const access = accessOf(u, sub);
+  const access = accessOf(u, sub, creator);
   const streak: StreakState = { current: s.current, longest: s.longest, lastReadDay: s.last_read_day, freezesLeft: s.freezes_left };
   const readToday = s.last_read_day === today;
   return c.json({
@@ -240,9 +241,9 @@ async function recentEvents(c: any, uid: string): Promise<ReadEvent[]> {
 }
 
 app.get('/api/today', async (c) => {
-  const { u, s, sub, pref } = await loadAll(c);
+  const { u, s, sub, pref, creator } = await loadAll(c);
   if (!pref) return c.json({ error: 'onboarding' }, 409);
-  const access = accessOf(u, sub);
+  const access = accessOf(u, sub, creator);
   if (!access.rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
   const day = localDay(new Date(), u.timezone);
   let row = await c.env.DB.prepare('SELECT id,topic_id,format,title,body FROM rabbit_holes WHERE user_id=? AND day=?').bind(u.id, day).first<any>();
@@ -275,8 +276,8 @@ app.get('/api/today', async (c) => {
 
 // Optional, reader-chosen: open the story that today's story points to. Read-only: no streak, read event, or "seen" change.
 app.get('/api/related/:id', async (c) => {
-  const { u, s, sub } = await loadAll(c);
-  if (!accessOf(u, sub).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
+  const { u, s, sub, creator } = await loadAll(c);
+  if (!accessOf(u, sub, creator).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
   const day = localDay(new Date(), u.timezone);
   const row = await c.env.DB.prepare('SELECT topic_id FROM rabbit_holes WHERE user_id=? AND day=?').bind(u.id, day).first<any>();
   const cur = row && SEED.find((t) => t.id === row.topic_id);
@@ -322,8 +323,8 @@ app.post('/api/save', async (c) => {
   return c.json({ ok: true, saved: !!b.saved });
 });
 app.get('/api/story/:id', async (c) => {
-  const { u, sub, pref } = await loadAll(c);
-  if (!accessOf(u, sub).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
+  const { u, sub, pref, creator } = await loadAll(c);
+  if (!accessOf(u, sub, creator).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
   const t = SEED.find((x) => x.id === c.req.param('id'));
   if (!t || !(await canOpen(c, u.id, t.id, u.timezone))) return c.json({ error: 'not found' }, 404);
   const saved = !!(await c.env.DB.prepare('SELECT 1 x FROM saved WHERE user_id=? AND topic_id=?').bind(u.id, t.id).first());
@@ -332,8 +333,8 @@ app.get('/api/story/:id', async (c) => {
 
 app.post('/api/read', async (c) => {
   const b = await c.req.json<{ holeId: string; seconds: number; completed: boolean }>();
-  const { u, s, sub } = await loadAll(c);
-  if (!accessOf(u, sub).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
+  const { u, s, sub, creator } = await loadAll(c);
+  if (!accessOf(u, sub, creator).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
   const hole = await c.env.DB.prepare('SELECT id,topic_id,format,day FROM rabbit_holes WHERE id=? AND user_id=?').bind(b.holeId, u.id).first<any>();
   if (!hole) return c.json({ error: 'not found' }, 404);
   const seed = SEED.find((t) => t.id === hole.topic_id)!; const day = localDay(new Date(), u.timezone);
@@ -357,9 +358,9 @@ app.post('/api/read', async (c) => {
 
 // Redeem one earned bonus hole: an extra story on a topic not yet seen. Never extends the streak (only today's main hole does).
 app.post('/api/bonus/redeem', async (c) => {
-  const { u, sub, pref } = await loadAll(c);
+  const { u, sub, pref, creator } = await loadAll(c);
   if (!pref) return c.json({ error: 'onboarding' }, 409);
-  if (!accessOf(u, sub).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
+  if (!accessOf(u, sub, creator).rabbitHoles) return c.json({ error: 'paywall', message: 'Your 3-day trial has ended.' }, 402);
   const day = localDay(new Date(), u.timezone);
   const seen = ((await c.env.DB.prepare('SELECT topic_id FROM rabbit_holes WHERE user_id=? ORDER BY day').bind(u.id).all()).results as any[]).map((r) => r.topic_id);
   const profile = { interestTags: JSON.parse(pref.interest_tags), formats: JSON.parse(pref.formats) };
@@ -375,13 +376,13 @@ app.post('/api/bonus/redeem', async (c) => {
 });
 
 app.post('/api/finder', async (c) => {
-  const { u, sub } = await loadAll(c);
-  const access = accessOf(u, sub);
+  const { u, sub, creator } = await loadAll(c);
+  const access = accessOf(u, sub, creator);
   const b = await c.req.json<{ a: string; b: string }>();
   if (!b.a?.trim() || !b.b?.trim()) return c.json({ error: 'Type two words.' }, 400);
   const since = Date.now() - (access.finderQuota?.period === 'week' ? 7 : 1) * 86400000; // rolling window; calendar-based reset is undecided
   const used = await c.env.DB.prepare('SELECT count(*) n FROM finder_uses WHERE user_id=? AND created_at>?').bind(u.id, since).first<{ n: number }>();
-  if (!finderUsesAllowed(access.finderQuota, used?.n ?? 0)) return c.json({ error: 'quota', message: 'No Connection Finder tries left for now.' }, 429);
+  if (!finderUsesAllowed(access.finderQuota, used?.n ?? 0, creator)) return c.json({ error: 'quota', message: 'No Connection Finder tries left for now.' }, 429);
   if (await ipLimited(c, 'finder', 120, 3600000, true)) return c.json({ error: 'slow_down', message: 'Slow down a little and try again later.' }, 429);
   const res = await findBridge(c.env as any, b.a, b.b);
   if (res.ok || res.reason === 'no_bridge') await c.env.DB.prepare('INSERT INTO finder_uses (id,user_id,word_a,word_b,result,sources,created_at) VALUES (?,?,?,?,?,?,?)')
