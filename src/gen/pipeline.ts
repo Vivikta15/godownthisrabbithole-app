@@ -4,7 +4,7 @@ import { classifyClaims, allowedPhrasing, licenceFlags, type Source, type Claim,
 
 export const PROMPTS = {
   // Output format: one claim per line "key | value | exact quote". The quote must be copied from the source text.
-  extract: (title: string, text: string) => `You are extracting facts from one source about "${title}". Output one line per fact: key | value | exact quote copied from the text. Use short snake_case keys such as start_year or boxes_per_day. Use the same key for the same question across sources. Only facts stated in the text. No placeholders, no commentary.\n\nSOURCE TEXT:\n${text}`,
+  extract: (title: string, text: string, known = '') => `You are extracting facts from one source about "${title}". Output one line per fact: key | value | exact quote copied from the text. Use short snake_case keys such as start_year or boxes_per_day. Use the same key for the same question across sources. Only facts stated in the text. No placeholders, no commentary.${known ? `\n\nFacts already found in OTHER sources (key | value). Where this text answers the same question, reuse that exact key and give the value in the same form (same units, same date format), as long as this text really says so. Never copy a value this text does not state. Quote only from this text.\n${known}` : ''}\n\nSOURCE TEXT:\n${text}`,
   outline: (title: string, ledger: string, country: string) => `Plan a 7 paragraph story about "${title}" for a curious reader in ${country}. Start from something the reader already knows. Use only these facts (id: key = value, status):\n${ledger}\nOutput 7 lines "paragraph N: purpose | fact ids". Where a fact is marked disputed, give it its own paragraph that says accounts differ. Do not plan trivia.`,
   write: (purpose: string, facts: string) => `Write one paragraph (3 to 5 sentences) for this purpose: ${purpose}. Use only these facts and cite each sentence. Output lines "sentence || fact ids". Facts marked "single" must say "according to <publisher>". Facts marked "disputed" may only appear as "accounts differ". Keep every qualifier in the source (such as "about", "usually", "may"). Never invent. Never repeat a fact used in an earlier paragraph.\n${facts}`,
   // Same shape as the benchmarked judge (scripts/judge-bench-paid.mjs) and the canary. The system prompt is JUDGE_SYSTEM in src/worker/judge.ts. Answers SUPPORTED, PARTLY or NOT.
@@ -26,7 +26,7 @@ export function parseWrite(raw: string): { t: string; ids: string[] }[] {
 }
 
 export type Runners = {
-  extract: (title: string, text: string) => Promise<string>; outline: (prompt: string) => Promise<string>; write: (prompt: string) => Promise<string>;
+  extract: (title: string, text: string, known?: string) => Promise<string>; outline: (prompt: string) => Promise<string>; write: (prompt: string) => Promise<string>;
   judge: (prompt: string) => Promise<string>; review: (prompt: string) => Promise<string>;
   note?: (msg: string) => void; reserve: (stage: string) => boolean; // false when the hard cap refuses; the pipeline must stop, not continue unchecked
 };
@@ -38,7 +38,7 @@ export async function runCandidate(title: string, sources: (Source & { text: str
   const claims: Claim[] = []; let n = 0;
   for (const s of sources) {
     if (!run.reserve('extract')) return fail('cap_reached');
-    let raw: string; try { raw = await run.extract(title, s.text); } catch { return fail('provider_error'); }
+    let raw: string; try { raw = await run.extract(title, s.text, claims.slice(0, 40).map((c) => `${c.key} | ${c.value}`).join('\n')); } catch { return fail('provider_error'); }
     const parsed = parseExtract(raw); let kept = 0;
     for (const c of parsed) if (quoteInSource(c.quote, s.text)) { kept++; claims.push({ id: `c${++n}`, sourceId: s.id, key: c.key, value: c.value, quote: c.quote }); }
     run.note?.(`${s.groupId} rawLen=${raw.length} parsed=${parsed.length} quoteKept=${kept} textLen=${s.text.length} rawHead=${JSON.stringify(raw.slice(0, 160))}`);

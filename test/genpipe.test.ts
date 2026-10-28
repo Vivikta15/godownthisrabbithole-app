@@ -41,3 +41,15 @@ describe('a candidate that passes every fixture check', () => {
     expect(r.candidate!.licenceFlags.join()).toMatch(/share-alike/); expect(r.candidate!.sourceUrls.length).toBe(3);
   });
 });
+
+describe('guided extraction (no model)', () => {
+  it('passes earlier sources keys to later extraction, so independent sources can agree on a key', async () => {
+    const seen: string[] = [];
+    const A = { id: 'a', url: 'https://a.test', publisher: 'a', license: 'unknown' as const, groupId: 'a', text: 'The line opened in 1853 in Bombay.' };
+    const B = { id: 'b', url: 'https://b.test', publisher: 'b', license: 'unknown' as const, groupId: 'b', text: 'Service began on 16 April 1853 near Bombay.' };
+    const run = { extract: async (_t: string, text: string, known?: string) => { seen.push(known ?? ''); return text === A.text ? 'first_service_year | 1853 | opened in 1853' : (known ?? '').includes('first_service_year') ? 'first_service_year | 1853 | began on 16 April 1853' : 'start | 16 April 1853 | began on 16 April 1853'; }, outline: async () => '', write: async () => '', judge: async () => 'supported', review: async () => 'none', reserve: () => true };
+    const r = await runCandidate('Rail', [A, B], run);
+    expect(seen[0]).toBe(''); expect(seen[1]).toContain('first_service_year | 1853');
+    expect(r.outcome).not.toEqual({ ok: false, reason: 'too_few_sources' });
+  });
+});
