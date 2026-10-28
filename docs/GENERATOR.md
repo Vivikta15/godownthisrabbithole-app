@@ -19,13 +19,23 @@ Status: design plus pure, tested modules in src/gen (ledger.ts, policy.ts, test/
 - Monthly cap in integer micro-dollars, reserved before each call, never refunded (same idea as src/worker/anthropic.ts, which has a lifetime trial cap and is OFF).
 - Rates in the forecast are provisional: Anthropic's pricing and all-models pages show the 5.5 lineup, its overview page shows an older one. Read exact IDs and prices from the owner's own account before activation.
 
-## Cost per ACCEPTED story (forecast, not measured)
-Assumptions: 7 paragraphs, about 49k input and 10.5k output tokens per attempt (scaled from the pilot's 42k in and 9k out over 6 runs), 3 sources (input x3), 1.5x retries, Haiku 5.5 writer at $0.10/$0.50 per M, Sonnet 5.5 judge at $2/$10 per M, judge handles half the tokens. Cost per accepted = attempt cost divided by acceptance.
-- acceptance 1/2: about $0.06 (all Haiku), $0.63 (half Sonnet), $1.20 (all Sonnet)
-- acceptance 1/3 (the pilot's rate): $0.09, $0.94, $1.80
-- acceptance 0.15: $0.20, $2.09, $3.99
-Not included: search calls ($10 per 1,000 on the Anthropic API), thinking tokens, Cloudflare Workers Paid ($5/month if the app needs more than 50 subrequests per invocation), a funded API account.
-My earlier "$0.03 to $0.65" omitted dividing by acceptance. Use these numbers.
+## Cost: one worksheet (src/gen/cost.ts, run `node scripts/cost-worksheet.mjs [acceptance] [thinkingTokensPerCall] [searches]`)
+This replaces every earlier figure (the 17:16, 17:17 and 17:19 numbers used different, cruder assumptions).
+- Units: tokens, USD per million tokens, search counts. An ATTEMPT is one try at one candidate. Each stage lists calls, input and output tokens per call, billed thinking (as output), and a within-stage retry factor. Acceptance is applied exactly once: cost per accepted = cost per attempt / acceptance.
+- Stages (illustrative, to be replaced by measured usage): extract claims from 3 sources, outline, write 7 paragraphs, judge about 28 sentences, adversarial review.
+- Provisional rates: writer $0.10/$0.50, judge $2/$10 per MTok. Not read from the owner's account.
+- Results: cost per attempt about $0.10 (no thinking, no search). Per accepted story: $0.21 at 50% acceptance, $0.31 at 33%, $0.69 at 15%. With 500 thinking tokens per call and 5 searches at 33%: $0.99 per accepted story. The judge stage is most of the cost, so a cheaper judge or fewer sentences judged moves the number most.
+- Not in the worksheet: Cloudflare Workers Paid ($5/month if needed), a funded provider account, human review time.
+
+## Hard cap (src/gen/ledger.ts reserveCall/settleCall/worstCaseMicro)
+- Reserves the worst case of every call before it is made: prompt bytes (bounds tokens) at the input rate, plus max_tokens at the output rate (max_tokens includes billed thinking), plus every allowed search at its price.
+- All reservations in flight or settled count, in order, one at a time (in D1: one conditional UPDATE). Failed calls keep their reservation; a smaller actual never frees cap; a larger actual pauses generation. Month is the month of reservation (UTC); a call that finishes after midnight stays in its reservation month, so check the provider invoice.
+- The cap bounds what could be billed, not what was accepted.
+
+## Prompts and fixture harness (src/gen/pipeline.ts, test/genpipe.test.ts)
+- Prompts for extract, outline, write, judge, review. Quotes must occur in the source text; a candidate needs two independent source groups; disputed claims only as disagreement; single-source claims attributed; numbers must appear in cited quotes; repeated facts, partly-supported sentences, reviewer defects, provider errors and cap refusals all reject.
+- A passing candidate is only a candidate: labelled "not verified by a person and not independently proven", with licence flags.
+- The harness runs on fixture responses. It proves refusal rules and orchestration. It does NOT show that any model writes good or true stories. Only a capped, approved pilot can.
 
 ## Not built, needs a paid test to learn
 Whether claim-ledger writing raises acceptance and quality over the single-source pilot. The one thing that would settle it is a small capped test.

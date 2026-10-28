@@ -41,3 +41,22 @@ describe('access policy is separate from generation', () => {
   it('N per day and on-demand are config changes', () => { expect(canOpenNew({ mode: 'per_day', perDay: 3, audience: 'all' }, false, 2).allowed).toBe(true); expect(canOpenNew({ mode: 'on_demand', audience: 'all' }, false, 50).allowed).toBe(true); });
   it('creator-only on-demand blocks others', () => { expect(canOpenNew({ mode: 'on_demand', audience: 'creator' }, false, 0).allowed).toBe(false); expect(canOpenNew({ mode: 'on_demand', audience: 'creator' }, true, 99).allowed).toBe(true); });
 });
+import { worksheet, DEFAULT, PROVISIONAL, DEFAULT_STAGES } from '../src/gen/cost';
+import { worstCaseMicro, reserveCall, settleCall } from '../src/gen/ledger';
+describe('cost worksheet', () => {
+  it('applies acceptance exactly once', () => { const a = worksheet(DEFAULT), b = worksheet({ ...DEFAULT, acceptance: 2 / 3 }); expect(a.attemptUsd).toBeCloseTo(b.attemptUsd, 10); expect(a.perAcceptedUsd / b.perAcceptedUsd).toBeCloseTo(2); expect(a.perAcceptedUsd).toBeCloseTo(a.attemptUsd * 3); });
+  it('thinking bills as output and search is separate', () => { const base = worksheet(DEFAULT); const th = worksheet({ ...DEFAULT, stages: DEFAULT_STAGES.map((s) => ({ ...s, thinkingOutPerCall: 2000 })) }); expect(th.attemptUsd).toBeGreaterThan(base.attemptUsd * 1.5); const se = worksheet({ ...DEFAULT, search: { count: 5, usdPerThousand: 10 } }); expect(se.searchUsd).toBeCloseTo(0.05); expect(se.attemptUsd - base.attemptUsd).toBeCloseTo(0.05); });
+  it('batch discounts tokens but not search', () => { const s = { ...DEFAULT, search: { count: 5, usdPerThousand: 10 } }; const full = worksheet(s), half = worksheet({ ...s, batchDiscount: 0.5 }); expect(half.attemptUsd - half.searchUsd).toBeCloseTo((full.attemptUsd - full.searchUsd) / 2); expect(half.searchUsd).toBe(full.searchUsd); });
+  it('retries inside a stage raise attempt cost, not acceptance', () => { const hi = worksheet({ ...DEFAULT, stages: DEFAULT_STAGES.map((s) => ({ ...s, stageRetryFactor: s.stageRetryFactor * 2 })) }); expect(hi.attemptUsd).toBeGreaterThan(worksheet(DEFAULT).attemptUsd * 1.9); expect(hi.acceptance).toBe(worksheet(DEFAULT).acceptance); });
+  it('zero acceptance is infinite', () => expect(worksheet({ ...DEFAULT, acceptance: 0 }).perAcceptedUsd).toBe(Infinity));
+  it('provisional rates are the only rate source', () => expect(DEFAULT.writer).toEqual(PROVISIONAL.writer));
+});
+describe('hard cap', () => {
+  const spec = { inRatePerM: 2, outRatePerM: 10, promptBytes: 10_000, maxTokens: 1_000, maxSearches: 2, usdPerThousandSearches: 10 };
+  it('reserves thinking (inside max_tokens) and searches', () => { expect(worstCaseMicro(spec)).toBe(10_000 * 2 + 1_000 * 10 + 2 * 10 * 1000); expect(worstCaseMicro({ ...spec, maxSearches: 0 })).toBe(30_000); });
+  it('concurrent reservations all count, in order', () => { let s = { capMicro: 100_000, reservations: [], paused: false } as any; const a = reserveCall(s, 'a', '2026-10', 60_000); s = a.state; const b = reserveCall(s, 'b', '2026-10', 60_000); expect(a.ok).toBe(true); expect(b.ok).toBe(false); expect(b.reason).toBe('over_cap'); });
+  it('failed calls keep their reservation, a smaller actual frees nothing', () => { let s = reserveCall({ capMicro: 100_000, reservations: [], paused: false }, 'a', '2026-10', 80_000).state; s = settleCall(s, 'a', 0); expect(reserveCall(s, 'b', '2026-10', 30_000).ok).toBe(false); });
+  it('an overage pauses generation', () => { let s = reserveCall({ capMicro: 100_000, reservations: [], paused: false }, 'a', '2026-10', 10_000).state; s = settleCall(s, 'a', 25_000); expect(s.paused).toBe(true); expect(reserveCall(s, 'b', '2026-10', 1).reason).toBe('paused'); });
+  it('month rollover starts a fresh month, old month stays counted', () => { let s = reserveCall({ capMicro: 100_000, reservations: [], paused: false }, 'a', '2026-10', 90_000).state; expect(reserveCall(s, 'b', '2026-10', 20_000).ok).toBe(false); s = reserveCall(s, 'c', '2026-11', 90_000).state; expect(s.reservations.length).toBe(2); });
+  it('duplicate id and zero amount are refused', () => { const s = reserveCall({ capMicro: 100, reservations: [], paused: false }, 'a', 'm', 10).state; expect(reserveCall(s, 'a', 'm', 10).reason).toBe('duplicate'); expect(reserveCall(s, 'z', 'm', 0).reason).toBe('bad_amount'); });
+});

@@ -67,3 +67,28 @@ export function costPerAcceptedUsd(f: Forecast): number {
   const attempt = price(f.judge, f.judgeShare) + price(f.writer, 1 - f.judgeShare) + (f.searches ?? 0) * (f.searchUsd ?? 0);
   return f.acceptance > 0 ? attempt / f.acceptance : Infinity;
 }
+
+// ---- Hard-cap reservations. A cap must bound what could be BILLED, not what was accepted. ----
+// Worst case of one call: prompt bytes (a token covers at least one byte, so bytes bound tokens) at the input rate, plus max_tokens at the output rate.
+// max_tokens includes billed thinking, so it covers thinking. Searches are billed per use, so each allowed search is reserved at its price. A failed call is still reserved
+// (billing for errors is not guaranteed to be zero) and is not refunded. Overage is recorded and pauses generation.
+export type CallSpec = { inRatePerM: number; outRatePerM: number; promptBytes: number; maxTokens: number; maxSearches: number; usdPerThousandSearches: number; batchDiscount?: number };
+export const worstCaseMicro = (c: CallSpec): number => Math.ceil(((c.promptBytes * c.inRatePerM + c.maxTokens * c.outRatePerM) * (c.batchDiscount ?? 1)) + (c.maxSearches * c.usdPerThousandSearches * 1000));
+// (rates are USD/MTok = micro-USD per token; search USD per 1000 => micro-USD per search = usdPerThousand * 1000)
+export type Reservation = { id: string; month: string; micro: number; settled?: { actualMicro: number } };
+export type CapState = { capMicro: number; reservations: Reservation[]; paused: boolean };
+const monthTotal = (s: CapState, month: string) => s.reservations.filter((r) => r.month === month).reduce((a, r) => a + Math.max(r.micro, r.settled?.actualMicro ?? 0), 0);
+// All reservations, in flight or settled, count against the cap. Concurrent callers must reserve one at a time; in D1 this is a single conditional UPDATE, as in src/worker/aibudget.ts.
+export function reserveCall(s: CapState, id: string, month: string, micro: number): { ok: boolean; state: CapState; reason?: 'paused' | 'over_cap' | 'bad_amount' | 'duplicate' } {
+  if (s.paused) return { ok: false, state: s, reason: 'paused' };
+  if (!(micro > 0)) return { ok: false, state: s, reason: 'bad_amount' };
+  if (s.reservations.some((r) => r.id === id)) return { ok: false, state: s, reason: 'duplicate' };
+  if (monthTotal(s, month) + micro > s.capMicro) return { ok: false, state: s, reason: 'over_cap' };
+  return { ok: true, state: { ...s, reservations: [...s.reservations, { id, month, micro }] } };
+}
+// Settling records actual billed micro-USD from the response usage. A smaller actual does not free cap (no refund). A larger one is an overage and pauses generation.
+export function settleCall(s: CapState, id: string, actualMicro: number): CapState {
+  const rs = s.reservations.map((r) => (r.id === id ? { ...r, settled: { actualMicro } } : r)); const r0 = s.reservations.find((r) => r.id === id);
+  return { ...s, reservations: rs, paused: s.paused || (!!r0 && actualMicro > r0.micro) };
+}
+// A call reserved in one month that finishes in the next stays in the month it was reserved in (conservative; also check the provider invoice).
