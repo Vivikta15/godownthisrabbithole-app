@@ -1,8 +1,8 @@
-import { LakeBackdrop } from './LakeBackdrop';
+import { Meadow } from './Meadow';
 import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, Emblem, NextMark, WeekRow, MonthCalendar, ForestScene, SkyLayer } from './visuals';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
-import { Mascot, useMascot } from './Mascot';
+import { useMascot } from './Mascot';
 import type { MascotEvent } from '../shared/mascot';
 
 type Me = { user: { email: string; name: string | null; onboarded: boolean }; access: { plan: string; rabbitHoles: boolean; finderQuota: { period: string; limit: number } | null; trialEndsAt: string }; streak: { current: number; longest: number; freezesLeft: number; bonusHoles: number; readToday: boolean }; prefs: any };
@@ -31,19 +31,27 @@ export function App() {
   else if (me === null) body = stage === 'welcome' ? <Welcome send={send} onStart={() => { setAuthMode('signup'); setStage('auth'); }} onLogin={() => { setAuthMode('login'); setStage('auth'); }} /> : <Auth initial={authMode} onDone={refresh} send={send} recovery={!!cfg.emailRecovery} onBack={() => setStage('welcome')} />;
   else if (!me.user.onboarded || redo) body = <Quiz cfg={cfg} me={me} redo={redo} onDone={() => { setRedo(false); refresh(); }} onCancel={redo ? () => setRedo(false) : undefined} send={send} />;
   else { nav = true; body = <Main me={me} cfg={cfg} refresh={refresh} send={send} onRedo={() => setRedo(true)} />; }
-  return <div className={nav ? 'shell has-nav' : 'shell'}><LakeBackdrop />{body}<div className="dock" aria-hidden="true" /><Mascot state={mascot} /></div>;
+  const welcome = !nav && me === null && stage === 'welcome' && !rt && !vt;
+  return <div className={nav ? 'shell has-nav' : welcome ? 'shell is-welcome' : 'shell'}><Meadow mascot={mascot} />
+    {!nav && <header className="pill"><span className="pill-brand"><Logo />godownthisrabbithole</span>{welcome && <button type="button" className="go small" onClick={() => { setAuthMode('login'); setStage('auth'); }}>Sign in</button>}</header>}
+    {body}</div>;
 }
 
+function Logo() {
+  return <svg className="logo" width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><g fill="currentColor"><ellipse cx="11.500" cy="8" rx="3.600" ry="7.500" transform="rotate(-8 11.500 8)" /><ellipse cx="20.500" cy="8" rx="3.600" ry="7.500" transform="rotate(8 20.500 8)" /><circle cx="16" cy="21" r="9" /></g><circle cx="12.800" cy="20" r="1.300" fill="#fff" /><circle cx="19.200" cy="20" r="1.300" fill="#fff" /></svg>;
+}
+
+const WORDS: [string, boolean][] = [['Curiosity', false], ['looks', false], ['good', true], ['on', false], ['you.', false]];
+const DETOURS = ['The year Australia lost to birds', 'A day on Venus is longer than its year', 'Three hearts, blue blood', 'Older than the Aztec capital'];
 function Welcome({ onStart, onLogin, send }: { onStart: () => void; onLogin: () => void; send: Send }) {
   useEffect(() => { send('onboarding_start'); }, [send]);
   return <main className="welcome">
-    
-    <p className="kicker">godownthisrabbithole</p>
-    <h1 className="display">Curiosity looks good on you.</h1>
+    <p className="badge"><i aria-hidden="true" />One rabbit hole a day</p>
+    <h1 className="display" aria-label="Curiosity looks good on you.">{WORDS.map(([w, em], i) => <span key={w} className="w" aria-hidden="true" style={{ ['--i' as string]: i }}>{em ? <em>{w}</em> : w}{' '}</span>)}</h1>
     <p className="deck">Leave the scroll behind. Follow something interesting.</p>
-    <p><button type="button" className="go" onClick={onStart}>Let's wander</button></p>
-    <p className="note"><a href="#" onClick={(e) => { e.preventDefault(); onLogin(); }}>I already have an account</a></p>
-    <p className="fine">One rabbit hole a day. No endless feed. Free for 3 days.</p>
+    <p className="cta"><button type="button" className="go" onClick={onStart}>Let's wander</button><button type="button" className="glassbtn" onClick={onLogin}>I already have an account</button></p>
+    <p className="fine">No endless feed. Free for 3 days.</p>
+    <div className="detours" aria-label="Rabbit holes to fall into"><p className="mono-note">Recent detours</p><ul>{DETOURS.map((d, i) => <li key={d} style={{ ['--i' as string]: i }}>{d}</li>)}</ul></div>
   </main>;
 }
 
@@ -156,7 +164,7 @@ function Main({ me, cfg, refresh, send, onRedo }: { me: Me; cfg: Cfg; refresh: (
   useFocusHeading(tab + '|' + (open ?? ''));
   const names: [Tab, string][] = [['explore', 'Explore'], ['connections', 'Connections'], ['trail', 'Trail'], ['you', 'You']];
   return <>
-    <nav className="nav" aria-label="Sections"><p className="brand" aria-hidden="true">go down this<br />rabbit hole</p>{names.map(([k, l]) => <button key={k} type="button" aria-current={tab === k ? 'page' : undefined} onClick={() => go(k)}><Icon k={k} /><span>{l}</span></button>)}</nav>
+    <nav className="nav" aria-label="Sections"><p className="brand" aria-hidden="true"><Logo /></p>{names.map(([k, l]) => <button key={k} type="button" aria-current={tab === k ? 'page' : undefined} onClick={() => go(k)}><Icon k={k} /><span>{l}</span></button>)}<p className="streakpill" aria-hidden="true">Day {me.streak.current}</p></nav>
     <main>
       {open ? <StoryView topicId={open} onBack={() => setOpen(null)} />
         : <>

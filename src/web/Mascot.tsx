@@ -14,7 +14,7 @@ export function useMascot() {
   return [state, dispatch as (e: MascotEvent) => void] as const;
 }
 
-const LABEL: Record<MascotState, string> = {
+export const LABEL: Record<MascotState, string> = {
   greet: 'The rabbit waves hello', explain_quiz: 'The rabbit is showing you around', idle: 'The rabbit is relaxing',
   finder_think: 'The rabbit is thinking hard', finder_found: 'The rabbit found something', hop_in: 'The rabbit hops into its hole',
   reading: 'The rabbit is reading on its phone in the hole', hop_out: 'The rabbit climbs out of the hole', cheer: 'The rabbit cheers',

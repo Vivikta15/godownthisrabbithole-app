@@ -2,7 +2,7 @@
    Solid shapes, rounded letterforms, gentle motion. Text stays on calm sky tones; scenery stays below the fold line. */
 :root{
   --sans:"DM Sans Variable","DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --serif:"Baloo 2 Variable","Baloo 2","DM Sans Variable","DM Sans",system-ui,sans-serif;
+  --serif:"Cormorant Garamond","Baloo 2 Variable","Baloo 2",Georgia,serif;
   --mono:"DM Mono",ui-monospace,Menlo,monospace;--navh:60px;
   /* light theme (day). Dawn and dusk only retint the sky and scenery; night rethemes. */
   --ink:#23413a;--soft:#3a5b52;--line:#9dbdac;--ctl:#6f9c8a;
@@ -58,11 +58,11 @@ input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{ou
 .steps-bar{display:flex;gap:4px;margin:6px 0 18px}.steps-bar i{flex:1;height:4px;border-radius:2px;background:var(--line)}.steps-bar i.on{background:var(--moss)}
 .row-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.nav{position:fixed;left:0;right:0;bottom:0;height:var(--navh);display:flex;background:var(--sky);border-top:1px solid var(--line);z-index:30;padding-bottom:env(safe-area-inset-bottom)}
-.nav .brand{display:none}
-.nav button{flex:1;border:0;border-radius:0;background:transparent;color:var(--soft);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:.72rem;padding:6px 2px;font-weight:500}
+.nav{position:fixed;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));height:var(--navh);display:flex;z-index:30}
+.nav .brand,.nav .streakpill{display:none}
+.nav button{flex:1;border:0;border-radius:18px;background:transparent;color:var(--soft);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:.72rem;padding:6px 2px;font-weight:500}
 .nav button:hover{border:0}
-.nav button[aria-current=page]{color:var(--coral);box-shadow:inset 0 2.5px 0 var(--coral)}
+.nav button[aria-current=page]{color:var(--brand);background:rgba(255,255,255,.55);box-shadow:0 1px 0 #fff inset,0 2px 8px rgba(40,80,50,.15)}
 .greet{font-family:var(--serif);font-weight:600;color:var(--soft);font-size:1.1rem;margin:.2em 0 1.2em}
 .detour{position:relative;border-top:1px solid var(--line);padding-top:18px}.peek{position:absolute;right:0;top:-34px}
 .strip{border-top:1px solid var(--line);padding:16px 0;margin-top:22px}.strip.row{display:flex;gap:28px;flex-wrap:wrap}.strip p{margin:.2em 0}
@@ -90,14 +90,12 @@ blockquote{margin:1em 0;padding:10px 14px;border-left:3px solid var(--line);back
 .mascot{position:fixed;right:max(4px,calc(50% - 330px));bottom:0;width:150px;height:105px;pointer-events:none;z-index:20}
 .has-nav .mascot{bottom:var(--navh)}
 @media (min-width:900px){
-  .has-nav{max-width:none;padding:40px 220px 150px 264px}.has-nav main{max-width:680px;margin:0 auto}
-  .nav{top:0;right:auto;bottom:0;width:224px;height:auto;flex-direction:column;border-top:0;border-right:1px solid var(--line);padding:32px 14px;gap:4px}
-  .nav .brand{display:block;font-family:var(--serif);font-weight:700;font-size:1.35rem;line-height:1.1;color:var(--ink);margin:0 10px 28px}
-  .nav button{flex:none;flex-direction:row;justify-content:flex-start;gap:12px;font-size:.98rem;padding:11px 12px;border-radius:12px}
-  .nav button[aria-current=page]{box-shadow:none;background:var(--bg2)}
-  .has-nav .dock{display:none}.has-nav .mascot{right:28px;bottom:0;width:170px;height:119px}
-  .shell:not(.has-nav) .dock{display:none}.shell:not(.has-nav) .mascot{right:max(12px,calc(50% - 330px))}
-  .story-title{font-size:2.5rem}.reading p{font-size:1.15rem}
+  .has-nav{max-width:none;padding:116px 24px 150px}.has-nav main{max-width:720px;margin:0 auto}
+  .nav{top:22px;bottom:auto;left:0;right:0;margin:0 auto;width:max-content;max-width:calc(100% - 32px);height:auto;flex-direction:row;align-items:center;gap:6px;padding:8px 10px 8px 18px}
+  .nav .brand{display:flex;align-items:center;margin:0 18px 0 0;color:var(--brand)}
+  .nav .streakpill{display:block;margin:0 0 0 14px;font-family:var(--mono);font-size:.78rem;color:var(--soft);padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.5)}
+  .nav button{flex:none;flex-direction:row;gap:8px;font-size:1.02rem;padding:10px 16px;border-radius:999px}
+  .story-title{font-size:3rem}.reading p{font-size:1.15rem}
 }
 .mascot .pos,.mascot .bob,.mascot .paw,.mascot .phone,.mascot .eye{transform-box:fill-box}
 .mascot .pos{transform:translateX(-50px)}
@@ -242,28 +240,3 @@ html{transition:background-color .8s ease}
 button,.go,.ghost,a{transition:background-color .2s ease,color .2s ease,border-color .2s ease,transform .15s ease}
 .reading p{line-height:1.75}
 
-/* Lake world (approved 28 Oct): a fixed Three.js lake behind every screen. Content sits on still paper panels, in the day palette, whatever the time of day. */
-html,body{background:#1d3a38}
-.lake-world{position:fixed;inset:0;width:100vw;height:100vh;height:100lvh;display:block;z-index:0;pointer-events:none}
-.shell:not(.has-nav){padding-top:max(20px,env(safe-area-inset-top))}
-.shell>main,.nav{
-  --ink:#1f3a34;--soft:#3f5a50;--line:#c9bf9f;--ctl:#6f9c8a;--amber:#7d5310;--moss:#2f6842;--coral:#a83a24;--on-accent:#fff8ee;
-  --panel:#f8f2e4;--sky:#cfe4da;--sky2:#e6f0e3;--bg:#f8f2e4;--bg2:#ece3cc;--cloud:#fbf7ec;--lake:#7fb0a2;--lake-deep:#5b9486;
-  --pine:#4e7a63;--pine-far:#93baa6;--grass:#a9cbb4;--autumn:#d99a55;--autumn2:#c47a4e;--sun:#f2c14e;--moon:#efe9d4;color-scheme:light;color:var(--ink)}
-.shell>main{background:#f8f2e4;border-radius:8px;padding:26px 22px;margin-top:max(0px,calc(18vh - 20px));box-shadow:0 1px 0 #fff8 inset,0 2px 3px rgba(10,25,22,.25),0 18px 40px rgba(8,22,20,.38)}
-.shell:has(.reading)>main{margin-top:12px}
-.nav{background:#f8f2e4;border-color:#d8cdb0}
-.shell>.note{color:#f3e6c8;text-shadow:0 1px 8px rgba(0,0,0,.45)}
-@media (max-width:899px){.shell>main{margin-top:min(20vh,150px)}.shell:has(.reading)>main{margin-top:12px}}
-@media (min-width:900px){.shell>main{margin-top:0}}
-
-/* Legacy illustrations graded into the lake world: muted, warm and dark-toned instead of bright flat cartoon colour. Fox and carrot scenes keep their motion. */
-.welcome .hero{display:none}
-.lake,.scene,.marginscene svg,.lakewrap svg{filter:saturate(.5) sepia(.3) brightness(.95) contrast(.96)}
-.mascot{filter:brightness(.3) sepia(.4) saturate(.8) drop-shadow(0 0 1.5px rgba(246,228,186,.95)) drop-shadow(0 0 10px rgba(255,205,130,.35))}
-
-/* Reading progress is a thin line with a small marker, not the old pale lake strip with a fish. */
-.rail{height:4px;background:rgba(20,40,34,.35);border-bottom:0}
-.railsvg{display:none}
-.railfish{width:10px;height:10px;bottom:-3px;border-radius:50%;background:#c4552b;border:1px solid #f6efe0}
-.railfish *{display:none}
