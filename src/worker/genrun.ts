@@ -47,6 +47,7 @@ function cachedFetch(ctx: Ctx): typeof fetch {
 }
 function runners(ctx: Ctx): Runners {
   return {
+    note: (m: string) => { if (ctx.diag.length < 16) ctx.diag.push(m.slice(0, 300)); },
     extract: (title, text) => model(ctx, 'extract', WRITER, '', PROMPTS.extract(title, text), 1500),
     outline: (p) => model(ctx, 'outline', WRITER, '', p, 700), write: (p) => model(ctx, 'write', WRITER, '', p, 600),
     judge: (p) => model(ctx, 'judge', JUDGE, JUDGE_SYSTEM, p, 8), review: (p) => model(ctx, 'review', JUDGE, '', p, 300),
@@ -148,6 +149,7 @@ async function tickLocked(env: GenEnv, fetchFn: typeof fetch, now: number): Prom
     if (!docs || docs.length < 2) await setC(db, 'src_diag', JSON.stringify({ topic: cur.topic, docs: docs ? docs.map((d) => d.groupId) : null, fetched: ctx.diag.slice(0, 12) }), now); // what the network actually returned, kept for diagnosis
     if (docs && docs.length >= 2) {
       const res = await runCandidate(cur.topic!, docs, runners(ctx)); if (ctx.yielded) throw new Yield();
+      if (!res.outcome.ok) await setC(db, 'src_diag', JSON.stringify({ topic: cur.topic, reason: res.outcome.reason, notes: ctx.diag.slice(0, 12) }), now);
       if (ctx.stop) outcome = { ok: false, reason: ctx.stop === 'over_cap' ? 'cap_reached' : 'provider_error' };
       else if (!res.outcome.ok) outcome = res.outcome;
       else { const a = await assemble(ctx, cur, res.candidate!); if (ctx.yielded) throw new Yield(); if (ctx.stop) outcome = { ok: false, reason: 'provider_error' }; else if (!a.ok) outcome = a; else { outcome = { ok: true }; seed = a.seed; } }
