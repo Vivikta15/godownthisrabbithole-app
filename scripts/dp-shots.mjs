@@ -13,8 +13,8 @@ async function run(tag, w, h) {
   await click("Let's wander"); await page.waitForSelector('form'); await page.type('input[type=email]', email); await page.type('input[type=password]', 'password-synth1'); await click('Start my 3 free days');
   await page.waitForSelector('select'); await click('Next'); await page.waitForSelector('.chips'); await click('everyday life'); await click('Next'); await wait(200); await click('Skip'); await wait(200); await click('A flowing story'); await click('Next'); await wait(200); await click('All set');
   await page.waitForSelector('.nav'); await wait(1000); await shot('explore-day');
-  await click('Go down this rabbit hole'); await wait(900); await shot('reading-top');
-  await page.evaluate(() => window.scrollTo(0, (document.documentElement.scrollHeight - innerHeight) / 2)); await wait(400); await shot('reading-mid');
+  await click('Go down this rabbit hole'); await wait(120); await shot('reading-anim'); await wait(800); await shot('reading-top');
+  await page.evaluate(() => window.scrollTo(0, (document.documentElement.scrollHeight - innerHeight) / 2)); await wait(400); await shot('reading-mid'); await page.evaluate(() => window.scrollTo(0, 700)); await wait(300); await shot('reading-q');
   await page.evaluate(() => window.scrollTo(0, 99999)); await wait(500); await shot('reading-end-caught');
   await click("I'm done reading"); await wait(1500); await shot('done-carrot');
   await click('Connections'); await wait(700); await shot('connections-day');
@@ -22,4 +22,4 @@ async function run(tag, w, h) {
   console.log(tag, 'errors:', errs.length ? errs.slice(0, 3) : 'none');
   await page.close();
 }
-await run(process.env.DP+'-m', 390, 780); await run(process.env.DP+'-d', 1280, 800); await browser.close();
+await run(process.env.DP+'-m', 390, 780); await run(process.env.DP+'-t', 1024, 768); await run(process.env.DP+'-d', 1280, 800); await browser.close();
