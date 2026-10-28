@@ -189,3 +189,6 @@ html[data-daypart=night] .sky .star{opacity:.9}
 @media (min-width:900px){.readbg{left:224px;bottom:0}}
 /* hero on the welcome screen */
 .hero{margin:26px 0 6px}
+/* Reading: sun, moon, stars and clouds fade away so nothing sits behind or crosses the text column. */
+.sky .sunwrap,.sky .moonwrap,.sky .star,.sky .cloud{transition:opacity .6s ease}
+html:has(.reading) .sky .sunwrap,html:has(.reading) .sky .moonwrap,html:has(.reading) .sky .star,html:has(.reading) .sky .cloud{opacity:0}
