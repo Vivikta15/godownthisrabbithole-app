@@ -64,3 +64,11 @@ describe('failure capture and judge format (replay, no model)', () => {
   it('records the judge raw answer and a non-supported verdict', async () => { const { run, notes } = mk('It opened in 1873. || c1', 'NOT'); const r = await runCandidate('T', [A, B], run); expect(r.outcome.ok).toBe(false); expect(notes.some((n) => n.startsWith('JUDGE_RAW "NOT"'))).toBe(true); });
   it('a judge answer with trailing punctuation or different case still counts as the word', async () => { const { run, notes } = mk('It opened in 1873. || c1', 'Supported.'); await runCandidate('T', [A, B], run); expect(notes.some((n) => n.startsWith('JUDGE_RAW "Supported."'))).toBe(true); expect(notes.some((n) => n.startsWith('JUDGE '))).toBe(false); });
 });
+
+describe('judge verdict strictness', () => {
+  const S = (id: string, g: string, text: string) => ({ id, url: `https://${g}.test`, publisher: g, license: 'unknown' as const, groupId: g, text });
+  const A = S('a', 'a', 'The tram line opened in 1873 and is run by WBTC.'), B = S('b', 'b', 'Trams began in 1873. WBTC runs them.');
+  const go = async (judge: string) => { const notes: string[] = []; await runCandidate('T', [A, B], { extract: async (_t: string, t: string) => (t === A.text ? 'opened | 1873 | opened in 1873' : 'opened | 1873 | began in 1873'), outline: async () => 'paragraph 1: open | c1 c2', write: async () => 'It opened in 1873. || c1', judge: async () => judge, review: async () => 'none', reserve: () => true, note: (m: string) => notes.push(m) }); return notes; };
+  for (const ok of ['SUPPORTED', 'Supported.', ' supported\n', '"Supported"']) it(`accepts ${JSON.stringify(ok)}`, async () => expect((await go(ok)).some((n) => n.startsWith('JUDGE '))).toBe(false));
+  for (const bad of ['Supported, but the year is not stated', 'SUPPORTED however the claim adds a date', 'Not supported', 'NOT', 'Supported or not?', '']) it(`rejects ${JSON.stringify(bad)}`, async () => expect((await go(bad)).some((n) => n.startsWith('JUDGE '))).toBe(true));
+});

@@ -66,7 +66,7 @@ export async function runCandidate(title: string, sources: (Source & { text: str
       if (nums(s.t).some((x) => !nums(q).includes(x))) return why('number_not_in_quotes ' + nums(s.t).filter((x) => !nums(q).includes(x)).join(','));
       if (cited.some((i) => used.has(i))) return fail('repeated_fact');
       if (!run.reserve('judge')) return fail('cap_reached');
-      const vraw = (await run.judge(PROMPTS.judge(s.t, q)).catch(() => 'error')); run.note?.(`JUDGE_RAW ${JSON.stringify(vraw.slice(0, 40))}`); const v = vraw === 'error' ? 'error' : (vraw.trim().toLowerCase().match(/^[a-z]+/)?.[0] ?? ''); // exact word still required; only trailing punctuation or a leading quote no longer fails it
+      const vraw = (await run.judge(PROMPTS.judge(s.t, q)).catch(() => 'error')); run.note?.(`JUDGE_RAW ${JSON.stringify(vraw.slice(0, 40))}`); const v = vraw === 'error' ? 'error' : /^[\s"'`*]*supported[\s.!"'`*]*$/i.test(vraw) ? 'supported' : /^[\s"'`*]*partly[\s.!"'`*]*$/i.test(vraw) ? 'partly' : 'other'; // only case, whitespace, quotes and terminal punctuation are tolerated; 'Supported, but ...' is not the verdict
       if (v === 'error') return fail('provider_error'); if (v !== 'supported') { run.note?.(`JUDGE ${v.slice(0, 20)}: ${s.t.slice(0, 200)} // ${q.slice(0, 300)}`); return fail(v.startsWith('partly') ? 'qualifier_dropped' : 'unsupported_sentence'); }
       kept.push(s.t); cited.forEach((i) => usedClaims.add(i));
     }
