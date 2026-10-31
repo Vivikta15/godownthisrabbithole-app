@@ -48,8 +48,17 @@ export function clarityLoaded(): boolean {
 export function watchCrossTabConsent() {
   window.addEventListener('storage', (e) => {
     if (e.key !== KEY || getConsent() !== 'no') return;
-    clearClarityCookies();
-    if (injected) window.location.reload();
+    // The withdrawing tab (You) has no tag, so its clarity('consent', false)
+    // call never reaches a live tracker. The collecting tab must send the
+    // documented withdrawal itself, before reloading without the tag.
+    if (injected) {
+      const w = window as unknown as { clarity?: (...args: unknown[]) => void };
+      try { w.clarity?.('consent', false); } catch { /* tag not fully loaded */ }
+      clearClarityCookies();
+      window.location.reload();
+    } else {
+      clearClarityCookies();
+    }
   });
 }
 

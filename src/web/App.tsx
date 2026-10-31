@@ -54,7 +54,7 @@ export function App() {
 function ConsentBanner({ onChoice }: { onChoice: (v: 'yes' | 'no') => void }) {
   return <div className="consent" role="dialog" aria-label="Analytics choice">
     <p className="kicker">Usage analytics</p>
-    <p className="note">Optional usage analytics are off by default. If you turn them on, Microsoft Clarity collects taps, scrolling and session replays to help improve the app. Sign-in, quiz and account pages are excluded. Inputs and story text are masked. You can turn it off in the You tab; this stops future collection on this device but doesn't delete earlier data. <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noreferrer">Microsoft privacy statement</a></p>
+    <p className="note">Microsoft Clarity collects taps, scrolling and session replays to improve the app. Where consent is required, it starts only after you agree, so it is off here until you say yes. Sign-in, quiz and account pages are excluded; inputs and story text are masked. Data goes to Microsoft. Turning it off stops future collection on this device, but doesn't delete earlier data. <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noreferrer">Microsoft privacy statement</a></p>
     <p className="row-actions"><button type="button" className="go" onClick={() => onChoice('yes')}>Turn on</button><button type="button" className="ghost" onClick={() => onChoice('no')}>No thanks</button></p>
   </div>;
 }
@@ -69,7 +69,7 @@ function Welcome({ onStart, onLogin, send }: { onStart: () => void; onLogin: () 
     <p><button type="button" className="go" onClick={onStart}>Let's wander</button></p>
     <p className="note"><a href="#" onClick={(e) => { e.preventDefault(); onLogin(); }}>I already have an account</a></p>
     <p className="fine">One rabbit hole a day. No endless feed. Free for 3 days.</p>
-    <p className="fine">Microsoft Clarity analytics help improve the app. After you sign in they are on unless you turn them off in the You tab; they never run on sign-in, quiz or account pages, and inputs and story text are masked. Where consent is required, they start only with your OK.</p>
+    <p className="fine">Microsoft Clarity collects taps, scrolling and session replays to improve the app. After sign-in, collection is on unless you turn it off in the You tab; sign-in, quiz and account pages are excluded, and inputs and story text are masked. Where consent is required, it starts only after you agree.</p>
   </main>;
 }
 
@@ -104,7 +104,7 @@ function Auth({ onDone, send, recovery, initial, onBack }: { onDone: () => void;
     {note && <p role="status">{note}</p>}
     {err && <p className="err" role="alert">{err}</p>}
     <p className="note">Preview build: no email verification or password reset yet, so please don't reuse an important password.</p>
-    <p className="note">Analytics (Microsoft Clarity) never run on this page. After you sign in they are on unless you turn them off in the You tab; where consent is required, they start only with your OK.</p>
+    <p className="note">Analytics (Microsoft Clarity) never run on this page. After sign-in, collection is on unless you turn it off in the You tab; where consent is required, it starts only after you agree.</p>
     {!(mode === 'forgot' && !recovery) && <p><button type="submit" className="go">{mode === 'signup' ? 'Start my 3 free days' : mode === 'forgot' ? 'Send reset link' : 'Log in'}</button></p>}
     <p className="note"><a href="#" onClick={(e) => { e.preventDefault(); setMode(mode === 'signup' ? 'login' : 'signup'); }}>{mode === 'signup' ? 'I already have an account' : 'I need an account'}</a>{mode === 'login' && <> · <a href="#" onClick={(e) => { e.preventDefault(); setMode('forgot'); }}>Forgot password?</a></>}</p>
   </form></main>;
@@ -410,7 +410,7 @@ function AnalyticsToggle({ strict }: { strict: boolean }) {
   const on = c === 'yes' || (c === null && !strict);
   const flip = () => { const v = on ? 'no' : 'yes'; setConsent(v); setC(v); };
   return <>
-    <p className="note">Microsoft Clarity records how the main app is used: taps, scrolling and short session replays. It never runs on this page, sign-in or the quiz, and inputs and story text are masked. The data goes to Microsoft (<a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noreferrer">Microsoft privacy statement</a>). Turning it off stops future recording on this device; it does not delete data already collected.</p>
+    <p className="note">Microsoft Clarity collects taps, scrolling and session replays to improve the app. After sign-in, collection is on unless you turn it off in the You tab. Where consent is required, it starts only after you agree. Sign-in, quiz and account pages are excluded; inputs and story text are masked. Data goes to Microsoft. Turning it off stops future collection on this device, but doesn't delete earlier data. <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noreferrer">Microsoft privacy statement</a></p>
     <p><button type="button" className="ghost" onClick={flip}>{on ? 'Analytics are on. Turn off' : 'Analytics are off. Turn on'}</button></p>
   </>;
 }
