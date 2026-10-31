@@ -267,3 +267,8 @@ html,body{background:#1d3a38}
 .railsvg{display:none}
 .railfish{width:10px;height:10px;bottom:-3px;border-radius:50%;background:#c4552b;border:1px solid #f6efe0}
 .railfish *{display:none}
+
+/* Consent choice for optional analytics. Sits above the scene, on a still panel like the reading cards. */
+.consent{position:fixed;left:50%;bottom:calc(16px + var(--navh, 0px));transform:translateX(-50%);width:min(560px, calc(100% - 32px));background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:14px 18px;z-index:60;box-shadow:0 8px 28px rgb(35 65 58 / .22)}
+.consent .kicker{margin:0 0 6px}
+.consent .note{margin:0 0 10px}

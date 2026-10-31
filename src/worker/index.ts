@@ -37,7 +37,7 @@ app.use('*', async (c, next) => {
   c.res.headers.set('X-Content-Type-Options', 'nosniff');
   c.res.headers.set('Referrer-Policy', 'same-origin');
   c.res.headers.set('X-Frame-Options', 'DENY');
-  c.res.headers.set('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'");
+  c.res.headers.set('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https://*.clarity.ms https://c.bing.com; style-src 'self' 'unsafe-inline'; script-src 'self' https://*.clarity.ms; connect-src 'self' https://*.clarity.ms https://c.bing.com; frame-ancestors 'none'");
 });
 // CSRF defence in depth on top of SameSite=Lax: state-changing browser requests must come from our own origin.
 app.use('/api/*', async (c, next) => {

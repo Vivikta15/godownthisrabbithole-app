@@ -3,6 +3,7 @@ import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, Emb
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import { Mascot, useMascot } from './Mascot';
+import { getConsent, setConsent, maybeLoadClarity, type ClarityConsent } from './clarity';
 import type { MascotEvent } from '../shared/mascot';
 
 type Me = { user: { email: string; name: string | null; onboarded: boolean }; access: { plan: string; rabbitHoles: boolean; finderQuota: { period: string; limit: number } | null; trialEndsAt: string }; streak: { current: number; longest: number; freezesLeft: number; bonusHoles: number; readToday: boolean }; prefs: any };
@@ -18,20 +19,37 @@ type Tab = 'explore' | 'connections' | 'trail' | 'you';
 export function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [cfg, setCfg] = useState<Cfg | null>(null);
-  const [mascot, send] = useMascot(); const [redo, setRedo] = useState(false); const [stage, setStage] = useState<'welcome' | 'auth'>('welcome'); const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
+  const [mascot, send] = useMascot(); const [redo, setRedo] = useState(new URLSearchParams(window.location.search).get('redo') === '1'); const [stage, setStage] = useState<'welcome' | 'auth'>('welcome'); const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
   const loadWeather = useCallback(async () => { const r = await api('/weather'); document.documentElement.dataset.weather = r.ok && r.data.condition ? r.data.condition : ''; }, []);
   const refresh = useCallback(async () => { const r = await api('/me'); setMe(r.ok ? r.data : null); }, []);
   useEffect(() => { if (!me || !cfg?.weather) return; loadWeather(); const t = window.setInterval(loadWeather, 30 * 60 * 1000); window.addEventListener('city-changed', loadWeather); return () => { window.clearInterval(t); window.removeEventListener('city-changed', loadWeather); }; }, [!!me, cfg?.weather]);
   useEffect(() => { refresh(); api('/config').then((r) => setCfg(r.data)); }, [refresh]);
 
   const q = new URLSearchParams(window.location.search); const rt = q.get('reset'), vt = q.get('verify');
+  const youParam = q.get('you') === '1'; const redoParam = q.get('redo') === '1';
+  const tabParam = ['explore', 'connections', 'trail'].includes(q.get('tab') ?? '') ? (q.get('tab') as Tab) : 'explore';
+  const [consent, setConsentState] = useState<ClarityConsent>(() => getConsent());
+  // Clarity may load only on eligible page loads for signed-in, onboarded visitors.
+  // Token screens, welcome/sign-in, the quiz and the account tab never qualify.
+  const clarityAllowed = !!me && me.user.onboarded && !redo && !rt && !vt && !youParam && !redoParam;
+  useEffect(() => { if (clarityAllowed) maybeLoadClarity(); }, [clarityAllowed]);
   let body: React.ReactNode; let nav = false;
   if (rt || vt) body = <TokenScreen kind={rt ? 'reset' : 'verify'} token={(rt || vt) as string} />;
   else if (me === undefined || !cfg) body = <p className="note" role="status">Waking the rabbit…</p>;
   else if (me === null) body = stage === 'welcome' ? <Welcome send={send} onStart={() => { setAuthMode('signup'); setStage('auth'); }} onLogin={() => { setAuthMode('login'); setStage('auth'); }} /> : <Auth initial={authMode} onDone={refresh} send={send} recovery={!!cfg.emailRecovery} onBack={() => setStage('welcome')} />;
-  else if (!me.user.onboarded || redo) body = <Quiz cfg={cfg} me={me} redo={redo} onDone={() => { setRedo(false); refresh(); }} onCancel={redo ? () => setRedo(false) : undefined} send={send} />;
-  else { nav = true; body = <Main me={me} cfg={cfg} refresh={refresh} send={send} onRedo={() => setRedo(true)} />; }
-  return <div className={nav ? 'shell has-nav' : 'shell'}><LakeBackdrop />{body}<div className="dock" aria-hidden="true" /><Mascot state={mascot} /></div>;
+  else if (!me.user.onboarded || redo) body = <Quiz cfg={cfg} me={me} redo={redo} onDone={() => { if (redoParam) { window.location.assign('/'); return; } setRedo(false); refresh(); }} onCancel={redo ? () => window.location.assign('/') : undefined} send={send} />;
+  else { nav = true; body = <Main me={me} cfg={cfg} refresh={refresh} send={send} onRedo={() => window.location.assign('/?redo=1')} initialTab={youParam ? 'you' : tabParam} />; }
+  return <div className={nav ? 'shell has-nav' : 'shell'}><LakeBackdrop />{body}<div className="dock" aria-hidden="true" /><Mascot state={mascot} />
+    {clarityAllowed && consent === null && <ConsentBanner onChoice={(v) => { setConsent(v); setConsentState(v); if (v === 'yes') maybeLoadClarity(); }} />}
+  </div>;
+}
+
+function ConsentBanner({ onChoice }: { onChoice: (v: 'yes' | 'no') => void }) {
+  return <div className="consent" role="dialog" aria-label="Analytics choice">
+    <p className="kicker">Usage analytics, off by default</p>
+    <p className="note">With your OK, Microsoft Clarity records how the main app is used: taps, scrolling and short session replays. It never runs on sign-in, the quiz or your account pages. What you type is always hidden, and story text stays hidden in replays. The data goes to Microsoft. You can change this any time on the You tab.</p>
+    <p className="row-actions"><button type="button" className="go" onClick={() => onChoice('yes')}>Turn on</button><button type="button" className="ghost" onClick={() => onChoice('no')}>No thanks</button></p>
+  </div>;
 }
 
 function Welcome({ onStart, onLogin, send }: { onStart: () => void; onLogin: () => void; send: Send }) {
@@ -44,6 +62,7 @@ function Welcome({ onStart, onLogin, send }: { onStart: () => void; onLogin: () 
     <p><button type="button" className="go" onClick={onStart}>Let's wander</button></p>
     <p className="note"><a href="#" onClick={(e) => { e.preventDefault(); onLogin(); }}>I already have an account</a></p>
     <p className="fine">One rabbit hole a day. No endless feed. Free for 3 days.</p>
+    <p className="fine">Optional Microsoft Clarity analytics help improve the app. They run only with your OK, only after you sign in, and never on sign-in, quiz or account pages.</p>
   </main>;
 }
 
@@ -52,7 +71,7 @@ function TokenScreen({ kind, token }: { kind: 'reset' | 'verify'; token: string 
   useEffect(() => { window.history.replaceState({}, '', '/'); }, []);
   useEffect(() => { if (kind === 'verify') api('/email/verify', { token }).then((r) => { setMsg(r.ok ? 'Your email is verified. Thank you!' : r.data.error); setDone(r.ok); }); }, [kind, token]);
   async function reset(e: React.FormEvent) { e.preventDefault(); const r = await api('/password/reset', { token, password: pw }); setMsg(r.ok ? 'Password changed. You are logged out everywhere; log in with the new one.' : r.data.error); setDone(r.ok); }
-  return <main><h1>{kind === 'reset' ? 'Choose a new password' : 'Email check'}</h1>
+  return <main data-clarity-mask="true"><h1>{kind === 'reset' ? 'Choose a new password' : 'Email check'}</h1>
     {kind === 'reset' && !done && <form onSubmit={reset}><input type="password" aria-label="New password" placeholder="New password (8+ characters)" minLength={8} required value={pw} onChange={(e) => setPw(e.target.value)} /><p><button type="submit">Save new password</button></p></form>}
     {msg && <p role="status">{msg}</p>}
     <p className="note"><a href="/">Back to the app</a></p></main>;
@@ -68,7 +87,7 @@ function Auth({ onDone, send, recovery, initial, onBack }: { onDone: () => void;
     const r = await api(mode === 'signup' ? '/signup' : '/login', { ...f, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
     if (r.ok) onDone(); else setErr(r.data.error || 'Something went sideways. Try again?');
   }
-  return <main><form onSubmit={go} className="auth">
+  return <main data-clarity-mask="true"><form onSubmit={go} className="auth">
     <p className="kicker"><a href="#" onClick={(e) => { e.preventDefault(); onBack(); }}>back</a></p>
     <h1>{mode === 'signup' ? 'First, a little burrow of your own.' : mode === 'forgot' ? 'Lost the way back?' : 'Welcome back. The kettle is on.'}</h1>
     {mode === 'signup' && <label>What should I call you?<input type="text" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} autoComplete="given-name" /></label>}
@@ -78,6 +97,7 @@ function Auth({ onDone, send, recovery, initial, onBack }: { onDone: () => void;
     {note && <p role="status">{note}</p>}
     {err && <p className="err" role="alert">{err}</p>}
     <p className="note">Preview build: no email verification or password reset yet, so please don't reuse an important password.</p>
+    <p className="note">Analytics (Microsoft Clarity) are optional, off by default, and never run on this page. They only start after you sign in and say yes.</p>
     {!(mode === 'forgot' && !recovery) && <p><button type="submit" className="go">{mode === 'signup' ? 'Start my 3 free days' : mode === 'forgot' ? 'Send reset link' : 'Log in'}</button></p>}
     <p className="note"><a href="#" onClick={(e) => { e.preventDefault(); setMode(mode === 'signup' ? 'login' : 'signup'); }}>{mode === 'signup' ? 'I already have an account' : 'I need an account'}</a>{mode === 'login' && <> · <a href="#" onClick={(e) => { e.preventDefault(); setMode('forgot'); }}>Forgot password?</a></>}</p>
   </form></main>;
@@ -97,7 +117,7 @@ function Quiz({ cfg, me, redo, onDone, onCancel, send }: { cfg: Cfg; me: Me; red
   const finish = async (skipNote = false) => { const r = await api('/quiz', { interestTags: tags, formats: fmts, length: len, country: country || undefined, why, curious: skipNote ? '' : curious }); if (r.ok) onDone(); else setErr(r.data.error); };
   const skippable = step === 0 || step === 2 || step === 4;
   const asks = ['Where are you reading from? I can start with stories close to home.', 'What do you actually wonder about? Pick a few.', 'Why do you want a daily rabbit hole?', 'How should a story feel?', 'Last one, and you can skip it.'];
-  return <main className="quiz">
+  return <main className="quiz" data-clarity-mask="true">
     <p className="kicker">{redo ? 'Your answers' : 'Let\'s get to know you'}</p>
     <div className="steps-bar" role="progressbar" aria-label="Quiz progress" aria-valuenow={step + 1} aria-valuemin={1} aria-valuemax={total}>{Array.from({ length: total }, (_, i) => <i key={i} className={i <= step ? 'on' : ''} />)}</div>
     <h1>{asks[step]}</h1>
@@ -150,9 +170,15 @@ function Paws({ n, of = 7 }: { n: number; of?: number }) {
   return <div className="paws" role="img" aria-label={`${Math.min(n, of)} of ${of} footprints on this trail`}>{Array.from({ length: of }, (_, i) => <svg key={i} className={i < n ? 'on' : ''} width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="16" rx="5" ry="4.200" /><circle cx="6" cy="10.500" r="2" /><circle cx="10" cy="7" r="2" /><circle cx="14.500" cy="7" r="2" /><circle cx="18.500" cy="10.500" r="2" /></svg>)}</div>;
 }
 
-function Main({ me, cfg, refresh, send, onRedo }: { me: Me; cfg: Cfg; refresh: () => void; send: Send; onRedo: () => void }) {
-  const [tab, setTab] = useState<Tab>('explore'); const [open, setOpen] = useState<string | null>(null);
-  const go = (t: Tab) => { setTab(t); setOpen(null); send(t === 'connections' ? 'tab_change_finder' : 'tab_change_other'); window.scrollTo({ top: 0 }); };
+function Main({ me, cfg, refresh, send, onRedo, initialTab }: { me: Me; cfg: Cfg; refresh: () => void; send: Send; onRedo: () => void; initialTab: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab); const [open, setOpen] = useState<string | null>(null);
+  // The account tab is a separate page load (/?you=1) so analytics scripts, which
+  // cannot be unloaded once injected, are guaranteed absent on account views.
+  const go = (t: Tab) => {
+    if (t === 'you' && tab !== 'you') { window.location.assign('/?you=1'); return; }
+    if (t !== 'you' && tab === 'you') { window.location.assign(t === 'explore' ? '/' : `/?tab=${t}`); return; }
+    setTab(t); setOpen(null); send(t === 'connections' ? 'tab_change_finder' : 'tab_change_other'); window.scrollTo({ top: 0 });
+  };
   useFocusHeading(tab + '|' + (open ?? ''));
   const names: [Tab, string][] = [['explore', 'Explore'], ['connections', 'Connections'], ['trail', 'Trail'], ['you', 'You']];
   return <>
@@ -203,7 +229,7 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
   if (extra) return <article className="reading"><ReadingRail /><MarginScene /><StartScene /><p className="kicker">Another trail</p><Story hole={extra} /><Sources hole={extra} /><p><button type="button" className="go" onClick={closeBonus}>I'm back up</button></p></article>;
   if (reading) return <article className="reading"><ReadProgress /><ReadingRail /><MarginScene /><StartScene /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Plate tags={h.tags} />
     <Story hole={h} /><Related hole={h} />
-    <aside className="takeaway"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside>
+    <aside className="takeaway" data-clarity-mask="true"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside>
     {h.shortened && <p className="note">Short version: some details are left out. Pick "A good chew" in your answers to read the full story.</p>}
     <Sources hole={h} />
     <EndScene />
@@ -211,7 +237,7 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
   </article>;
   const greeting = me.user.name ? `Where should we wander today, ${me.user.name}?` : 'Where should we wander today?';
   return <div className="explore">
-    <p className="greet">{greeting}</p>
+    <p className="greet" data-clarity-mask="true">{greeting}</p>
     {done ? <section className="detour"><ForestScene kind="carrot" /><p className="kicker">{res?.alreadyCounted ? 'Already counted' : 'Today\'s detour, found'}</p><h1 className="story-title">Look what your curiosity uncovered.</h1>
       <p className="deck"><em>{h.title}</em> is in your trail. {res && !res.alreadyCounted ? `Streak: ${res.streak} day${res.streak === 1 ? '' : 's'}.` : `Streak: ${me.streak.current} day${me.streak.current === 1 ? '' : 's'}.`}</p>
       {res?.freezesUsed > 0 && <p className="note">A streak freeze covered {res.freezesUsed} missed day{res.freezesUsed > 1 ? 's' : ''}.</p>}
@@ -221,7 +247,7 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
       <p className="note">Re-reading does not change your streak or count again.</p>
       {again && <article className="reading inline"><Story hole={h} /><Related hole={h} /><Sources hole={h} /></article>}
     </section>
-      : <section className="detour"><Peek /><p className="kicker">Today's detour</p><h1 className="story-title">{h.title}</h1><p className="deck">{h.hook}</p>
+      : <section className="detour"><Peek /><p className="kicker">Today's detour</p><h1 className="story-title">{h.title}</h1><p className="deck" data-clarity-mask="true">{h.hook}</p>
         <p className="mono-note">{h.tags.join(' · ')} · about {h.minutes} min read</p>
         <p><button type="button" className="go" onClick={start}>Go down this rabbit hole</button></p>
         <Plate tags={h.tags} /><p className="note">{h.why}</p></section>}
@@ -243,7 +269,7 @@ function StoryView({ topicId, onBack }: { topicId: string; onBack: () => void })
   useEffect(() => { api(`/story/${topicId}`).then((r) => (r.ok ? setH(r.data.hole) : setErr(r.data.message || r.data.error))); }, [topicId]);
   return <article className="reading"><ReadingRail /><MarginScene /><StartScene /><p><button type="button" className="ghost" onClick={onBack}>Back</button></p>
     {err && <p className="err" role="alert">{err}</p>}{!h && !err && <p className="note" role="status">Finding it again…</p>}
-    {h && <><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Story hole={h} /><aside className="takeaway"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside><Sources hole={h} /><p className="row-actions"><SaveButton topicId={h.topicId} initial={h.saved} /></p><p className="note">Re-reading does not change your streak.</p></>}
+    {h && <><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Story hole={h} /><aside className="takeaway" data-clarity-mask="true"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside><Sources hole={h} /><p className="row-actions"><SaveButton topicId={h.topicId} initial={h.saved} /></p><p className="note">Re-reading does not change your streak.</p></>}
   </article>;
 }
 
@@ -263,9 +289,9 @@ function Story({ hole }: { hole: any }) {
   const paras: string[] = hole.story || [];
   const beats: { q: string; a: string }[] = hole.beats || [];
   return <>
-    <div className="story">{paras.map((p, i) => <p key={i}>{p}</p>)}</div>
-    {(hole.whyModes || []).includes('learn') && (hole.sources || []).length > 0 && <aside className="recap"><p className="kicker">Check it yourself</p><p>{(hole.sources as any[]).map((x, i) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a>{i < hole.sources.length - 1 ? ', ' : ''}</span>)}</p></aside>}
-    {hole.format !== 'narrative' && beats.length > 0 && <aside className="recap"><h2 className="serif">{hole.format === 'steps' ? 'The short version, step by step' : 'The short version, as questions'}</h2>
+    <div className="story" data-clarity-mask="true">{paras.map((p, i) => <p key={i}>{p}</p>)}</div>
+    {(hole.whyModes || []).includes('learn') && (hole.sources || []).length > 0 && <aside className="recap" data-clarity-mask="true"><p className="kicker">Check it yourself</p><p>{(hole.sources as any[]).map((x, i) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a>{i < hole.sources.length - 1 ? ', ' : ''}</span>)}</p></aside>}
+    {hole.format !== 'narrative' && beats.length > 0 && <aside className="recap" data-clarity-mask="true"><h2 className="serif">{hole.format === 'steps' ? 'The short version, step by step' : 'The short version, as questions'}</h2>
       {hole.format === 'qa' ? beats.map((b, i) => <div className="beat" key={i}><h3 className="serif">{b.q}</h3><p>{b.a}</p></div>)
         : <ol className="steps">{beats.map((b, i) => <li key={i}><strong>{b.q}</strong> {b.a}</li>)}</ol>}</aside>}
   </>;
@@ -370,13 +396,22 @@ function Trail({ me, onOpen }: { me: Me; onOpen: (id: string) => void }) {
   </section>;
 }
 
+function AnalyticsToggle() {
+  const [c, setC] = useState<ClarityConsent>(() => getConsent());
+  const flip = () => { const v = c === 'yes' ? 'no' : 'yes'; setConsent(v); setC(v); };
+  return <>
+    <p className="note">Optional Microsoft Clarity recording of how the main app is used: taps, scrolling and short session replays. It never runs on this page, sign-in or the quiz, and what you type and story text stay hidden. The data goes to Microsoft. Changes apply on the main app pages.</p>
+    <p><button type="button" className="ghost" onClick={flip}>{c === 'yes' ? 'Analytics are on. Turn off' : c === 'no' ? 'Analytics are off. Turn on' : 'Not chosen yet. Turn on'}</button></p>
+  </>;
+}
+
 function You({ me, cfg, onRedo, onOpen }: { me: Me; cfg: Cfg; onRedo: () => void; onOpen: (id: string) => void }) {
   const [saved, setSaved] = useState<any[] | null>(null); const [hist, setHist] = useState<any>(null); const [lib, setLib] = useState<any[] | null>(null);
   useEffect(() => { if (me.access.plan === 'creator') api('/creator/library').then((r) => r.ok && setLib(r.data.stories)); }, [me.access.plan]);
   useEffect(() => { api('/saved').then((r) => r.ok && setSaved(r.data.items)); api('/history').then((r) => r.ok && setHist(r.data)); }, []);
   const p = me.prefs; const fmtName = (id: string) => cfg.formats.find((f) => f.id === id)?.label ?? id;
   const mins = hist ? Math.round(hist.recorded.seconds / 60) : 0;
-  return <section className="you">
+  return <section className="you" data-clarity-mask="true">
     <p className="kicker">You</p><h1 className="story-title">{me.user.name ? `${me.user.name}'s corner.` : 'Your corner.'}</h1><p className="mono-note">{me.user.email}</p>
     <h2 className="serif">How you like your stories</h2>
     {p ? <dl className="prefs"><dt>Topics</dt><dd>{p.interestTags.join(', ')}</dd><dt>Shape</dt><dd>{p.formats.map(fmtName).join(', ')}</dd><dt>Length</dt><dd>{p.length === 'short' ? 'A quick nibble' : 'A good chew'}</dd>{p.quiz?.country && <><dt>Country</dt><dd>{(cfg.countries ?? []).find((c) => c.code === p.quiz.country)?.name ?? p.quiz.country}</dd></>}</dl> : <p className="note">No answers yet.</p>}
@@ -387,6 +422,8 @@ function You({ me, cfg, onRedo, onOpen }: { me: Me; cfg: Cfg; onRedo: () => void
     {saved === null ? <p className="note" role="status">Checking your shelf…</p> : saved.length === 0 ? <p className="note">Nothing saved yet. Use "Save for later" on a story you want to find again.</p>
       : <ul className="journal">{saved.map((x) => <li key={x.topicId}><button type="button" className="linklike" onClick={() => onOpen(x.topicId)}>{x.title}</button><span className="note"> {x.hook}</span></li>)}</ul>}
     {cfg.weather && <CitySetting />}
+    <h2 className="serif">Usage analytics</h2>
+    <AnalyticsToggle />
     <h2 className="serif">Learning history and privacy</h2>
     <p>What the app keeps about your reading: which story you were shown each day, how long you had it open, and whether you finished. It uses topic tags from stories you finish to choose what comes next, along with your answers above. Time spent is not treated as how much you learned.</p>
     {hist && <p className="mono-note">{hist.recorded.reads} opened · {hist.recorded.completed} finished · about {mins} min total</p>}
