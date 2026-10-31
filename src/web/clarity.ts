@@ -23,9 +23,29 @@ function clearClarityCookies() {
   for (const name of ['_clck', '_clsk']) document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
 }
 
-export function pageEligible(): boolean {
+// Eligibility is frozen at page-load time. Token URLs strip their query string
+// immediately (history.replaceState), so reading location.search later would
+// wrongly mark a reset/verify page load as eligible.
+const ELIGIBLE_AT_LOAD = (() => {
   const q = new URLSearchParams(window.location.search);
   return !(q.get('reset') || q.get('verify') || q.get('you') || q.get('redo'));
+})();
+export function pageEligible(): boolean {
+  return ELIGIBLE_AT_LOAD;
+}
+
+export function clarityLoaded(): boolean {
+  return injected;
+}
+
+// Opt-out in another tab stops this tab promptly: clear Clarity cookies here and
+// reload so the injected tag is gone. A reloaded page will not inject it again.
+export function watchCrossTabConsent() {
+  window.addEventListener('storage', (e) => {
+    if (e.key !== KEY || getConsent() === 'yes') return;
+    clearClarityCookies();
+    if (injected) window.location.reload();
+  });
 }
 
 let injected = false;

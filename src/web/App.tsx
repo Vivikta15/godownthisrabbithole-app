@@ -3,7 +3,7 @@ import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, Emb
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import { Mascot, useMascot } from './Mascot';
-import { getConsent, setConsent, maybeLoadClarity, type ClarityConsent } from './clarity';
+import { getConsent, setConsent, maybeLoadClarity, watchCrossTabConsent, type ClarityConsent } from './clarity';
 import type { MascotEvent } from '../shared/mascot';
 
 type Me = { user: { email: string; name: string | null; onboarded: boolean }; access: { plan: string; rabbitHoles: boolean; finderQuota: { period: string; limit: number } | null; trialEndsAt: string }; streak: { current: number; longest: number; freezesLeft: number; bonusHoles: number; readToday: boolean }; prefs: any };
@@ -31,8 +31,12 @@ export function App() {
   const [consent, setConsentState] = useState<ClarityConsent>(() => getConsent());
   // Clarity may load only on eligible page loads for signed-in, onboarded visitors.
   // Token screens, welcome/sign-in, the quiz and the account tab never qualify.
-  const clarityAllowed = !!me && me.user.onboarded && !redo && !rt && !vt && !youParam && !redoParam;
+  // The gate inputs are frozen at load: the reset/verify token is stripped from the
+  // URL right after mount, so re-reading location.search would open the gate again.
+  const [gate] = useState(() => ({ token: !!rt || !!vt, you: youParam, redo: redoParam }));
+  const clarityAllowed = !!me && me.user.onboarded && !redo && !gate.token && !gate.you && !gate.redo;
   useEffect(() => { if (clarityAllowed) maybeLoadClarity(); }, [clarityAllowed]);
+  useEffect(() => watchCrossTabConsent(), []);
   let body: React.ReactNode; let nav = false;
   if (rt || vt) body = <TokenScreen kind={rt ? 'reset' : 'verify'} token={(rt || vt) as string} />;
   else if (me === undefined || !cfg) body = <p className="note" role="status">Waking the rabbit…</p>;
@@ -46,8 +50,8 @@ export function App() {
 
 function ConsentBanner({ onChoice }: { onChoice: (v: 'yes' | 'no') => void }) {
   return <div className="consent" role="dialog" aria-label="Analytics choice">
-    <p className="kicker">Usage analytics, off by default</p>
-    <p className="note">With your OK, Microsoft Clarity records how the main app is used: taps, scrolling and short session replays. It never runs on sign-in, the quiz or your account pages. What you type is always hidden, and story text stays hidden in replays. The data goes to Microsoft (<a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noreferrer">Microsoft privacy statement</a>). You can change this any time on the You tab.</p>
+    <p className="kicker">Usage analytics</p>
+    <p className="note">Optional usage analytics are off by default. If you turn them on, Microsoft Clarity collects taps, scrolling and session replays to help improve the app. Sign-in, quiz and account pages are excluded. Inputs and story text are masked. You can turn it off in the You tab; this stops future collection on this device but doesn't delete earlier data. <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noreferrer">Microsoft privacy statement</a></p>
     <p className="row-actions"><button type="button" className="go" onClick={() => onChoice('yes')}>Turn on</button><button type="button" className="ghost" onClick={() => onChoice('no')}>No thanks</button></p>
   </div>;
 }
@@ -226,8 +230,8 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
   </section>;
   if (!d) return <p className="note" role="status">Digging up today's detour…</p>;
   const h = d.hole; const done = !!(res || d.readToday);
-  if (extra) return <article className="reading"><ReadingRail /><MarginScene /><StartScene /><p className="kicker">Another trail</p><Story hole={extra} /><Sources hole={extra} /><p><button type="button" className="go" onClick={closeBonus}>I'm back up</button></p></article>;
-  if (reading) return <article className="reading"><ReadProgress /><ReadingRail /><MarginScene /><StartScene /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Plate tags={h.tags} />
+  if (extra) return <article className="reading" data-clarity-mask="true"><ReadingRail /><MarginScene /><StartScene /><p className="kicker">Another trail</p><Story hole={extra} /><Sources hole={extra} /><p><button type="button" className="go" onClick={closeBonus}>I'm back up</button></p></article>;
+  if (reading) return <article className="reading" data-clarity-mask="true"><ReadProgress /><ReadingRail /><MarginScene /><StartScene /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Plate tags={h.tags} />
     <Story hole={h} /><Related hole={h} />
     <aside className="takeaway" data-clarity-mask="true"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside>
     {h.shortened && <p className="note">Short version: some details are left out. Pick "A good chew" in your answers to read the full story.</p>}
@@ -238,16 +242,16 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
   const greeting = me.user.name ? `Where should we wander today, ${me.user.name}?` : 'Where should we wander today?';
   return <div className="explore">
     <p className="greet" data-clarity-mask="true">{greeting}</p>
-    {done ? <section className="detour"><ForestScene kind="carrot" /><p className="kicker">{res?.alreadyCounted ? 'Already counted' : 'Today\'s detour, found'}</p><h1 className="story-title">Look what your curiosity uncovered.</h1>
+    {done ? <section className="detour" data-clarity-mask="true"><ForestScene kind="carrot" /><p className="kicker">{res?.alreadyCounted ? 'Already counted' : 'Today\'s detour, found'}</p><h1 className="story-title">Look what your curiosity uncovered.</h1>
       <p className="deck"><em>{h.title}</em> is in your trail. {res && !res.alreadyCounted ? `Streak: ${res.streak} day${res.streak === 1 ? '' : 's'}.` : `Streak: ${me.streak.current} day${me.streak.current === 1 ? '' : 's'}.`}</p>
       {res?.freezesUsed > 0 && <p className="note">A streak freeze covered {res.freezesUsed} missed day{res.freezesUsed > 1 ? 's' : ''}.</p>}
       {res?.reset && <p className="note">A fresh start today. No pressure. Curiosity isn't homework.</p>}
       {res?.bonusEarned && <p className="ok">Another trail turned up for you.</p>}
       <p className="row-actions"><button type="button" className="ghost" onClick={() => setAgain(!again)}>{again ? 'Hide the story' : 'Read it again'}</button><SaveButton topicId={h.topicId} initial={h.saved} /></p>
       <p className="note">Re-reading does not change your streak or count again.</p>
-      {again && <article className="reading inline"><Story hole={h} /><Related hole={h} /><Sources hole={h} /></article>}
+      {again && <article className="reading inline" data-clarity-mask="true"><Story hole={h} /><Related hole={h} /><Sources hole={h} /></article>}
     </section>
-      : <section className="detour"><Peek /><p className="kicker">Today's detour</p><h1 className="story-title">{h.title}</h1><p className="deck" data-clarity-mask="true">{h.hook}</p>
+      : <section className="detour" data-clarity-mask="true"><Peek /><p className="kicker">Today's detour</p><h1 className="story-title">{h.title}</h1><p className="deck" data-clarity-mask="true">{h.hook}</p>
         <p className="mono-note">{h.tags.join(' · ')} · about {h.minutes} min read</p>
         <p><button type="button" className="go" onClick={start}>Go down this rabbit hole</button></p>
         <Plate tags={h.tags} /><p className="note">{h.why}</p></section>}
@@ -267,7 +271,7 @@ function Sources({ hole }: { hole: any }) {
 function StoryView({ topicId, onBack }: { topicId: string; onBack: () => void }) {
   const [h, setH] = useState<any>(null); const [err, setErr] = useState('');
   useEffect(() => { api(`/story/${topicId}`).then((r) => (r.ok ? setH(r.data.hole) : setErr(r.data.message || r.data.error))); }, [topicId]);
-  return <article className="reading"><ReadingRail /><MarginScene /><StartScene /><p><button type="button" className="ghost" onClick={onBack}>Back</button></p>
+  return <article className="reading" data-clarity-mask="true"><ReadingRail /><MarginScene /><StartScene /><p><button type="button" className="ghost" onClick={onBack}>Back</button></p>
     {err && <p className="err" role="alert">{err}</p>}{!h && !err && <p className="note" role="status">Finding it again…</p>}
     {h && <><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Story hole={h} /><aside className="takeaway" data-clarity-mask="true"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside><Sources hole={h} /><p className="row-actions"><SaveButton topicId={h.topicId} initial={h.saved} /></p><p className="note">Re-reading does not change your streak.</p></>}
   </article>;
@@ -370,7 +374,7 @@ function Trail({ me, onOpen }: { me: Me; onOpen: (id: string) => void }) {
   const load = () => api('/leaderboard').then((r) => setBoard(r.data.board || []));
   useEffect(() => { load(); api('/history').then((r) => r.ok && setHist(r.data)); api('/calendar').then((r) => r.ok && setCal(r.data)); }, []);
   const marks = [3, 7, 30];
-  return <section>
+  return <section data-clarity-mask="true">
     <p className="kicker">Trail</p><h1 className="story-title">{me.streak.current ? `Day ${me.streak.current} on the trail.` : 'The trail starts with one detour.'}</h1>
     <Emblem n={me.streak.current} best={me.streak.longest} />
     <NextMark n={me.streak.current} marks={marks} />
