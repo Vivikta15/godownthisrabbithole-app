@@ -25,7 +25,11 @@ export function App() {
   useEffect(() => { if (!me || !cfg?.weather) return; loadWeather(); const t = window.setInterval(loadWeather, 30 * 60 * 1000); window.addEventListener('city-changed', loadWeather); return () => { window.clearInterval(t); window.removeEventListener('city-changed', loadWeather); }; }, [!!me, cfg?.weather]);
   useEffect(() => { refresh(); api('/config').then((r) => setCfg(r.data)); }, [refresh]);
 
-  const q = new URLSearchParams(window.location.search); const rt = q.get('reset'), vt = q.get('verify');
+  const q = new URLSearchParams(window.location.search);
+  // Frozen at mount: TokenScreen strips the token from the URL right after mount,
+  // and re-reading location.search on later renders would unmount the token screen.
+  const [rt] = useState(() => q.get('reset'));
+  const [vt] = useState(() => q.get('verify'));
   const youParam = q.get('you') === '1'; const redoParam = q.get('redo') === '1';
   const tabParam = ['explore', 'connections', 'trail'].includes(q.get('tab') ?? '') ? (q.get('tab') as Tab) : 'explore';
   const [consent, setConsentState] = useState<ClarityConsent>(() => getConsent());
