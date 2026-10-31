@@ -47,7 +47,7 @@ export function App() {
 function ConsentBanner({ onChoice }: { onChoice: (v: 'yes' | 'no') => void }) {
   return <div className="consent" role="dialog" aria-label="Analytics choice">
     <p className="kicker">Usage analytics, off by default</p>
-    <p className="note">With your OK, Microsoft Clarity records how the main app is used: taps, scrolling and short session replays. It never runs on sign-in, the quiz or your account pages. What you type is always hidden, and story text stays hidden in replays. The data goes to Microsoft. You can change this any time on the You tab.</p>
+    <p className="note">With your OK, Microsoft Clarity records how the main app is used: taps, scrolling and short session replays. It never runs on sign-in, the quiz or your account pages. What you type is always hidden, and story text stays hidden in replays. The data goes to Microsoft (<a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noreferrer">Microsoft privacy statement</a>). You can change this any time on the You tab.</p>
     <p className="row-actions"><button type="button" className="go" onClick={() => onChoice('yes')}>Turn on</button><button type="button" className="ghost" onClick={() => onChoice('no')}>No thanks</button></p>
   </div>;
 }
@@ -338,11 +338,11 @@ function Finder({ me, send }: { me: Me; send: Send }) {
         <label>Thing two<input type="text" placeholder="cheese" value={b} onChange={(e) => setB(e.target.value)} /></label></div>
       <p className="row-actions"><button type="button" className="ghost" onClick={random}>Surprise me with a pair</button><button className="go" disabled={busy || !a.trim() || !b.trim()}>{busy ? 'Following the thread…' : 'Find the connection'}</button></p>
     </form>
-    {msg && <p className="note bubble" role="status">{msg}</p>}
+    {msg && <p className="note bubble" role="status" data-clarity-mask="true">{msg}</p>}
     {found && (() => {
       const br = found.bridge; const kind = br.kind || 'shared'; const sw = br.from === 'b';
       const src = sw ? found.b : found.a, oth = sw ? found.a : found.b;
-      return <article className="bridge" role="status"><p className="kicker">{kind === 'direct' ? 'A direct mention' : kind === 'chain' ? 'A two-step route' : 'A sourced bridge'}</p>
+      return <article className="bridge" role="status" data-clarity-mask="true"><p className="kicker">{kind === 'direct' ? 'A direct mention' : kind === 'chain' ? 'A two-step route' : 'A sourced bridge'}</p>
       {kind === 'direct' ? <><BridgeViz a={src.title} b={oth.title} via="mentions" />
         <h2 className="serif"><em>{src.title}</em> mentions <em>{oth.title}</em> directly.</h2>
         <p className="note">This sentence is copied from the {src.title} page on Wikipedia.</p>
@@ -400,7 +400,7 @@ function AnalyticsToggle() {
   const [c, setC] = useState<ClarityConsent>(() => getConsent());
   const flip = () => { const v = c === 'yes' ? 'no' : 'yes'; setConsent(v); setC(v); };
   return <>
-    <p className="note">Optional Microsoft Clarity recording of how the main app is used: taps, scrolling and short session replays. It never runs on this page, sign-in or the quiz, and what you type and story text stay hidden. The data goes to Microsoft. Changes apply on the main app pages.</p>
+    <p className="note">Optional Microsoft Clarity recording of how the main app is used: taps, scrolling and short session replays. It never runs on this page, sign-in or the quiz, and what you type and story text stay hidden. The data goes to Microsoft (<a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noreferrer">Microsoft privacy statement</a>). Turning it off stops future recording on this device; it does not delete data already collected. Changes apply on the main app pages.</p>
     <p><button type="button" className="ghost" onClick={flip}>{c === 'yes' ? 'Analytics are on. Turn off' : c === 'no' ? 'Analytics are off. Turn on' : 'Not chosen yet. Turn on'}</button></p>
   </>;
 }
