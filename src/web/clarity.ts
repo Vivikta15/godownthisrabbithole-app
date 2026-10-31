@@ -15,7 +15,12 @@ export function getConsent(): ClarityConsent {
 
 export function setConsent(v: 'yes' | 'no') {
   window.localStorage.setItem(KEY, v);
-  if (v === 'no') clearClarityCookies();
+  if (v === 'no') {
+    // Documented withdrawal signal, then drop Clarity's first-party cookies.
+    const w = window as unknown as { clarity?: (...args: unknown[]) => void };
+    if (typeof w.clarity === 'function') w.clarity('consent', false);
+    clearClarityCookies();
+  }
 }
 
 // Clarity sets first-party cookies (_clck, _clsk). Remove them on opt-out.
@@ -42,16 +47,25 @@ export function clarityLoaded(): boolean {
 // reload so the injected tag is gone. A reloaded page will not inject it again.
 export function watchCrossTabConsent() {
   window.addEventListener('storage', (e) => {
-    if (e.key !== KEY || getConsent() === 'yes') return;
+    if (e.key !== KEY || getConsent() !== 'no') return;
     clearClarityCookies();
     if (injected) window.location.reload();
   });
 }
 
 let injected = false;
-export function maybeLoadClarity() {
-  if (injected || getConsent() !== 'yes' || !pageEligible()) return;
+// strict = consent-required region (or unknown region, or config unavailable):
+// collect only after the visitor turns analytics on. Otherwise analytics are on
+// unless the visitor turned them off.
+export function maybeLoadClarity(strict: boolean) {
+  if (injected || getConsent() === 'no' || !pageEligible()) return;
+  if (strict && getConsent() !== 'yes') return;
   injected = true;
+  // Queue before the tag loads. Advertising storage stays denied in every region;
+  // only analytics collection is ever enabled here.
+  const w = window as unknown as { clarity?: (...args: unknown[]) => void };
+  w.clarity = w.clarity || function (...args: unknown[]) { ((w.clarity as unknown as { q: unknown[] }).q = (w.clarity as unknown as { q: unknown[] }).q || []).push(args); };
+  w.clarity('consentv2', { ad_Storage: 'denied', analytics_Storage: 'granted' });
   const s = document.createElement('script');
   s.async = true;
   s.src = `https://www.clarity.ms/tag/${CLARITY_ID}`;

@@ -15,6 +15,7 @@ import { findBridge } from './bridge';
 import { judge } from './judge';
 import { shapeBeats } from '../shared/shape';
 import { fetchCondition } from './weather';
+import { consentRegionFor } from './consentregion';
 
 type Env = { GEN_ENABLED?: string; ANTHROPIC_API_KEY?: string; DB: D1Database; ASSETS: Fetcher; DODO_WEBHOOK_SECRET?: string; DODO_PRODUCT_MAP?: string; BONUS_CHANCE?: string; DODO_API_KEY?: string; MAIL_ENABLED?: string; REQUIRE_VERIFIED_EMAIL?: string; IP_SIGNUP_MAX?: string; DODO_ENV?: string; AI?: any; AI_ENABLED?: string; AI_PLAN_CONFIRMED?: string; FINDER_MODEL?: string; APP_URL?: string; CHECKOUT_ENABLED?: string; WEATHER_CONTACT?: string };
 type Vars = { uid: string };
@@ -67,7 +68,10 @@ async function startSession(c: any, uid: string) {
   setCookie(c, 'sid', sid, { httpOnly: true, secure: new URL(c.req.url).protocol === 'https:', sameSite: 'Lax', path: '/', maxAge: 30 * 86400 });
 }
 
-app.get('/api/config', (c) => c.json({ topics: TOPIC_TAGS, formats: FORMATS, whyRead: WHY_READ, countries: COUNTRIES, countriesWithStories: COUNTRIES_WITH_STORIES(), plans: PLANS, finderGenerator: false, weather: !!c.env.WEATHER_CONTACT, emailRecovery: !!getMailer(c.env), payments: c.env.CHECKOUT_ENABLED === 'true' && c.env.DODO_API_KEY && c.env.DODO_ENV !== 'live_mode' ? 'test_mode' : 'not_configured' }));
+app.get('/api/config', (c) => {
+  c.header('Cache-Control', 'no-store');
+  return c.json({ consentRegion: consentRegionFor(c.req.raw.cf as { isEUCountry?: boolean | string; country?: string } | undefined), topics: TOPIC_TAGS, formats: FORMATS, whyRead: WHY_READ, countries: COUNTRIES, countriesWithStories: COUNTRIES_WITH_STORIES(), plans: PLANS, finderGenerator: false, weather: !!c.env.WEATHER_CONTACT, emailRecovery: !!getMailer(c.env), payments: c.env.CHECKOUT_ENABLED === 'true' && c.env.DODO_API_KEY && c.env.DODO_ENV !== 'live_mode' ? 'test_mode' : 'not_configured' });
+});
 
 // Per-IP throttle (security, not a product rule). The IP is stored only as a truncated SHA-256 in login_attempts.
 async function ipKey(c: any, action: string) {

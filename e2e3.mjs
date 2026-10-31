@@ -1,0 +1,47 @@
+import { chromium } from 'playwright';
+const BASE='http://127.0.0.1:8787'; const hits=[];
+const isClarity=(u)=>/clarity\.ms|c\.bing\.com/.test(u);
+const since=(t)=>hits.filter(h=>h.when>=t).length;
+const check=(n,ok,ex='')=>console.log(`${ok?'PASS':'FAIL'} ${n}${ex?' ('+ex+')':''}`);
+const b=await chromium.launch();
+const ctx=await b.newContext();
+await ctx.route('**/*', async (route)=>{const u=route.request().url();
+  if(isClarity(u)){hits.push({url:u,when:Date.now()});return route.abort();}
+  if(u.endsWith('/api/config')){const resp=await route.fetch();const j=await resp.json();j.consentRegion='open';return route.fulfill({response:resp,json:j});}
+  return route.continue();});
+const op=await ctx.newPage();
+let t=Date.now();
+await op.goto(BASE+'/',{waitUntil:'networkidle'});
+await op.click("text=Let's wander");
+await op.fill('input[autocomplete="given-name"]','T P');
+await op.fill('input[type="email"]',`o3${Date.now()}@example.com`);
+await op.fill('input[type="password"]','testpass123');
+await op.click('text=Start my 3 free days');
+await op.waitForSelector("text=Let's get to know you",{timeout:15000});
+const cfg=await op.evaluate(async()=>await(await fetch('/api/config')).json());
+await op.evaluate(async({cfg})=>{await fetch('/api/quiz',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({interestTags:[cfg.topics[0]],formats:[cfg.formats[0].id],length:'medium',why:[],curious:''})});},{cfg});
+await op.goto(BASE+'/',{waitUntil:'networkidle'});
+await op.waitForTimeout(1500);
+check('O2 default-on attempted', since(t)>=1, `${since(t)}`);
+await op.goto(BASE+'/?you=1',{waitUntil:'networkidle'});
+const off=op.locator('button.ghost',{hasText:'Turn off'});
+await off.waitFor({timeout:15000});
+const cookiesBefore=(await ctx.cookies(BASE)).filter(c=>c.name.startsWith('_cl')).length;
+await off.click();
+check('O3a toggle flipped to off', (await op.evaluate(()=>localStorage.getItem('clarity-consent')))==='no');
+check('O3b clarity cookies cleared', (await ctx.cookies(BASE)).filter(c=>c.name.startsWith('_cl')).length===0, `before=${cookiesBefore}`);
+t=Date.now();
+await op.goto(BASE+'/',{waitUntil:'networkidle'});
+await op.waitForTimeout(2000);
+check('O3c after opt-out: zero clarity', since(t)===0, `${since(t)}`);
+// re-enable works (functional Turn on)
+await op.goto(BASE+'/?you=1',{waitUntil:'networkidle'});
+const on=op.locator('button.ghost',{hasText:'Turn on'});
+await on.waitFor({timeout:15000});
+await on.click();
+check('O4a turn-on persists yes',(await op.evaluate(()=>localStorage.getItem('clarity-consent')))==='yes');
+t=Date.now();
+await op.goto(BASE+'/',{waitUntil:'networkidle'});
+await op.waitForTimeout(1500);
+check('O4b after re-enable: tag attempted again', since(t)>=1, `${since(t)}`);
+await b.close(); console.log('E2E3_DONE');

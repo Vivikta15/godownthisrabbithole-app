@@ -7,7 +7,7 @@ import { getConsent, setConsent, maybeLoadClarity, watchCrossTabConsent, type Cl
 import type { MascotEvent } from '../shared/mascot';
 
 type Me = { user: { email: string; name: string | null; onboarded: boolean }; access: { plan: string; rabbitHoles: boolean; finderQuota: { period: string; limit: number } | null; trialEndsAt: string }; streak: { current: number; longest: number; freezesLeft: number; bonusHoles: number; readToday: boolean }; prefs: any };
-type Cfg = { weather?: boolean; topics: string[]; formats: { id: string; label: string }[]; plans: any; payments?: string; emailRecovery?: boolean; whyRead?: { id: string; label: string }[]; countries?: { code: string; name: string }[]; countriesWithStories?: string[] };
+type Cfg = { consentRegion?: 'strict' | 'open'; weather?: boolean; topics: string[]; formats: { id: string; label: string }[]; plans: any; payments?: string; emailRecovery?: boolean; whyRead?: { id: string; label: string }[]; countries?: { code: string; name: string }[]; countriesWithStories?: string[] };
 type Send = (e: MascotEvent) => void;
 // Move keyboard and screen-reader focus to the page heading when the view changes, so the next Tab starts at the top of the new content.
 function useFocusHeading(dep: unknown, skipFirst = true) {
@@ -35,7 +35,10 @@ export function App() {
   // URL right after mount, so re-reading location.search would open the gate again.
   const [gate] = useState(() => ({ token: !!rt || !!vt, you: youParam, redo: redoParam }));
   const clarityAllowed = !!me && me.user.onboarded && !redo && !gate.token && !gate.you && !gate.redo;
-  useEffect(() => { if (clarityAllowed) maybeLoadClarity(); }, [clarityAllowed]);
+  // Consent-first unless the worker positively identified a region where
+  // default-on applies. A missing or failed config never turns collection on.
+  const consentStrict = !cfg || cfg.consentRegion !== 'open';
+  useEffect(() => { if (clarityAllowed && cfg) maybeLoadClarity(consentStrict); }, [clarityAllowed, cfg, consentStrict]);
   useEffect(() => watchCrossTabConsent(), []);
   let body: React.ReactNode; let nav = false;
   if (rt || vt) body = <TokenScreen kind={rt ? 'reset' : 'verify'} token={(rt || vt) as string} />;
@@ -44,7 +47,7 @@ export function App() {
   else if (!me.user.onboarded || redo) body = <Quiz cfg={cfg} me={me} redo={redo} onDone={() => { if (redoParam) { window.location.assign('/'); return; } setRedo(false); refresh(); }} onCancel={redo ? () => window.location.assign('/') : undefined} send={send} />;
   else { nav = true; body = <Main me={me} cfg={cfg} refresh={refresh} send={send} onRedo={() => window.location.assign('/?redo=1')} initialTab={youParam ? 'you' : tabParam} />; }
   return <div className={nav ? 'shell has-nav' : 'shell'}><LakeBackdrop />{body}<div className="dock" aria-hidden="true" /><Mascot state={mascot} />
-    {clarityAllowed && consent === null && <ConsentBanner onChoice={(v) => { setConsent(v); setConsentState(v); if (v === 'yes') maybeLoadClarity(); }} />}
+    {clarityAllowed && consent === null && consentStrict && <ConsentBanner onChoice={(v) => { setConsent(v); setConsentState(v); if (v === 'yes') maybeLoadClarity(consentStrict); }} />}
   </div>;
 }
 
@@ -66,7 +69,7 @@ function Welcome({ onStart, onLogin, send }: { onStart: () => void; onLogin: () 
     <p><button type="button" className="go" onClick={onStart}>Let's wander</button></p>
     <p className="note"><a href="#" onClick={(e) => { e.preventDefault(); onLogin(); }}>I already have an account</a></p>
     <p className="fine">One rabbit hole a day. No endless feed. Free for 3 days.</p>
-    <p className="fine">Optional Microsoft Clarity analytics help improve the app. They run only with your OK, only after you sign in, and never on sign-in, quiz or account pages.</p>
+    <p className="fine">Microsoft Clarity analytics help improve the app. After you sign in they are on unless you turn them off in the You tab; they never run on sign-in, quiz or account pages, and inputs and story text are masked. Where consent is required, they start only with your OK.</p>
   </main>;
 }
 
@@ -101,7 +104,7 @@ function Auth({ onDone, send, recovery, initial, onBack }: { onDone: () => void;
     {note && <p role="status">{note}</p>}
     {err && <p className="err" role="alert">{err}</p>}
     <p className="note">Preview build: no email verification or password reset yet, so please don't reuse an important password.</p>
-    <p className="note">Analytics (Microsoft Clarity) are optional, off by default, and never run on this page. They only start after you sign in and say yes.</p>
+    <p className="note">Analytics (Microsoft Clarity) never run on this page. After you sign in they are on unless you turn them off in the You tab; where consent is required, they start only with your OK.</p>
     {!(mode === 'forgot' && !recovery) && <p><button type="submit" className="go">{mode === 'signup' ? 'Start my 3 free days' : mode === 'forgot' ? 'Send reset link' : 'Log in'}</button></p>}
     <p className="note"><a href="#" onClick={(e) => { e.preventDefault(); setMode(mode === 'signup' ? 'login' : 'signup'); }}>{mode === 'signup' ? 'I already have an account' : 'I need an account'}</a>{mode === 'login' && <> · <a href="#" onClick={(e) => { e.preventDefault(); setMode('forgot'); }}>Forgot password?</a></>}</p>
   </form></main>;
@@ -400,12 +403,15 @@ function Trail({ me, onOpen }: { me: Me; onOpen: (id: string) => void }) {
   </section>;
 }
 
-function AnalyticsToggle() {
+function AnalyticsToggle({ strict }: { strict: boolean }) {
   const [c, setC] = useState<ClarityConsent>(() => getConsent());
-  const flip = () => { const v = c === 'yes' ? 'no' : 'yes'; setConsent(v); setC(v); };
+  // Effective state, not just the stored choice: in default-on regions analytics
+  // are on until the visitor turns them off, even with no stored choice yet.
+  const on = c === 'yes' || (c === null && !strict);
+  const flip = () => { const v = on ? 'no' : 'yes'; setConsent(v); setC(v); };
   return <>
-    <p className="note">Optional Microsoft Clarity recording of how the main app is used: taps, scrolling and short session replays. It never runs on this page, sign-in or the quiz, and what you type and story text stay hidden. The data goes to Microsoft (<a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noreferrer">Microsoft privacy statement</a>). Turning it off stops future recording on this device; it does not delete data already collected. Changes apply on the main app pages.</p>
-    <p><button type="button" className="ghost" onClick={flip}>{c === 'yes' ? 'Analytics are on. Turn off' : c === 'no' ? 'Analytics are off. Turn on' : 'Not chosen yet. Turn on'}</button></p>
+    <p className="note">Microsoft Clarity records how the main app is used: taps, scrolling and short session replays. It never runs on this page, sign-in or the quiz, and inputs and story text are masked. The data goes to Microsoft (<a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noreferrer">Microsoft privacy statement</a>). Turning it off stops future recording on this device; it does not delete data already collected.</p>
+    <p><button type="button" className="ghost" onClick={flip}>{on ? 'Analytics are on. Turn off' : 'Analytics are off. Turn on'}</button></p>
   </>;
 }
 
@@ -427,7 +433,7 @@ function You({ me, cfg, onRedo, onOpen }: { me: Me; cfg: Cfg; onRedo: () => void
       : <ul className="journal">{saved.map((x) => <li key={x.topicId}><button type="button" className="linklike" onClick={() => onOpen(x.topicId)}>{x.title}</button><span className="note"> {x.hook}</span></li>)}</ul>}
     {cfg.weather && <CitySetting />}
     <h2 className="serif">Usage analytics</h2>
-    <AnalyticsToggle />
+    <AnalyticsToggle strict={!cfg || cfg.consentRegion !== 'open'} />
     <h2 className="serif">Learning history and privacy</h2>
     <p>What the app keeps about your reading: which story you were shown each day, how long you had it open, and whether you finished. It uses topic tags from stories you finish to choose what comes next, along with your answers above. Time spent is not treated as how much you learned.</p>
     {hist && <p className="mono-note">{hist.recorded.reads} opened · {hist.recorded.completed} finished · about {mins} min total</p>}
