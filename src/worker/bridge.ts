@@ -45,20 +45,86 @@ export async function loadPage(word: string, f: typeof fetch = fetch): Promise<P
   return { title, url: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(title.replace(/ /g, '_')), text, links };
 }
 export const sentences = (t: string) => t.replace(/=+\s*[^=\n]{1,80}?\s*=+/g, '\n').split(/\n+/).flatMap((para) => para.replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s+(?=[A-Z"“])/)).map((x) => x.trim()).filter((x) => x.length >= 40 && x.length <= 400);
-function sentenceWith(text: string, term: string): string | null {
-  const re = new RegExp('(^|[^\\p{L}])' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^\\p{L}]|$)', 'iu');
-  const hits = sentences(text).filter((s) => re.test(s)); return hits[0] ?? null;
+// Workers Free allows only 10 ms CPU per request; per-term unicode regexes over these texts cost ~1 ms each
+// and got the Worker killed (Cloudflare 1102) on link-heavy pages. Plain-ASCII terms are matched on folded text
+// with indexOf + boundary checks instead: ~30x cheaper and exactly equivalent. foldText is per-code-unit and
+// length-preserving: it lowercase-folds A-Z and the only two characters whose unicode case fold lands in ASCII
+// (U+017F long s -> s, U+212A kelvin -> k), so it canonicalizes exactly like the /iu regexes did for ASCII terms,
+// and letter-ness of every other character is unchanged. Non-ASCII terms keep the original regex path.
+const foldText = (t: string) => t.replace(/[A-Z\u017F\u212A]/g, (c) => (c === '\u017F' ? 's' : c === '\u212A' ? 'k' : c.toLowerCase()));
+const LETTER = /\p{L}/u;
+// Codepoint-aware: an astral letter (surrogate pair) at the boundary must read as a letter, matching the
+// old /iu regexes, which evaluate whole code points. Testing a lone surrogate half would wrongly allow adjacency.
+const isLetterAt = (t: string, i: number) => {
+  if (i < 0 || i >= t.length) return false;
+  const c = t.charCodeAt(i);
+  const start = c >= 0xdc00 && c <= 0xdfff && i > 0 && (t.charCodeAt(i - 1) & 0xfc00) === 0xd800 ? i - 1 : i;
+  return LETTER.test(String.fromCodePoint(t.codePointAt(start)!));
+};
+const ASCII_ONLY = /^[\x00-\x7F]*$/;
+const escRx = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const boundaryRx = (base: string, plural = false) => new RegExp('(^|[^\\p{L}])' + escRx(base) + (plural ? '(s|es)?' : '') + '([^\\p{L}]|$)', 'iu');
+// First sentence containing `base` as a standalone phrase; same result as the old per-sentence regex scan.
+function sentenceInFolded(orig: string[], folded: string[], base: string, plural = false): string | null {
+  if (!ASCII_ONLY.test(base)) {
+    const re = boundaryRx(base, plural);
+    const i = orig.findIndex((s) => re.test(s));
+    return i === -1 ? null : orig[i];
+  }
+  const f = foldText(base);
+  for (let s = 0; s < folded.length; s++) {
+    const t = folded[s];
+    let j = -1;
+    while ((j = t.indexOf(f, j + 1)) !== -1) {
+      if (isLetterAt(t, j - 1)) continue;
+      const r = j + f.length;
+      if (!plural) { if (!isLetterAt(t, r)) return orig[s]; continue; }
+      if (!isLetterAt(t, r)) return orig[s];
+      if (t[r] === 's' && !isLetterAt(t, r + 1)) return orig[s];
+      if (t[r] === 'e' && t[r + 1] === 's' && !isLetterAt(t, r + 2)) return orig[s];
+    }
+  }
+  return null;
+}
+// Occurrence count equivalent to the old /(^|[^\p{L}])base([^\p{L}]|$)/giu match().length for word terms:
+// a successful match consumes its trailing delimiter, so an occurrence beginning immediately after that
+// delimiter is not counted. Known low-stakes divergence, kept deliberately: for numeric-ish terms (e.g. "11"
+// in "a111") delimiter-consumption ordering can differ by one overlap; it only shifts salience ordering of
+// rare numeric candidates, and generic() already drops plain years/numbers.
+function countFolded(lt: string, f: string): number {
+  let n = 0, last = 0;
+  for (;;) {
+    const j = lt.indexOf(f, last);
+    if (j === -1) return n;
+    const leftOk = j === 0 ? last === 0 : j - 1 >= last && !isLetterAt(lt, j - 1);
+    const r = j + f.length;
+    const rightOk = r >= lt.length || !isLetterAt(lt, r);
+    if (leftOk && rightOk) { n++; last = r + (r < lt.length ? 1 : 0); } else { last = j + 1; }
+  }
 }
 export function candidates(a: Page, b: Page, max = 12): Bridge[] {
+  // Split and fold each page once: the old version re-split both texts and compiled fresh unicode regexes for
+  // every shared link, which cost over a second of CPU on link-heavy pages and got the Worker killed (1102).
+  const sentsA = sentences(a.text), sentsB = sentences(b.text);
+  const foldA = sentsA.map(foldText), foldB = sentsB.map(foldText);
+  const lowA = foldText(a.text), lowB = foldText(b.text);
+  // Whitespace-normalized folds: every kept sentence is a substring of these, so a missing term cannot
+  // appear in any sentence and the sentence scan below can be skipped for it (exact, not heuristic).
+  const normA = foldText(a.text.replace(/\s+/g, ' ')), normB = foldText(b.text.replace(/\s+/g, ' '));
   const out: Bridge[] = [];
   for (const t of a.links) {
     if (!b.links.has(t) || generic(t) || t === a.title || t === b.title) continue;
-    const base = t.replace(/ \(.*\)$/, ''); const sa = sentenceWith(a.text, base), sb = sentenceWith(b.text, base);
+    const base = t.replace(/ \(.*\)$/, '');
+    if (ASCII_ONLY.test(base) && (!normA.includes(foldText(base)) || !normB.includes(foldText(base)))) continue;
+    const sa = sentenceInFolded(sentsA, foldA, base);
+    if (!sa) continue;
+    const sb = sentenceInFolded(sentsB, foldB, base);
     if (sa && sb) out.push({ via: t, sentA: sa, sentB: sb });
   }
   // Salience: a topic both pages keep coming back to beats one mentioned in passing. Ties go to the more specific (longer) title.
-  const count = (t: string, term: string) => (t.match(new RegExp('(^|[^\\p{L}])' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^\\p{L}]|$)', 'giu')) ?? []).length;
-  const score = (x: Bridge) => { const base = x.via.replace(/ \(.*\)$/, ''); return Math.min(count(a.text, base), count(b.text, base)) * 100 + x.via.length; };
+  // Non-ASCII terms keep the original regex count: foldText only folds into ASCII, so their folded counts would diverge.
+  const count = (text: string, low: string, base: string) => ASCII_ONLY.test(base) ? countFolded(low, foldText(base)) : (text.match(new RegExp('(^|[^\\p{L}])' + escRx(base) + '([^\\p{L}]|$)', 'giu')) ?? []).length;
+  const score = (x: Bridge) => { const base = x.via.replace(/ \(.*\)$/, ''); return Math.min(count(a.text, lowA, base), count(b.text, lowB, base)) * 100 + x.via.length; };
   return out.sort((x, y) => score(y) - score(x)).slice(0, max);
 }
 
@@ -70,15 +136,17 @@ const baseOf = (t: string) => t.replace(/ \(.*\)$/, '');
 // A page that says the other page's subject in one of its own sentences ("the Moon page mentions cheese").
 export function directMention(from: Page, other: Page): string | null {
   const base = baseOf(other.title); if (base.length < 4 || generic(other.title)) return null;
-  const re = new RegExp('(^|[^\\p{L}])' + esc(base) + '(s|es)?([^\\p{L}]|$)', 'iu');
-  const hits = sentences(from.text).filter((x) => re.test(x) && x.length < 420);
-  return hits[0] ?? null;
+  const sents = sentences(from.text);
+  return sentenceInFolded(sents, sents.map(foldText), base, true);
 }
 // Two-step route: the source page names a topic C in one sentence, and C's own page names the target in another.
 async function chainVia(db: any, from: Page, other: Page, f: typeof fetch): Promise<Bridge | null> {
-  const count = (t: string, term: string) => (t.match(new RegExp('(^|[^\\p{L}])' + esc(term) + '([^\\p{L}]|$)', 'giu')) ?? []).length;
-  const cands = [...from.links].filter((t) => !generic(t) && !boring(t) && t !== from.title && t !== other.title && sentenceWith(from.text, baseOf(t)))
-    .map((t) => ({ t, n: count(from.text, baseOf(t)) })).sort((x, y) => y.n - x.n || y.t.length - x.t.length).slice(0, 18).map((x) => x.t);
+  const fromSents = sentences(from.text); // split and fold once, not per link: same CPU blow-up as candidates()
+  const fromFolded = fromSents.map(foldText);
+  const lowFrom = foldText(from.text);
+  const count = (term: string) => ASCII_ONLY.test(term) ? countFolded(lowFrom, foldText(term)) : (from.text.match(new RegExp('(^|[^\\p{L}])' + esc(term) + '([^\\p{L}]|$)', 'giu')) ?? []).length;
+  const cands = [...from.links].filter((t) => !generic(t) && !boring(t) && t !== from.title && t !== other.title && sentenceInFolded(fromSents, fromFolded, baseOf(t)))
+    .map((t) => ({ t, n: count(baseOf(t)) })).sort((x, y) => y.n - x.n || y.t.length - x.t.length).slice(0, 18).map((x) => x.t);
   if (!cands.length) return null;
   let j: any; try { j = await wget(f, api('action=query&prop=extracts&exintro=1&explaintext=1&exlimit=max&titles=' + encodeURIComponent(cands.join('|')))); } catch { return null; }
   const pages: any[] = Object.values(j?.query?.pages ?? {});
@@ -86,7 +154,7 @@ async function chainVia(db: any, from: Page, other: Page, f: typeof fetch): Prom
   for (const t of cands) {
     const pg = pages.find((p) => p.title === t); if (!pg?.extract) continue;
     const hit = sentences(String(pg.extract)).find((x) => re.test(x) && x.length < 420); if (!hit) continue;
-    return { via: t, sentA: sentenceWith(from.text, baseOf(t))!, sentB: hit, kind: 'chain', viaUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(t.replace(/ /g, '_')) };
+    return { via: t, sentA: sentenceInFolded(fromSents, fromFolded, baseOf(t))!, sentB: hit, kind: 'chain', viaUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(t.replace(/ /g, '_')) };
   }
   return null;
 }

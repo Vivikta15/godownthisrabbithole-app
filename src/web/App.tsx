@@ -335,7 +335,13 @@ function Finder({ me, send }: { me: Me; send: Send }) {
   const q = me.access.finderQuota;
   async function go(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setMsg(''); setFound(null); setCopied(false); send('tab_change_finder');
-    const r = await api('/finder', { a, b }); setBusy(false); if (r.data.ok) { setFound(r.data); send('finder_result'); } else { setMsg(r.data.message || r.data.error || ''); send('tab_change_other'); }
+    try {
+      const r = await api('/finder', { a, b });
+      // A killed or unreachable worker answers with no JSON message: never fail silently.
+      if (r.data.ok) { setFound(r.data); send('finder_result'); } else { setMsg(r.data.message || r.data.error || 'The rabbit got tangled up on that one. Wait a moment and try again.'); if (!r.data.ok) send('tab_change_other'); }
+    } catch {
+      setMsg('The connection dropped before the rabbit came back. Check your network and try again.');
+    } finally { setBusy(false); }
   }
   const random = () => { const p = PAIRS[Math.floor(Math.random() * PAIRS.length)]; setA(p[0]); setB(p[1]); };
   const line = !found ? '' : found.bridge.kind === 'direct' ? `${found.bridge.from === 'b' ? found.b.title : found.a.title} mentions ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}").` : found.bridge.kind === 'chain' ? `${found.a.title} and ${found.b.title} connect through ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}" / "${found.bridge.sentB}").` : `${found.a.title} and ${found.b.title} both point to ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}" / "${found.bridge.sentB}").`;
