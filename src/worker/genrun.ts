@@ -68,6 +68,8 @@ const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 const hostLabel = (u: string, title: string) => { const h = new URL(u).hostname.replace(/^www\./, ''); return h.endsWith('wikipedia.org') ? `Wikipedia: ${title} (text under CC BY-SA 4.0)` : h; };
 export const groupOf = (u: string) => { const h = new URL(u).hostname.replace(/^www\./, '').split('.'); return h.length >= 3 && ['co', 'ac', 'gov', 'org', 'com', 'edu', 'nic', 'net'].includes(h[h.length - 2]) ? h.slice(-3).join('.') : h.slice(-2).join('.'); };
 
+// Why a model call stopped the attempt. A prompt that is over the size limit is a property of the story, not a provider outage: it must not feed the "provider failing" breaker.
+export const stopReason = (stop: string): 'cap_reached' | 'rubric_failed' | 'provider_error' => (stop === 'over_cap' ? 'cap_reached' : stop === 'prompt_too_long' ? 'rubric_failed' : 'provider_error');
 // The hook and answers are whole sentences taken from the pipeline's own sentence list. Re-splitting the paragraph text on full stops cut them at "approx." or "St." and
 // dropped the rest of the sentence, including its qualifier or attribution.
 export function pickBeats(cand: Pick<Candidate, 'paragraphs'> & { sentences?: string[][] }): { hook: string; ans: string[] } {
@@ -166,9 +168,9 @@ async function tickLocked(env: GenEnv, fetchFn: typeof fetch, now: number): Prom
     if (docs && docs.length >= 2) {
       const res = await runCandidate(cur.topic!, docs, runners(ctx)); if (ctx.yielded) throw new Yield();
       if (!res.outcome.ok) await setC(db, 'src_diag', JSON.stringify({ topic: cur.topic, reason: res.outcome.reason, notes: ctx.diag.slice(0, 80) }), now);
-      if (ctx.stop) outcome = { ok: false, reason: ctx.stop === 'over_cap' ? 'cap_reached' : 'provider_error' };
+      if (ctx.stop) outcome = { ok: false, reason: stopReason(ctx.stop) };
       else if (!res.outcome.ok) outcome = res.outcome;
-      else { const a = await assemble(ctx, cur, res.candidate!); if (ctx.yielded) throw new Yield(); if (ctx.stop) outcome = { ok: false, reason: 'provider_error' }; else if (!a.ok) outcome = a; else { outcome = { ok: true }; seed = a.seed; } }
+      else { const a = await assemble(ctx, cur, res.candidate!); if (ctx.yielded) throw new Yield(); if (ctx.stop) outcome = { ok: false, reason: stopReason(ctx.stop) }; else if (!a.ok) outcome = a; else { outcome = { ok: true }; seed = a.seed; } }
     }
     if (ctx.stop && ['disabled', 'no_key', 'paused', 'rates_stale'].includes(ctx.stop)) { await park(); return 'parked:' + ctx.stop; }
     cur.micro += ctx.micro; cur.calls = (cur.calls ?? 0) + ctx.calls;
@@ -181,7 +183,7 @@ async function tickLocked(env: GenEnv, fetchFn: typeof fetch, now: number): Prom
   } catch (e) {
     if (e instanceof Yield || ctx.yielded) { if (cur.ticks >= MAX_TICKS_PER_ATTEMPT) { cur.micro += ctx.micro; cur.calls = (cur.calls ?? 0) + ctx.calls; await finishAttempt(db, cur, 'rejected', 'stuck', now); return 'stuck'; } await park(); return 'yielded'; }
     if (ctx.stop && ['disabled', 'no_key', 'paused', 'rates_stale'].includes(ctx.stop)) { await park(); return 'parked:' + ctx.stop; }
-    cur.micro += ctx.micro; cur.calls = (cur.calls ?? 0) + ctx.calls; await finishAttempt(db, cur, 'rejected', ctx.stop === 'over_cap' ? 'cap_reached' : 'provider_error', now); return 'error';
+    cur.micro += ctx.micro; cur.calls = (cur.calls ?? 0) + ctx.calls; await finishAttempt(db, cur, 'rejected', ctx.stop ? stopReason(ctx.stop) : 'provider_error', now); return 'error';
   }
 }
 

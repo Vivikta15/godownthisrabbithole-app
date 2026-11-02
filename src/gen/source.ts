@@ -15,13 +15,14 @@ export function usableRef(u: string): string | null {
   if (/\.(pdf|jpg|png|gif|zip|mp3|mp4)(\?|$)/i.test(x.pathname)) return null; return x.toString();
 }
 export function htmlToText(html: string): string {
-  return html.replace(/<(script|style|noscript|svg|nav|footer|header|form)[\s\S]*?<\/\1>/gi, ' ').replace(/<(script|style|noscript|svg)\b[\s\S]*$/i, ' ').replace(/<br\s*\/?>|<\/(p|div|li|h\d|tr)>/gi, '\n').replace(/<[^>]+>/g, ' ')
+  return html.replace(/<(script|style|noscript|svg|nav|footer|header|form)[\s\S]*?<\/\1>/gi, ' ').replace(/<(script|style|noscript|svg)\b(?![^>]*\/>)(?:(?!<\/\1\s*>)[\s\S])*$/i, ' ').replace(/<br\s*\/?>|<\/(p|div|li|h\d|tr)>/gi, '\n').replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#8217;/g, "'").replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
 }
 // Article body first: sites wrap the story in <article> or <main> and put menus, tickers and trending lists around it in plain divs. Take the longest such block when it holds enough text on its own;
 // otherwise fall back to the whole page, so a site without those tags behaves as before.
 export function bodyText(html: string): string {
-  const longest = (tag: string) => { let best = ''; for (const m of html.matchAll(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, 'gi'))) { const t = htmlToText(m[1]); if (t.length > best.length) best = t; } return best; };
+  // Outermost blocks only, matched by depth: an <article> can hold a related-story <article>, and ending at the first </article> would silently drop the rest of the story.
+  const longest = (tag: string) => { let best = '', depth = 0, start = 0; for (const m of html.matchAll(new RegExp(`<(/?)${tag}\\b[^>]*>`, 'gi'))) { if (m[1]) { if (depth > 0 && --depth === 0) { const t = htmlToText(html.slice(start, m.index)); if (t.length > best.length) best = t; } } else if (depth++ === 0) start = m.index! + m[0].length; } return best; };
   // <article> and <main> are gathered separately (a <main> that wraps an <article> must not hide it). A qualifying article wins, then a qualifying main, then the page.
   const art = longest('article'); if (art.length >= MIN_EXT_CHARS) return art; const main = longest('main'); return main.length >= MIN_EXT_CHARS ? main : htmlToText(html);
 }

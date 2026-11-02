@@ -89,7 +89,10 @@ export async function runCandidate(title: string, sources: (Source & { text: str
   void status;
   const quotesOf = (ids: string[]) => ids.map((i) => claims.find((c) => c.id === i)).filter(Boolean).map((c) => `[${c!.id}] ${c!.quote}`).join('\n');
   // The writer must see each fact's status and publisher, or it cannot follow the 'single must say according to <publisher>' rule. The judge still gets bare quotes.
-  const factsFor = (ids: string[]) => ids.map((i) => claims.find((c) => c.id === i)).filter(Boolean).map((c) => `[${c!.id}] (${byClaim.get(c!.id)}${byClaim.get(c!.id) === 'single' ? `; write "according to ${sources.find((x) => x.id === c!.sourceId)!.publisher}"` : ''}) ${c!.quote}`).join('\n');
+  // A disputed fact is only ever told with every side present: the writer is handed all claims under that key, and a sentence that cites one side alone is refused below.
+  const keyIds = new Map(groups.map((g) => [g.key, g.values.flatMap((v) => v.claimIds)] as const));
+  const withAllSides = (ids: string[]) => [...new Set(ids.flatMap((i) => { const c = claims.find((x) => x.id === i); return c && byClaim.get(i) === 'disputed' ? keyIds.get(c.key) ?? [i] : [i]; }))];
+  const factsFor = (ids0: string[]) => withAllSides(ids0).map((i) => claims.find((c) => c.id === i)).filter(Boolean).map((c) => `[${c!.id}] (${byClaim.get(c!.id)}${byClaim.get(c!.id) === 'single' ? `; write "according to ${sources.find((x) => x.id === c!.sourceId)!.publisher}"` : ''}) ${c!.quote}`).join('\n');
   const ledger = claims.map((c) => `${c.id}: ${c.key} = ${c.value}, ${byClaim.get(c.id)}`).join('\n');
   run.note?.(`LEDGER ${claims.map((c) => `${c.id}:${c.key}=${c.value}:${byClaim.get(c.id)}`).join(' ; ').slice(0, 480)}`);
   if (!run.reserve('outline')) return fail('cap_reached');
@@ -100,12 +103,11 @@ export async function runCandidate(title: string, sources: (Source & { text: str
     const purpose = line.replace(/^paragraph \d+:\s*/i, '').split('|')[0].trim(); const ids = (line.split('|')[1] ?? '').split(/[,\s]+/).filter(Boolean);
     if (!run.reserve('write')) return fail('cap_reached');
     const raw = await run.write(PROMPTS.write(purpose, factsFor(ids), told.join(' ').slice(-1500))).catch(() => null); if (raw === null) return fail('provider_error');
-    run.note?.(`WRITE ${raw.slice(0, 480)}`); const sents = parseWrite(raw); if (!sents.length) continue; const kept: string[] = [];
+    run.note?.(`WRITE ${raw.slice(0, 480)}`); const sents = parseWrite(raw); if (!sents.length) continue; const kept: string[] = []; const paraCited = new Set<string>();
     for (const s of sents) {
       const cited = s.ids.filter((i) => claims.some((c) => c.id === i)); const why = (w: string) => { const all: string[] = []; if (!cited.length) all.push('no_valid_citation'); if (cited.some((i) => byClaim.get(i) === 'single' && !attributed(s.t, publisherOf(i)))) all.push('single_not_attributed'); const qq = quotesOf(cited); const bad = nums(s.t).filter((x) => !nums(qq).includes(x)); if (bad.length) all.push('number_not_in_quotes:' + bad.join(',')); run.note?.(`REJECT first=${w} all=[${all.join(' | ')}] ids=${s.ids.join(',')} sentence=${s.t.slice(0, 220)} quotes=${qq.slice(0, 200)}`); return fail('unsupported_sentence'); }; if (!cited.length) return why('no_valid_citation');
       const sts = cited.map((i) => byClaim.get(i)!); const q = quotesOf(cited);
-      if (sts.includes('disputed') && !DISAGREE.test(s.t)) return fail('disputed_stated_as_fact');
-      if (cited.some((i) => byClaim.get(i) === 'single' && !attributed(s.t, publisherOf(i)))) return why('single_not_attributed'); // single-source facts must be attributed to the source they came from
+      if (sts.includes('disputed') && !DISAGREE.test(s.t)) return fail('disputed_stated_as_fact');      if (cited.some((i) => byClaim.get(i) === 'single' && !attributed(s.t, publisherOf(i)))) return why('single_not_attributed'); // single-source facts must be attributed to the source they came from
       if (nums(s.t).some((x) => !nums(q).includes(x))) return why('number_not_in_quotes ' + nums(s.t).filter((x) => !nums(q).includes(x)).join(','));
       const dropped = qualifierDropped(s.t, cited.map((i) => claimOf(i).quote).join('\n')); if (dropped) { run.note?.(`REJECT qualifier=${dropped} sentence=${s.t.slice(0, 200)}`); return fail('qualifier_dropped'); }
       const keys = cited.map((i) => claimOf(i).key);
@@ -115,8 +117,10 @@ export async function runCandidate(title: string, sources: (Source & { text: str
       if (!run.reserve('judge')) return fail('cap_reached');
       const vraw = (await run.judge(PROMPTS.judge(s.t, q)).catch(() => 'error')); run.note?.(`JUDGE_RAW ${JSON.stringify(vraw.slice(0, 40))}`); const v = vraw === 'error' ? 'error' : verdict(vraw); // only case, whitespace, quotes and terminal punctuation are tolerated; 'Supported, but ...' is not the verdict
       if (v === 'error') return fail('provider_error'); if (v !== 'supported') { run.note?.(`JUDGE ${v.slice(0, 20)}: ${s.t.slice(0, 200)} // ${q.slice(0, 300)}`); return fail(v.startsWith('partly') ? 'qualifier_dropped' : 'unsupported_sentence'); }
-      kept.push(s.t); cited.forEach((i) => usedClaims.add(i)); keys.forEach((k) => { usedKeys.add(k); if (!keyPara.has(k)) keyPara.set(k, pIdx); }); told.push(s.t);
+      kept.push(s.t); cited.forEach((i) => { usedClaims.add(i); paraCited.add(i); }); keys.forEach((k) => { usedKeys.add(k); if (!keyPara.has(k)) keyPara.set(k, pIdx); }); told.push(s.t);
     }
+    // Telling one side of a disagreement and stopping ("accounts differ, but it was 1873") is the dispute stated as fact: by the end of the paragraph every side must have been told.
+    for (const i of paraCited) if (byClaim.get(i) === 'disputed' && !(keyIds.get(claimOf(i).key) ?? []).every((x) => paraCited.has(x))) return fail('disputed_stated_as_fact');
     paragraphs.push(kept.join(' ')); allSents.push(kept);
   }
   if (paragraphs.length < 5) return fail('rubric_failed');
