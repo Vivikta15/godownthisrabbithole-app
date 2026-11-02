@@ -4,12 +4,12 @@ import { runCandidate, parseExtract, parseWrite, quoteInSource, type Runners } f
 const S = [
   { id: 'a', url: 'https://example.test/a', publisher: 'A', license: 'cc-by-sa' as const, groupId: 'a', text: 'The system began in 1890. Boxes per day: between 175,000 and 200,000.' },
   { id: 'b', url: 'https://example.test/b', publisher: 'B', license: 'unknown' as const, groupId: 'b', text: 'It was 1890 when the system started. A crew of 50 started it. Collectors use bicycles.' },
-  { id: 'c', url: 'https://example.test/c', publisher: 'C', license: 'unknown' as const, groupId: 'c', text: 'The founder began with about 100 men.' },
+  { id: 'c', url: 'https://example.test/c', publisher: 'C', license: 'unknown' as const, groupId: 'c', text: 'The founder began with about 100 men. Lunch is carried in tin boxes.' },
 ];
 const ext: Record<string, string> = {
   a: 'start_year | 1890 | The system began in 1890\nboxes | 175000-200000 | between 175,000 and 200,000\nfake | 1 | this quote is not in the text',
   b: 'start_year | 1890 | It was 1890 when the system started\ncrew | 50 | A crew of 50 started it\nbikes | bicycles | Collectors use bicycles',
-  c: 'crew | 100 | The founder began with about 100 men',
+  c: 'crew | 100 | The founder began with about 100 men\nlunch | tin boxes | Lunch is carried in tin boxes',
 };
 const plan = [1, 2, 3, 4, 5].map((n) => `paragraph ${n}: purpose ${n} | c1 c2`).join('\n');
 function runners(over: Partial<Runners> = {}, writes: string[] = []): Runners {
@@ -21,7 +21,7 @@ describe('parsers', () => {
   it('write lines need a citation separator', () => expect(parseWrite('A sentence. || c1, c2\nno cite here')).toEqual([{ t: 'A sentence.', ids: ['c1', 'c2'] }]));
   it('quote must exist in source, ignoring case and punctuation', () => { expect(quoteInSource('began in 1890!', 'It began in 1890.')).toBe(true); expect(quoteInSource('began in 1891', 'It began in 1890.')).toBe(false); });
 });
-const GOOD = ['Most accounts say it began in 1890. || c1', 'According to A, between 175,000 and 200,000 boxes move a day. || c2', 'Another source also says it started in 1890. || c3', 'According to B, collectors use bicycles. || c5', 'Accounts differ on the first crew: 50 in one source, about 100 in another. || c4 c6'];
+const GOOD = ['Most accounts say it began in 1890. || c1', 'According to A, between 175,000 and 200,000 boxes move a day. || c2', 'According to C, lunch is carried in tin boxes. || c7', 'According to B, collectors use bicycles. || c5', 'Accounts differ on the first crew: 50 in one source, about 100 in another. || c4 c6'];
 describe('orchestration refusals', () => {
   it('needs two independent sources', async () => { expect((await runCandidate('T', [S[0]], runners())).outcome).toEqual({ ok: false, reason: 'too_few_sources' }); });
   it('fabricated quotes never enter the ledger', async () => { expect((await runCandidate('T', S, runners({}, ['Fake fact. || c99']))).outcome.ok).toBe(false); });
@@ -76,10 +76,10 @@ describe('judge verdict strictness', () => {
 describe('writer sees status and publisher', () => {
   it('a single-source fact reaches the writer marked single with the publisher to attribute', async () => {
     const S = (id: string, g: string, text: string) => ({ id, url: `https://${g}.test`, publisher: g === 'a' ? 'Wikipedia' : 'Other', license: 'unknown' as const, groupId: g, text });
-    const A = S('a', 'a', 'The word monsoon comes from Arabic mawsim. The season ends in September.'), B = S('b', 'b', 'The season ends in September.');
+    const A = S('a', 'a', 'The word monsoon comes from Arabic mawsim. The season ends in September.'), B = S('b', 'b', 'The season ends in September.'), C = S('c', 'c', 'Here the season ends in September.');
     const prompts: string[] = []; const notes: string[] = [];
     const run = { extract: async (_t: string, t: string) => (t === A.text ? 'origin | Arabic | comes from Arabic mawsim\nend | September | ends in September' : 'end | September | ends in September'), outline: async () => 'paragraph 1: open | c1 c2', write: async (p: string) => { prompts.push(p); return 'According to Wikipedia, the word monsoon comes from Arabic. || c1'; }, judge: async () => 'SUPPORTED', review: async () => 'none', reserve: () => true, note: (m: string) => notes.push(m) };
-    await runCandidate('T', [A, B], run);
+    await runCandidate('T', [A, B, C], run);
     expect(prompts[0]).toContain('(single; write "according to Wikipedia")'); expect(prompts[0]).toContain('(central)'.slice(0, 1) === '(' ? '[c1] (single' : '');
     expect(notes.some((n) => n.startsWith('REJECT'))).toBe(false);
   });

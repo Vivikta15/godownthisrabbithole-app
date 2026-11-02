@@ -9,19 +9,56 @@ export type Claim = { id: string; sourceId: string; key: string; value: string; 
 export type ClaimStatus = 'central' | 'single' | 'disputed';
 export type ClaimGroup = { key: string; status: ClaimStatus; values: { value: string; groups: string[]; claimIds: string[] }[] };
 
-const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+const norm0 = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+// Conservative typed canonical form, so one fact written two ways meets itself. Only a value that is EXACTLY one of these shapes is rewritten; anything with a qualifier, range or extra
+// words stays as written. Never fuzzy on meaning. A decimal offset ("5.30") is NOT hours.minutes: it only equals another decimal offset ("+5.30"), never "05:30".
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+const mon = (w: string) => { const i = MONTHS.findIndex((m) => m === w || (w.length === 3 && m.startsWith(w)) || (w === 'sept' && m === 'september')); return i < 0 ? 0 : i + 1; };
+const iso = (y: string, m: number, d: string) => { const dd = Number(d); return m && dd >= 1 && dd <= new Date(Date.UTC(Number(y), m, 0)).getUTCDate() ? `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}` : null; };
+export function canonValue(v: string): string {
+  const n = norm0(v); let m: RegExpMatchArray | null;
+  if ((m = n.match(/^(utc\s*)?([+-])\s*(\d{1,2})(?::(\d{2})|\.(\d+))?$/)) && (m[1] || m[4] || m[5]) && Number(m[3]) <= 14 && (!m[4] || Number(m[4]) < 60)) return m[4] ? `utc${m[2]}${m[3].padStart(2, '0')}:${m[4]}` : m[5] ? `utc${m[2]}${Number(m[3])}.${m[5]}` : `utc${m[2]}${Number(m[3])}`; // a bare signed integer ("-12") stays literal: only an explicit UTC or a colon/dot offset is read as an offset
+  if ((m = n.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]{3,9})\.?,?\s+(\d{4})$/))) return iso(m[3], mon(m[2]), m[1]) ?? n;
+  if ((m = n.match(/^([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/))) return iso(m[3], mon(m[1]), m[2]) ?? n;
+  const dir = (d: string) => d[0];
+  if ((m = n.match(/^(\d{1,3})\s*°\s*(\d{1,2})\s*['′]\s*(?:(\d{1,2})\s*["″]\s*)?(n|s|e|w)$/))) { const v = Number(m[1]) + Number(m[2]) / 60 + Number(m[3] ?? 0) / 3600; return Number(m[2]) < 60 && Number(m[3] ?? 0) < 60 && v <= (/[ns]/.test(m[4]) ? 90 : 180) ? `${Number(v.toFixed(6))}${m[4]}` : n; }
+  if ((m = n.match(/^(\d{1,3}(?:\.\d+)?)\s*(?:°|degrees?|deg)\s*(n|s|e|w|north|south|east|west)$/))) return Number(m[1]) <= (/^[ns]/.test(m[2]) ? 90 : 180) ? `${Number(m[1])}${dir(m[2])}` : n;
+  return n;
+}
+const norm = canonValue;
+export const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+export const nums = (s: string) => (s.match(/\d[\d,.]*/g) ?? []).map((x) => x.replace(/[,.]+$/, '').replace(/,/g, ''));
+// Wikipedia is built from its own references, so it can never be the second, independent voice behind a claim. It still counts when looking for DISAGREEMENT.
+export const isWikipedia = (s: Source) => { try { if (/(^|\.)wikipedia\.org$/i.test(new URL(s.url).hostname)) return true; } catch { /* not a url */ } return s.groupId === 'wikipedia' || /^wikipedia$/i.test(s.publisher); };
+const STOP = new Set(['that', 'this', 'with', 'from', 'were', 'was', 'have', 'been', 'which', 'their', 'there', 'also', 'than', 'into', 'about', 'after', 'before', 'according', 'while', 'when', 'where', 'would', 'could', 'other', 'some', 'many', 'most']);
+export const contentWords = (s: string) => new Set(squash(s).split(' ').filter((w) => w.length >= 4 && !/\d/.test(w) && !STOP.has(w)));
+// Keys are chosen by the model, so two sources can describe the same question under different keys and never meet. Backstop: claims from different groups that share several
+// content words but give disjoint numbers are treated as a possible disagreement. This errs toward "disputed" (more careful wording, or no story), never toward agreement.
+// A coordinate written 82°30' is the same number as 82.5, so both forms count when two quotes are compared for disjoint numbers.
+const dmsDecimals = (q: string) => [...q.matchAll(/(\d{1,3})\s*°\s*(\d{1,2})\s*['′]/g)].filter((m) => Number(m[2]) < 60).map((m) => String(Number((Number(m[1]) + Number(m[2]) / 60).toFixed(6))));
+// The topic's own words (e.g. "Indian Standard Time") are in almost every quote about it, so they are not evidence that two quotes answer the same question: they are ignored here.
+function crossKeyConflicts(claims: Claim[], grp: Map<string, string>, topic = ''): Set<string> {
+  const tw = contentWords(topic); const out = new Set<string>(); const cw = claims.map((c) => new Set([...contentWords(c.quote)].filter((w) => !tw.has(w)))); const nn = claims.map((c) => new Set([...nums(c.quote), ...dmsDecimals(c.quote)]));
+  for (let i = 0; i < claims.length; i++) for (let j = i + 1; j < claims.length; j++) {
+    const a = claims[i], b = claims[j]; if (!grp.has(a.sourceId) || !grp.has(b.sourceId) || grp.get(a.sourceId) === grp.get(b.sourceId) || a.key === b.key) continue;
+    if (!nn[i].size || !nn[j].size || [...nn[i]].some((n) => nn[j].has(n))) continue;
+    if ([...cw[i]].filter((w) => cw[j].has(w)).length >= 3) { out.add(a.key); out.add(b.key); }
+  }
+  return out;
+}
 
-// central: two or more independent source groups give the same value and none give another. disputed: independent groups give different values. single: one group only.
-export function classifyClaims(sources: Source[], claims: Claim[]): ClaimGroup[] {
-  const grp = new Map(sources.map((s) => [s.id, s.groupId] as const));
+// central: two or more INDEPENDENT (non-Wikipedia) source groups give the same value and none give another. disputed: any groups give different values. single: anything else.
+export function classifyClaims(sources: Source[], claims: Claim[], topic = ''): ClaimGroup[] {
+  const grp = new Map(sources.map((s) => [s.id, s.groupId] as const)); const wikiGroups = new Set(sources.filter(isWikipedia).map((s) => s.groupId));
   const byKey = new Map<string, Claim[]>();
   for (const c of claims) { if (!grp.has(c.sourceId)) continue; byKey.set(c.key, [...(byKey.get(c.key) ?? []), c]); }
+  const conflicts = crossKeyConflicts(claims, grp, topic);
   return [...byKey.entries()].map(([key, cs]) => {
     const byVal = new Map<string, { groups: Set<string>; ids: string[] }>();
     for (const c of cs) { const v = norm(c.value); const e = byVal.get(v) ?? { groups: new Set<string>(), ids: [] }; e.groups.add(grp.get(c.sourceId)!); e.ids.push(c.id); byVal.set(v, e); }
     const values = [...byVal.entries()].map(([value, e]) => ({ value, groups: [...e.groups].sort(), claimIds: e.ids }));
-    const allGroups = new Set(values.flatMap((v) => v.groups));
-    const status: ClaimStatus = values.length > 1 ? 'disputed' : allGroups.size >= 2 ? 'central' : 'single';
+    const independent = new Set(values.flatMap((v) => v.groups).filter((g) => !wikiGroups.has(g)));
+    const status: ClaimStatus = values.length > 1 || conflicts.has(key) ? 'disputed' : independent.size >= 2 ? 'central' : 'single';
     return { key, status, values };
   });
 }

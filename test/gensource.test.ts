@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { usableRef, registrable, htmlToText, mentionsTopic, acquireSources } from '../src/gen/source';
+import { usableRef, registrable, htmlToText, mentionsTopic, acquireSources, copyOf, fetchExternal } from '../src/gen/source';
 import { TOPICS, topicAllowed } from '../src/gen/topics';
 import { TOPIC_TAGS } from '../src/content/seed';
 describe('reference filtering', () => {
@@ -20,4 +20,28 @@ describe('acquireSources with a fake network', () => {
   it('returns null when the article is missing', async () => { expect(await acquireSources('Nope', (async () => ({ ok: false })) as any)).toBeNull(); });
   it('caps external fetch attempts', async () => { let n = 0; const g = (async (u: string, i: any) => { if (!u.includes('en.wikipedia.org')) n++; return f(u, i); }) as any; await acquireSources('Chai', g, 1); expect(n).toBe(1); });
 });
+describe('copies are not independent sources', () => {
+  const T = Array.from({ length: 60 }, (_, i) => `Chai fact number ${i} is about tea and spice ${i * 3} in many homes.`).join(' ');
+  const U = Array.from({ length: 60 }, (_, i) => `A separate history note ${i} on chai trade routes and merchants ${i * 5} abroad.`).join(' ');
+  it('copyOf', () => { expect(copyOf(T, T)).toBe(true); expect(copyOf(T, U)).toBe(false); expect(copyOf(T, 'short')).toBe(false); });
+  it('a page on another host that repeats Wikipedia is skipped, and a different page is kept', async () => {
+    const f = (async (url: string) => {
+      if (url.includes('prop=extracts')) return { ok: true, json: async () => ({ query: { pages: [{ title: 'Chai', extract: T, revisions: [{ revid: 7 }] }] } }) };
+      if (url.includes('prop=extlinks')) return { ok: true, json: async () => ({ query: { pages: [{ extlinks: [{ url: 'https://mirror.example.com/chai' }, { url: 'https://other.example.org/chai' }] }] } }) };
+      return { ok: true, url, headers: { get: () => 'text/html' }, text: async () => `<html><body><p>${url.includes('mirror') ? T : U}</p></body></html>` };
+    }) as any;
+    expect((await acquireSources('Chai', f))!.map((x) => x.groupId)).toEqual(['wikipedia', 'example.org']);
+  });
+  it('known Wikipedia mirrors are not usable references', () => { for (const h of ['www.wikiwand.com', 'dbpedia.org', 'alchetron.com', 'infogalactic.com']) expect(usableRef(`https://${h}/x`), h).toBeNull(); });
+});
 describe('topic pool', () => { it('tags are valid and titles allowed', () => { for (const t of TOPICS) { expect(t.tags.every((g) => TOPIC_TAGS.includes(g)), t.title).toBe(true); expect(topicAllowed(t), t.title).toBe(true); } expect(new Set(TOPICS.map((t) => t.title)).size).toBe(TOPICS.length); }); });
+
+describe('external page cleaning (large pages)', () => {
+  it('drops an unterminated style/script block and reads article text that sits after a very large head', async () => {
+    const css = '.a{animation-name:x}'.repeat(25_000); const article = '<p>' + 'India Standard Time is observed across the whole country at an offset of five and a half hours from UTC. '.repeat(30) + '</p>';
+    const html = `<html><head><style>${css}</style></head><body><nav>menu</nav>${article}</body></html>`; expect(html.length).toBeGreaterThan(400_000);
+    const f = (async () => ({ ok: true, url: 'https://news.example.com/ist', headers: { get: () => 'text/html' }, text: async () => html })) as any;
+    const d = await fetchExternal('https://news.example.com/ist', 'Indian Standard Time', 'x1', f); expect(d).not.toBeNull(); expect(d!.text).toMatch(/five and a half hours/); expect(d!.text).not.toMatch(/animation-name/);
+    expect(htmlToText('<p>Real sentence here.</p><style>.x{color:red}')).toBe('Real sentence here.'); expect(htmlToText('<p>Hi there.</p><script>var a=1;')).toBe('Hi there.');
+  });
+});

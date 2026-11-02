@@ -1,6 +1,6 @@
 // Autonomous generator runtime: resumable ticks (Workers Free allows 50 subrequests per invocation), D1 replay cache, fail-closed.
 // Nothing here runs unless GEN_ENABLED === 'true' and a key secret exists. Every model call goes through callModel (hard cap ledger).
-import { PROMPTS, runCandidate, LABEL, type Runners, type Candidate } from '../gen/pipeline';
+import { PROMPTS, runCandidate, verdict, LABEL, type Runners, type Candidate } from '../gen/pipeline';
 import { acquireSources } from '../gen/source';
 import { TOPICS, topicAllowed } from '../gen/topics';
 import { decide, canaryOk, type Health } from '../gen/controller';
@@ -13,7 +13,7 @@ export const WRITER = 'claude-haiku-5-5', JUDGE = 'claude-sonnet-5';
 export const MAX_EXTERNAL_PER_TICK = 8, MAX_TICKS_PER_ATTEMPT = 40, MAX_ATTEMPTS_PER_DAY = 4, TARGET_POOL = 30, LOW_WATER = 5, MIN_GAP_MS = 20 * 60_000, LEASE_MS = 4 * 60_000;
 class Yield extends Error {}
 type Cur = { id: string; kind: 'attempt' | 'canary'; topic?: string; tags?: string[]; countries?: string[]; ticks: number; micro: number; calls?: number; started: number };
-type Ctx = { env: GenEnv; fetchFn: typeof fetch; cache: Map<string, string>; used: number; max: number; yielded: boolean; stop: string | null; micro: number; calls: number; diag: string[]; attemptId: string; kind: string };
+export type Ctx = { env: GenEnv; fetchFn: typeof fetch; cache: Map<string, string>; used: number; max: number; yielded: boolean; stop: string | null; micro: number; calls: number; diag: string[]; attemptId: string; kind: string };
 
 const fnv = (s: string) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(16); };
 async function getC(db: D1Database, k: string): Promise<string | null> { const r = await db.prepare('SELECT v FROM gen_control WHERE k=?').bind(k).first<{ v: string }>(); return r ? r.v : null; }
@@ -35,10 +35,18 @@ function model(ctx: Ctx, stage: string, m: string, system: string, prompt: strin
   });
 }
 // A fetch that replays from the cache. Responses are stored whole so a resumed tick sees exactly what the first tick saw.
-function cachedFetch(ctx: Ctx): typeof fetch {
+// D1 allows at most 2,000,000 bytes in one string/row (developers.cloudflare.com/d1/platform/limits). The cached JSON is measured in BYTES after escaping, not in characters, and is shrunk until it fits with margin.
+// 1,000,000 characters is enough to reach an article body that sits behind a very large page head; the byte check is what actually bounds the row.
+export const MAX_FETCH_CHARS = 1_000_000, MAX_ROW_BYTES = 1_800_000;
+export function packFetched(ok: boolean, url: string, ct: string, text: string): { json: string; bytes: number; bodyChars: number } {
+  let body = text.slice(0, MAX_FETCH_CHARS); const enc = new TextEncoder(); let json = JSON.stringify({ ok, url, ct, body }); let bytes = enc.encode(json).length;
+  for (let i = 0; bytes > MAX_ROW_BYTES && i < 20; i++) { body = body.slice(0, Math.max(0, Math.floor(body.length * (MAX_ROW_BYTES / bytes) * 0.95))); json = JSON.stringify({ ok, url, ct, body }); bytes = enc.encode(json).length; }
+  return { json, bytes, bodyChars: body.length };
+}
+export function cachedFetch(ctx: Ctx): typeof fetch {
   return (async (input: any, init?: any) => {
     const url = String(input); const raw = await cached(ctx, 'f:' + url, async () => {
-      try { const fx = ctx.fetchFn; const r = await fx(url, init); const ct = r.headers.get('content-type') || ''; const body = (await r.text()).slice(0, 600_000); ctx.diag.push(`${r.status} ${url.slice(8, 60)} ${body.length}`); return JSON.stringify({ ok: r.ok, url: r.url || url, ct, body }); }
+      try { const fx = ctx.fetchFn; const r = await fx(url, init); const ct = r.headers.get('content-type') || ''; const packed = packFetched(r.ok, r.url || url, ct, await r.text()); ctx.diag.push(`${r.status} ${url.slice(8, 60)} ${packed.bodyChars}/${packed.bytes}b`); return packed.json; }
       catch (e) { ctx.diag.push(`ERR ${url.slice(8, 60)} ${String(e).slice(0, 60)}`); return JSON.stringify({ ok: false, url, ct: '', body: '' }); }
     });
     const o = JSON.parse(raw);
@@ -60,14 +68,22 @@ const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 const hostLabel = (u: string, title: string) => { const h = new URL(u).hostname.replace(/^www\./, ''); return h.endsWith('wikipedia.org') ? `Wikipedia: ${title} (text under CC BY-SA 4.0)` : h; };
 export const groupOf = (u: string) => { const h = new URL(u).hostname.replace(/^www\./, '').split('.'); return h.length >= 3 && ['co', 'ac', 'gov', 'org', 'com', 'edu', 'nic', 'net'].includes(h[h.length - 2]) ? h.slice(-3).join('.') : h.slice(-2).join('.'); };
 
+// The hook and answers are whole sentences taken from the pipeline's own sentence list. Re-splitting the paragraph text on full stops cut them at "approx." or "St." and
+// dropped the rest of the sentence, including its qualifier or attribution.
+export function pickBeats(cand: Pick<Candidate, 'paragraphs'> & { sentences?: string[][] }): { hook: string; ans: string[] } {
+  const S = cand.sentences ?? cand.paragraphs.map(sentences); return { hook: S[0][0], ans: [1, 2, 3].map((i) => S[Math.min(i, S.length - 1)][0]) };
+}
+// A question may only reuse words from its own answer: no new names (capitalised words) and no digits.
+export const questionOk = (q: string, a: string) => q.endsWith('?') && q.length <= 110 && !/\d/.test(q) && (q.match(/\b[A-Z][a-z]+/g) ?? []).slice(q.match(/^[A-Z][a-z]+/) ? 1 : 0).every((w) => a.toLowerCase().includes(w.toLowerCase()));
+const isWiki = (u: string) => /(^|\.)wikipedia\.org$/i.test(new URL(u).hostname);
 // Turns an accepted candidate into the app's story shape. The hook and every answer are sentences that already passed the judge; the model only writes the questions.
 export async function assemble(ctx: Ctx, cur: Cur, cand: Candidate): Promise<{ ok: true; seed: Seed } | { ok: false; reason: 'rubric_failed' | 'too_few_sources' }> {
-  if (new Set(cand.sourceUrls.map(groupOf)).size < 2) return { ok: false, reason: 'too_few_sources' };
+  if (new Set(cand.sourceUrls.filter((u) => !isWiki(u)).map(groupOf)).size < 2) return { ok: false, reason: 'too_few_sources' }; // Wikipedia is never one of the two independent groups
   const ps = cand.paragraphs; if (ps.length < 4) return { ok: false, reason: 'rubric_failed' };
-  const ans = [1, 2, 3].map((i) => sentences(ps[Math.min(i, ps.length - 1)])[0]); const hook = sentences(ps[0])[0];
+  const { hook, ans } = pickBeats(cand);
   const raw = await model(ctx, 'questions', WRITER, '', `For each numbered sentence write one short plain question that the sentence answers. Do not add facts, names or numbers that are not in the sentence. Output exactly 3 lines "1. question".\n${ans.map((a, i) => `${i + 1}. ${a}`).join('\n')}`, 200);
   const qs = raw.split('\n').map((l) => l.replace(/^\s*\d+[.)]\s*/, '').trim()).filter((l) => l.length > 0);
-  if (qs.length < 3 || qs.slice(0, 3).some((q) => !q.endsWith('?') || q.length > 110 || /\d/.test(q))) return { ok: false, reason: 'rubric_failed' };
+  if (qs.length < 3 || qs.slice(0, 3).some((q, i) => !questionOk(q, ans[i]))) return { ok: false, reason: 'rubric_failed' };
   const seed: Seed = {
     id: 'g-' + slug(cur.topic!) + '-' + fnv(cur.id).slice(0, 4), countries: cur.countries, title: cur.topic!, tags: cur.tags!, hook,
     beats: ans.map((a, i) => ({ q: qs[i], a })), story: ps, shortKeep: [0, 1], sources: cand.sourceUrls.map((u) => ({ label: hostLabel(u, cur.topic!), url: u })),
@@ -140,7 +156,7 @@ async function tickLocked(env: GenEnv, fetchFn: typeof fetch, now: number): Prom
   try {
     if (cur.kind === 'canary') {
       const res: { corrupted: boolean; accepted: boolean }[] = [];
-      for (const p of CANARY as { quotes: string; claim: string }[]) { const v = await model(ctx, 'canary', JUDGE, JUDGE_SYSTEM, PROMPTS.judge(p.claim, p.quotes), 8).catch(() => 'ERR'); if (ctx.yielded) throw new Yield(); if (v === 'ERR') throw new Error(ctx.stop || 'error'); res.push({ corrupted: true, accepted: v.trim().toLowerCase() === 'supported' }); }
+      for (const p of CANARY as { quotes: string; claim: string }[]) { const v = await model(ctx, 'canary', JUDGE, JUDGE_SYSTEM, PROMPTS.judge(p.claim, p.quotes), 8).catch(() => 'ERR'); if (ctx.yielded) throw new Yield(); if (v === 'ERR') throw new Error(ctx.stop || 'error'); res.push({ corrupted: true, accepted: verdict(v) === 'supported' }); } // the same word rule as production: "Supported." on a known-bad claim is a false accept
       const r = canaryOk(res, 20); await setC(db, 'canary', JSON.stringify({ ok: r.ok, ts: now, reason: r.reason ?? null, n: res.length }), now);
       cur.micro += ctx.micro; await db.batch([db.prepare('DELETE FROM gen_cache WHERE attempt=?').bind(cur.id), db.prepare("DELETE FROM gen_control WHERE k='current'")]); return r.ok ? 'canary_ok' : 'canary_failed:' + r.reason;
     }
@@ -157,7 +173,7 @@ async function tickLocked(env: GenEnv, fetchFn: typeof fetch, now: number): Prom
     if (ctx.stop && ['disabled', 'no_key', 'paused', 'rates_stale'].includes(ctx.stop)) { await park(); return 'parked:' + ctx.stop; }
     cur.micro += ctx.micro; cur.calls = (cur.calls ?? 0) + ctx.calls;
     if (seed) {
-      const h = await health(db, now); const pubOk = decide(h).autoPublish && h.canaryOk;
+      const h = await health(db, now); const pubOk = decide(h).autoPublish && h.canaryOk && env.GEN_AUTOPUBLISH === 'true'; // hold boundary: without this explicit setting every accepted story is stored 'held', never served
       await db.prepare('INSERT OR IGNORE INTO gen_story (id,title,status,created_at,body,meta) VALUES (?,?,?,?,?,?)').bind(seed.id, seed.title, pubOk ? 'published' : 'held', now, JSON.stringify(seed), JSON.stringify({ attempt: cur.id, micro: cur.micro })).run();
     }
     await finishAttempt(db, cur, outcome.ok ? 'accepted' : 'rejected', outcome.ok ? null : outcome.reason ?? 'unknown', now);

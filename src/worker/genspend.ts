@@ -43,7 +43,7 @@ export async function spentMicro(db: D1Database, now = Date.now()): Promise<{ mo
   return { month: m?.s ?? 0, trailing30: t?.s ?? 0 };
 }
 
-export type GenEnv = { DB: D1Database; GEN_ENABLED?: string; ANTHROPIC_API_KEY?: string };
+export type GenEnv = { DB: D1Database; GEN_ENABLED?: string; ANTHROPIC_API_KEY?: string; GEN_AUTOPUBLISH?: string };
 export type CallResult = { ok: true; text: string; micro: number } | { ok: false; reason: 'disabled' | 'no_key' | 'rates_stale' | 'paused' | 'bad_model' | 'prompt_too_long' | 'over_cap' | 'provider_error' };
 // One paid call: gates, reserve, one fetch (no automatic retry; a retry is a new reservation), settle. Thinking is switched off where the model allows it, and max_tokens bounds any output anyway.
 export async function callModel(env: GenEnv, req: { model: string; system?: string; prompt: string; maxTokens: number; id: string; note: string }, fetchFn: typeof fetch = fetch): Promise<CallResult> {

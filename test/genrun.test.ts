@@ -8,8 +8,8 @@ import { WORKING_CAP_MICRO } from '../src/worker/genspend';
 // They do NOT show that a real model writes true or good stories; real acceptance and cost come only from live runs.
 const FACTS = ['The first passenger line opened in 1853', 'Trains run on broad gauge tracks across the country', 'Station names are written in several scripts', 'Tea sellers walk the platforms with kettles', 'Tickets can be booked on a phone application'];
 const KEYS = ['opened_year', 'gauge', 'scripts', 'tea', 'tickets'], VALS = ['1853', 'broad', 'several', 'kettles', 'phone'];
-const PAD = ' The Indian railway network is large and busy, and the railway is part of daily life.'.repeat(30);
-const PAGE = FACTS.join('. ') + '.' + PAD;
+// Each page carries the same facts but its own filler: identical pages are copies, and acquireSources now refuses copies as independent sources.
+const PAGE_OF = (tag: string) => FACTS.join('. ') + '.' + ' The Indian railway network is large and busy, and the railway is part of daily life.' + Array.from({ length: 40 }, (_, i) => ` The ${tag} account number ${i} describes separate matters of ${tag} ${i * 7}.`).join('');
 const bad = new Set((CANARY as any[]).map((c) => c.claim));
 function world(opts: { judge?: (claim: string) => string } = {}) {
   const log = { external: 0, anthropic: 0, perTick: 0, models: [] as string[] };
@@ -28,9 +28,9 @@ function world(opts: { judge?: (claim: string) => string } = {}) {
     }
     log.external++; log.perTick++;
     const J = (o: any) => ({ ok: true, headers: { get: () => 'application/json' }, json: async () => o, text: async () => JSON.stringify(o) });
-    if (url.includes('prop=extracts')) return J({ query: { pages: [{ title: 'T', extract: PAGE.slice(0, 2500), revisions: [{ revid: 9 }] }] } });
+    if (url.includes('prop=extracts')) return J({ query: { pages: [{ title: 'T', extract: PAGE_OF('wiki').slice(0, 2500), revisions: [{ revid: 9 }] }] } });
     if (url.includes('prop=extlinks')) return J({ query: { pages: [{ extlinks: [{ url: 'https://news.example.com/a' }, { url: 'https://other.example.org/b' }, { url: 'https://third.example.net/c' }] }] } });
-    return { ok: true, url, headers: { get: () => 'text/html' }, text: async () => `<html><body><p>${PAGE}</p></body></html>` };
+    return { ok: true, url, headers: { get: () => 'text/html' }, text: async () => `<html><body><p>${PAGE_OF(new URL(url).hostname.split('.')[0])}</p></body></html>` };
   }) as any;
   return { f, log };
 }
@@ -39,7 +39,8 @@ async function run(db: any, env: any, w: ReturnType<typeof world>, ticks: number
   for (let i = 0; i < ticks; i++) { w.log.perTick = 0; out.push(await tick(env, w.f, t0 + i * 5 * 60_000)); maxPer = Math.max(maxPer, w.log.perTick); }
   return { out, maxPer };
 }
-const on = (db: any) => ({ DB: db, GEN_ENABLED: 'true', ANTHROPIC_API_KEY: 'test-key' });
+const on = (db: any) => ({ DB: db, GEN_ENABLED: 'true', ANTHROPIC_API_KEY: 'test-key', GEN_AUTOPUBLISH: 'true' });
+const heldOnly = (db: any) => ({ DB: db, GEN_ENABLED: 'true', ANTHROPIC_API_KEY: 'test-key' }); // what production would run with: no explicit publish setting
 describe('autonomous generator end to end, fixture world', () => {
   it('canary, then a resumable attempt, then a published story in the served pool', async () => {
     const { db, raw } = mkdb(); const w = world(); const { out, maxPer } = await run(db, on(db), w, 14);
@@ -63,6 +64,14 @@ describe('autonomous generator end to end, fixture world', () => {
   it('a judge that accepts a known-bad claim fails the canary and blocks generation', async () => {
     const { db, raw } = mkdb(); const w = world({ judge: () => 'SUPPORTED' }); const { out } = await run(db, on(db), w, 12);
     expect(out).toContain('canary_failed:false_accept'); expect((raw.prepare("SELECT COUNT(*) n FROM gen_attempt").get() as any).n).toBe(0); expect(out.at(-1)).toMatch(/judge_canary_failed/);
+  });
+  it('without GEN_AUTOPUBLISH an accepted story is held, never served', async () => {
+    const { db, raw } = mkdb(); const w = world(); const { out } = await run(db, heldOnly(db), w, 14); expect(out).toContain('accepted');
+    expect((raw.prepare('SELECT status FROM gen_story').get() as any).status).toBe('held'); const n0 = SEED.length; await syncSeed(db, Date.now(), true); expect(SEED.length).toBe(n0);
+  });
+  it('a judge that answers "Supported." to known-bad claims fails the canary (it used to pass)', async () => {
+    const { db, raw } = mkdb(); const w = world({ judge: () => 'Supported.' }); const { out } = await run(db, on(db), w, 12);
+    expect(out).toContain('canary_failed:false_accept'); expect((raw.prepare('SELECT COUNT(*) n FROM gen_attempt').get() as any).n).toBe(0);
   });
   it('is inert unless enabled with a key, and the kill switch stops it', async () => {
     const { db, raw } = mkdb(); const w = world();
