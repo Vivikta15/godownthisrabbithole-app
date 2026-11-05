@@ -12,13 +12,14 @@ function Scene({ tag, id }: { tag: string; id: string }) {
     case 'space': return <>
       <Sky id={id} a="#0f3d5a" b="#1e7a86" />
       {Array.from({ length: 26 }, (_, i) => <circle key={i} className="tw" style={{ animationDelay: `${-(i % 7) * 0.5}s` }} cx={(i * 97) % 470 + 6} cy={(i * 53) % 150 + 8} r={i % 4 ? 1.600 : 2.600} fill={CREAM} />)}
-      <g className="orbit"><circle cx="330" cy="96" r="46" fill={SUN} /><path d="M286 84q44 20 88-6M287 110q44 18 86-4" fill="none" stroke="#f5a623" strokeWidth="9" opacity=".8" /><ellipse cx="330" cy="98" rx="82" ry="16" fill="none" stroke={PINK} strokeWidth="6" transform="rotate(-18 330 98)" opacity=".95" /><path d="M262 90a82 16 -18 0 1 128 14" fill="none" stroke={CREAM} strokeWidth="2" opacity=".6" /></g>
+      {/* The planet never spins (a spinning ring ends up standing on edge). The ring is drawn behind the planet, then its near half is drawn in front. */}
+      <g className="planet"><ellipse cx="330" cy="98" rx="82" ry="16" fill="none" stroke={PINK} strokeWidth="6" transform="rotate(-18 330 98)" /><circle cx="330" cy="96" r="46" fill={SUN} /><path d="M286 84q44 20 88-6M287 110q44 18 86-4" fill="none" stroke="#f5a623" strokeWidth="9" opacity=".8" /><path d="M248 98A82 16 0 0 0 412 98" fill="none" stroke={PINK} strokeWidth="6" strokeLinecap="round" transform="rotate(-18 330 98)" /></g>
       <path d="M96 40a30 30 0 1 0 22 52a24 24 0 1 1 -22 -52z" fill={CREAM} /><circle cx="170" cy="150" r="14" fill={TEAL} stroke={CREAM} strokeWidth="3" />
       <path className="shoot" d="M60 30L130 70" stroke={CREAM} strokeWidth="2.400" strokeLinecap="round" />
       <path d="M-10 214Q120 160 250 200T500 190V240H-10z" fill="#4f9a2c" /><path d="M-10 226Q140 190 300 222T500 214V240H-10z" fill="#72b533" /></>;
     case 'science': return <>
       <Sky id={id} a="#35c1b8" b="#0c8a8e" />
-      <g className="orbit">{[0, 60, 120].map((a) => <ellipse key={a} cx="110" cy="100" rx="64" ry="20" fill="none" stroke={CREAM} strokeWidth="3" opacity=".75" transform={`rotate(${a} 110 100)`} />)}<circle cx="110" cy="100" r="10" fill={SUN} /></g>
+      <g className="spin">{[0, 60, 120].map((a) => <ellipse key={a} cx="110" cy="100" rx="64" ry="20" fill="none" stroke={CREAM} strokeWidth="3" opacity=".75" transform={`rotate(${a} 110 100)`} />)}<circle cx="110" cy="100" r="10" fill={SUN} /></g>
       <path d="M262 36h56M272 36v62l-52 86a14 14 0 0 0 12 21h116a14 14 0 0 0 12-21l-52-86V36" fill={CREAM} stroke={INK} strokeWidth="4" strokeLinejoin="round" />
       <path d="M241 150q28 10 54 0t54 4l16 26a10 10 0 0 1-9 15H234a10 10 0 0 1-9-15z" fill={PINK} opacity=".9" />
       {[0, 1, 2, 3].map((i) => <circle key={i} className="bub" style={{ animationDelay: `${-i * 0.8}s` }} cx={282 + i * 14} cy="170" r={4 + (i % 2) * 2} fill={CREAM} />)}
