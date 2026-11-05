@@ -1,11 +1,12 @@
 import { Meadow } from './Meadow';
-import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, Emblem, NextMark, WeekRow, MonthCalendar, ForestScene, SkyLayer } from './visuals';
+import { TagGlyph, TrailPath, MilestoneLine, InterestBars, BridgeViz, MonthCalendar } from './visuals';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { StreakBoard } from './Streak';
 import { toTop } from './flow';
 import { leafWipe } from './motion';
 import { Loader } from './Loader';
+import { StoryArt } from './StoryArt';
 import { api } from './api';
 import { useMascot } from './Mascot';
 import type { MascotEvent } from '../shared/mascot';
@@ -224,7 +225,7 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
   if (!d) return <Loader label="Digging up today's detour…" />;
   const h = d.hole; const done = !!(res || d.readToday);
   if (extra) return <article className="reading"><ReadingRail /><MarginScene /><StartScene /><p className="kicker">Another trail</p><Story hole={extra} /><Sources hole={extra} /><p><button type="button" className="go" onClick={closeBonus}>I'm back up</button></p></article>;
-  if (reading) return <article className="reading"><ReadProgress /><ReadingRail /><MarginScene /><StartScene /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Plate tags={h.tags} />
+  if (reading) return <article className="reading"><ReadProgress /><ReadingRail /><MarginScene /><StartScene /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><StoryArt tags={h.tags} />
     <Story hole={h} /><Related hole={h} />
     <aside className="takeaway"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside>
     {h.shortened && <p className="note">Short version: some details are left out. Pick "A good chew" in your answers to read the full story.</p>}
@@ -235,7 +236,7 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
   const greeting = me.user.name ? `Where should we wander today, ${me.user.name}?` : 'Where should we wander today?';
   return <div className="explore">
     <p className="greet">{greeting}</p>
-    {done ? <section className="detour"><ForestScene kind="carrot" /><p className="kicker">{res?.alreadyCounted ? 'Already counted' : 'Today\'s detour, found'}</p><h1 className="story-title">Look what your curiosity uncovered.</h1>
+    {done ? <section className="detour"><p className="kicker">{res?.alreadyCounted ? 'Already counted' : 'Today\'s detour, found'}</p><h1 className="story-title">Look what your curiosity uncovered.</h1>
       <p className="deck"><em>{h.title}</em> is in your trail. {res && !res.alreadyCounted ? `Streak: ${res.streak} day${res.streak === 1 ? '' : 's'}.` : `Streak: ${me.streak.current} day${me.streak.current === 1 ? '' : 's'}.`}</p>
       {res?.freezesUsed > 0 && <p className="note">A streak freeze covered {res.freezesUsed} missed day{res.freezesUsed > 1 ? 's' : ''}.</p>}
       {res?.reset && <p className="note">A fresh start today. No pressure. Curiosity isn't homework.</p>}
@@ -247,8 +248,8 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
       : <section className="detour"><Peek /><p className="kicker">Today's detour</p><h1 className="story-title">{h.title}</h1><p className="deck">{h.hook}</p>
         <p className="mono-note">{h.tags.join(' · ')} · about {h.minutes} min read</p>
         <p><button type="button" className="go" onClick={start}>Go down this rabbit hole</button></p>
-        <Plate tags={h.tags} /><p className="note">{h.why}</p></section>}
-    {!done && me.streak.current === 0 && me.streak.longest > 0 && <section className="sceneblock"><ForestScene kind="fox" /><p className="serif">A fox wandered by while you were away.</p><p className="note">The rabbit is fine, tucked in its burrow. Your trail starts fresh today. No pressure.</p></section>}
+        <StoryArt tags={h.tags} /><p className="note">{h.why}</p></section>}
+    {!done && me.streak.current === 0 && me.streak.longest > 0 && <section className="sceneblock"><p className="serif">Welcome back.</p><p className="note">Your trail starts fresh today. No pressure. Curiosity isn't homework.</p></section>}
     {done && me.streak.bonusHoles > 0 && <section className="strip"><p className="kicker">Another trail</p><p>You have {me.streak.bonusHoles} extra.</p><button type="button" className="ghost" onClick={openBonus}>One tiny detour?</button>{bmsg && <p className="note" role="status">{bmsg}</p>}</section>}
     <section className="strip"><p className="kicker">Connections</p><p className="serif">Two words. One strange bridge.</p><p className="note">Try "moon" and "cheese". The rabbit looks for a link both Wikipedia pages mention. It's an early version.</p><button type="button" className="ghost" onClick={() => goTab('connections')}>Open the lab</button></section>
     <section className="strip row"><div><p className="kicker">Trail</p><Paws n={me.streak.current} /><p className="mono-note">day {me.streak.current}</p></div><div><p className="kicker">Saved</p><button type="button" className="ghost" onClick={() => goTab('you')}>{savedN === null ? 'Saved discoveries' : savedN ? `${savedN} saved` : 'Nothing saved yet'}</button></div></section>
@@ -373,7 +374,7 @@ function Trail({ me, onOpen, goTab }: { me: Me; onOpen: (id: string) => void; go
     <p className="note">No need to read every day. A freeze covers a missed day. Curiosity isn't homework.</p>
     {cal && <MonthCalendar cal={cal} />}
     <p className="note">Marks are only marks on your trail. There are no prizes behind them yet.</p>
-    <details className="scenes"><summary>Peek at the forest scenes</summary><p className="note">Previews of scenes you'll meet. This is not your status.</p><div className="pair-scenes"><figure><ForestScene kind="carrot" /><figcaption className="mono-note">After you finish a story</figcaption></figure><figure><ForestScene kind="fox" /><figcaption className="mono-note">If you come back after missing a day. The rabbit is safe.</figcaption></figure></div></details>
+    
     <h2 className="serif">What you've wandered through</h2>
     {hist && hist.items.length > 0 && <InterestBars items={hist.items} />}
     {!hist ? <p className="note" role="status">Reading the journal…</p> : hist.items.length === 0 ? <p className="note">Nothing yet. Your first detour will show up here.</p>
