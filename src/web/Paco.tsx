@@ -23,7 +23,7 @@ export function canopy(seed: number, key: string, cx: number, cy: number, R: num
 }
 
 export const swan = (k: string, x: number, y: number, s: number, flip: boolean, dur: number, delay: number) => (
-  <g key={k} className="swan" style={{ animationDuration: `${dur}s`, animationDelay: `${delay}s` }}>
+  <g key={k} className={flip ? 'swan l' : 'swan'} style={{ animationDuration: `${dur}s`, animationDelay: `${delay}s` }}>
     <g transform={`translate(${x} ${y}) scale(${flip ? -s : s} ${s})`}>
       <ellipse cx="0" cy="6" rx="34" ry="6" fill="#0d6f75" opacity=".35" />
       <path d="M-30 0 Q-34 -14 -14 -16 Q10 -18 28 -8 Q34 -4 30 2 Q10 10 -16 8 Q-30 6 -30 0Z" fill="#fffdf6" />
