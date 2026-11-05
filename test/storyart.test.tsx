@@ -11,7 +11,7 @@ import { TOPIC_TAGS } from '../src/content/seed';
 const TAGS = [...TOPIC_TAGS, '', 'something-new'];
 const svg = (tag: string) => renderToStaticMarkup(<StoryArt tags={tag ? [tag] : []} />);
 // The only classes a poster may carry. A new animated class has to be added here on purpose, with a look at what it does to the picture.
-const ALLOWED = new Set(['storyart', 'sw', 'bl', 'swan', 'tw', 'spin', 'shoot', 'bub', 'steam', 'bee', 'balloon', 'smoke', 'coin', 'fly', 'bird', 'flock', 'planet']);
+const ALLOWED = new Set(['storyart', 'sw', 'bl', 'swan', 'l', 'tw', 'spin', 'shoot', 'bub', 'steam', 'bee', 'balloon', 'smoke', 'coin', 'fly', 'bird', 'flock', 'planet']);
 
 describe('story art guardrails', () => {
   for (const tag of TAGS) describe(tag || '(no tag)', () => {

@@ -66,8 +66,10 @@ button.outline{display:block;width:100%;margin-top:14px;padding:12px;font-weight
 @media (max-width:899px){.bunny{bottom:calc(var(--navh) + 22px);width:78px}.shell:has(.reading) .bunny{display:none}}
 
 /* the world behind: clouds, swans, ripples, leaves */
-.swan{animation:swim 24s ease-in-out infinite alternate}
-@keyframes swim{from{transform:translateX(-50px)}to{transform:translateX(70px)}}
+.swan{animation:swimr 32s linear infinite}
+.swan.l{animation-name:swiml}
+@keyframes swimr{0%{transform:translateX(-140px);opacity:0}10%{opacity:1}90%{opacity:1}100%{transform:translateX(170px);opacity:0}}
+@keyframes swiml{0%{transform:translateX(140px);opacity:0}10%{opacity:1}90%{opacity:1}100%{transform:translateX(-170px);opacity:0}}
 .rip{animation:ripple2 5s ease-in-out infinite}
 @keyframes ripple2{50%{transform:translateX(10px);opacity:.4}}
 .meadow .cl{animation-duration:70s}
@@ -164,3 +166,10 @@ html.flow{scroll-behavior:auto}
 .storyart .fly{animation:flutter 5s ease-in-out infinite alternate}
 @keyframes flutter{from{transform:translate(0,0)}to{transform:translate(60px,-26px)}}
 @media (prefers-reduced-motion:reduce){.storyart *{animation:none!important}}
+
+/* birds fly somewhere: each flock crosses the sky once in one direction (wings flapping), then a new one enters. No back-and-forth. */
+.flock{animation:cross 38s linear infinite}
+.flock.f2{animation-name:crossback;animation-duration:56s;animation-delay:-20s}
+@keyframes cross{0%{transform:translate(-1100px,50px)}50%{transform:translate(-100px,-20px)}100%{transform:translate(1000px,-70px)}}
+@keyframes crossback{0%{transform:translate(900px,-30px)}50%{transform:translate(-100px,10px)}100%{transform:translate(-1100px,-60px)}}
+@media (prefers-reduced-motion:reduce){.flock,.swan{animation:none!important}}
