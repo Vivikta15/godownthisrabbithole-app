@@ -7,12 +7,13 @@ import { toTop } from './flow';
 import { leafWipe } from './motion';
 import { Loader } from './Loader';
 import { api } from './api';
+import { getConsent, setConsent, maybeLoadClarity, watchCrossTabConsent, type ClarityConsent } from './clarity';
 import { useMascot } from './Mascot';
 import type { MascotEvent } from '../shared/mascot';
 
 type Me = { user: { email: string; name: string | null; onboarded: boolean }; access: { plan: string; rabbitHoles: boolean; finderQuota: { period: string; limit: number } | null; trialEndsAt: string }; streak: { current: number; longest: number; freezesLeft: number; bonusHoles: number; readToday: boolean }; prefs: any };
-type Cfg = { weather?: boolean; topics: string[]; formats: { id: string; label: string }[]; plans: any; payments?: string; emailRecovery?: boolean; whyRead?: { id: string; label: string }[]; countries?: { code: string; name: string }[]; countriesWithStories?: string[] };
 type Send = (e: MascotEvent) => void;
+type Cfg = { consentRegion?: 'strict' | 'open'; weather?: boolean; topics: string[]; formats: { id: string; label: string }[]; plans: any; payments?: string; emailRecovery?: boolean; whyRead?: { id: string; label: string }[]; countries?: { code: string; name: string }[]; countriesWithStories?: string[] };
 // Move keyboard and screen-reader focus to the page heading when the view changes, so the next Tab starts at the top of the new content.
 function useFocusHeading(dep: unknown, skipFirst = true) {
   const first = useRef(true);
@@ -23,23 +24,52 @@ type Tab = 'explore' | 'connections' | 'trail' | 'you';
 export function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [cfg, setCfg] = useState<Cfg | null>(null);
-  const [mascot, send] = useMascot(); const [redo, setRedo] = useState(false); const [stage, setStage] = useState<'welcome' | 'auth'>('welcome'); const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
+  const [redo, setRedo] = useState(new URLSearchParams(window.location.search).get('redo') === '1'); const [stage, setStage] = useState<'welcome' | 'auth'>('welcome'); const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
   const loadWeather = useCallback(async () => { const r = await api('/weather'); document.documentElement.dataset.weather = r.ok && r.data.condition ? r.data.condition : ''; }, []);
   const refresh = useCallback(async () => { const r = await api('/me'); setMe(r.ok ? r.data : null); }, []);
   useEffect(() => { if (!me || !cfg?.weather) return; loadWeather(); const t = window.setInterval(loadWeather, 30 * 60 * 1000); window.addEventListener('city-changed', loadWeather); return () => { window.clearInterval(t); window.removeEventListener('city-changed', loadWeather); }; }, [!!me, cfg?.weather]);
   useEffect(() => { refresh(); api('/config').then((r) => setCfg(r.data)); }, [refresh]);
 
-  const q = new URLSearchParams(window.location.search); const rt = q.get('reset'), vt = q.get('verify');
+  const q = new URLSearchParams(window.location.search);
+  // Frozen at mount: TokenScreen strips the token from the URL right after mount,
+  // and re-reading location.search on later renders would unmount the token screen.
+  const [rt] = useState(() => q.get('reset'));
+  const [vt] = useState(() => q.get('verify'));
+  const youParam = q.get('you') === '1'; const redoParam = q.get('redo') === '1';
+  const tabParam = ['explore', 'connections', 'trail'].includes(q.get('tab') ?? '') ? (q.get('tab') as Tab) : 'explore';
+  const [mascot, send] = useMascot();
+  const [consent, setConsentState] = useState<ClarityConsent>(() => getConsent());
+  // Clarity may load only on eligible page loads for signed-in, onboarded visitors.
+  // Token screens, welcome/sign-in, the quiz and the account tab never qualify.
+  // The gate inputs are frozen at load: the reset/verify token is stripped from the
+  // URL right after mount, so re-reading location.search would open the gate again.
+  const [gate] = useState(() => ({ token: !!rt || !!vt, you: youParam, redo: redoParam }));
+  const clarityAllowed = !!me && me.user.onboarded && !redo && !gate.token && !gate.you && !gate.redo;
+  // Consent-first unless the worker positively identified a region where
+  // default-on applies. A missing or failed config never turns collection on.
+  const consentStrict = !cfg || cfg.consentRegion !== 'open';
+  useEffect(() => { if (clarityAllowed && cfg) maybeLoadClarity(consentStrict); }, [clarityAllowed, cfg, consentStrict]);
+  useEffect(() => watchCrossTabConsent(), []);
   let body: React.ReactNode; let nav = false;
   if (rt || vt) body = <TokenScreen kind={rt ? 'reset' : 'verify'} token={(rt || vt) as string} />;
   else if (me === undefined || !cfg) body = <Loader label="Waking the rabbit…" />;
   else if (me === null) body = stage === 'welcome' ? <Welcome send={send} onStart={() => { setAuthMode('signup'); setStage('auth'); }} onLogin={() => { setAuthMode('login'); setStage('auth'); }} /> : <Auth initial={authMode} onDone={refresh} send={send} recovery={!!cfg.emailRecovery} onBack={() => setStage('welcome')} />;
-  else if (!me.user.onboarded || redo) body = <Quiz cfg={cfg} me={me} redo={redo} onDone={() => { setRedo(false); refresh(); }} onCancel={redo ? () => setRedo(false) : undefined} send={send} />;
-  else { nav = true; body = <Main me={me} cfg={cfg} refresh={refresh} send={send} onRedo={() => setRedo(true)} />; }
+  else if (!me.user.onboarded || redo) body = <Quiz cfg={cfg} me={me} redo={redo} onDone={() => { if (redoParam) { window.location.assign('/'); return; } setRedo(false); refresh(); }} onCancel={redo ? () => window.location.assign('/') : undefined} send={send} />;
+  else { nav = true; body = <Main me={me} cfg={cfg} refresh={refresh} send={send} onRedo={() => window.location.assign('/?redo=1')} initialTab={youParam ? 'you' : tabParam} />; }
   const welcome = !nav && me === null && stage === 'welcome' && !rt && !vt;
   return <div className={nav ? 'shell has-nav' : welcome ? 'shell is-welcome' : 'shell'}><Meadow mascot={mascot} />
     {!nav && <header className="pill"><span className="pill-brand"><Logo />godownthisrabbithole</span>{welcome && <button type="button" className="go small" onClick={() => { setAuthMode('login'); setStage('auth'); }}>Sign in</button>}</header>}
-    {body}</div>;
+    {body}
+    {clarityAllowed && consent === null && consentStrict && <ConsentBanner onChoice={(v) => { setConsent(v); setConsentState(v); if (v === 'yes') maybeLoadClarity(consentStrict); }} />}
+  </div>;
+}
+
+function ConsentBanner({ onChoice }: { onChoice: (v: 'yes' | 'no') => void }) {
+  return <div className="consent" role="dialog" aria-label="Analytics choice">
+    <p className="kicker">Usage analytics</p>
+    <p className="note">Microsoft Clarity collects taps, scrolling and session replays to improve the app. Where consent is required, it starts only after you agree, so it is off here until you say yes. Sign-in, quiz and account pages are excluded; inputs and story text are masked. Data goes to Microsoft. Turning it off stops future collection on this device, but doesn't delete earlier data. <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noreferrer">Microsoft privacy statement</a></p>
+    <p className="row-actions"><button type="button" className="go" onClick={() => onChoice('yes')}>Turn on</button><button type="button" className="ghost" onClick={() => onChoice('no')}>No thanks</button></p>
+  </div>;
 }
 
 function Logo() {
@@ -56,6 +86,7 @@ function Welcome({ onStart, onLogin, send }: { onStart: () => void; onLogin: () 
     <p className="deck">Leave the scroll behind. Follow something interesting.</p>
     <p className="cta"><button type="button" className="go" onClick={onStart}>Let's wander</button><button type="button" className="glassbtn" onClick={onLogin}>I already have an account</button></p>
     <p className="fine">No endless feed. Free for 3 days.</p>
+    <p className="fine">Microsoft Clarity collects taps, scrolling and session replays to improve the app. After sign-in, collection is on unless you turn it off in the You tab; sign-in, quiz and account pages are excluded, and inputs and story text are masked. Where consent is required, it starts only after you agree.</p>
     <div className="detours" aria-label="Rabbit holes to fall into"><p className="mono-note">Recent detours</p><ul>{DETOURS.map((d, i) => <li key={d} style={{ ['--i' as string]: i }}>{d}</li>)}</ul></div>
   </main>;
 }
@@ -65,23 +96,23 @@ function TokenScreen({ kind, token }: { kind: 'reset' | 'verify'; token: string 
   useEffect(() => { window.history.replaceState({}, '', '/'); }, []);
   useEffect(() => { if (kind === 'verify') api('/email/verify', { token }).then((r) => { setMsg(r.ok ? 'Your email is verified. Thank you!' : r.data.error); setDone(r.ok); }); }, [kind, token]);
   async function reset(e: React.FormEvent) { e.preventDefault(); const r = await api('/password/reset', { token, password: pw }); setMsg(r.ok ? 'Password changed. You are logged out everywhere; log in with the new one.' : r.data.error); setDone(r.ok); }
-  return <main><h1>{kind === 'reset' ? 'Choose a new password' : 'Email check'}</h1>
+  return <main data-clarity-mask="true"><h1>{kind === 'reset' ? 'Choose a new password' : 'Email check'}</h1>
     {kind === 'reset' && !done && <form onSubmit={reset}><input type="password" aria-label="New password" placeholder="New password (8+ characters)" minLength={8} required value={pw} onChange={(e) => setPw(e.target.value)} /><p><button type="submit">Save new password</button></p></form>}
     {msg && <p role="status">{msg}</p>}
     <p className="note"><a href="/">Back to the app</a></p></main>;
 }
 
 function Auth({ onDone, send, recovery, initial, onBack }: { onDone: () => void; send: Send; recovery: boolean; initial: 'signup' | 'login'; onBack: () => void }) {
+  useEffect(() => { send('onboarding_start'); }, [send]);
   const [mode, setMode] = useState<'signup' | 'login' | 'forgot'>(initial); const [note, setNote] = useState('');
   const [f, setF] = useState({ name: '', email: '', password: '' }); const [err, setErr] = useState('');
-  useEffect(() => { send('onboarding_start'); }, [send]);
   async function go(e: React.FormEvent) {
     e.preventDefault(); setErr(''); setNote('');
     if (mode === 'forgot') { const fr = await api('/password/forgot', { email: f.email }); setNote(fr.data.message || fr.data.error || 'Please try again.'); return; }
     const r = await api(mode === 'signup' ? '/signup' : '/login', { ...f, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
     if (r.ok) onDone(); else setErr(r.data.error || 'Something went sideways. Try again?');
   }
-  return <main><form onSubmit={go} className="auth">
+  return <main data-clarity-mask="true"><form onSubmit={go} className="auth">
     <p className="kicker"><a href="#" onClick={(e) => { e.preventDefault(); onBack(); }}>back</a></p>
     <h1>{mode === 'signup' ? 'First, a little burrow of your own.' : mode === 'forgot' ? 'Lost the way back?' : 'Welcome back. The kettle is on.'}</h1>
     {mode === 'signup' && <label>What should I call you?<input type="text" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} autoComplete="given-name" /></label>}
@@ -91,6 +122,7 @@ function Auth({ onDone, send, recovery, initial, onBack }: { onDone: () => void;
     {note && <p role="status">{note}</p>}
     {err && <p className="err" role="alert">{err}</p>}
     <p className="note">Preview build: no email verification or password reset yet, so please don't reuse an important password.</p>
+    <p className="note">Analytics (Microsoft Clarity) never run on this page. After sign-in, collection is on unless you turn it off in the You tab; where consent is required, it starts only after you agree.</p>
     {!(mode === 'forgot' && !recovery) && <p><button type="submit" className="go">{mode === 'signup' ? 'Start my 3 free days' : mode === 'forgot' ? 'Send reset link' : 'Log in'}</button></p>}
     <p className="note"><a href="#" onClick={(e) => { e.preventDefault(); setMode(mode === 'signup' ? 'login' : 'signup'); }}>{mode === 'signup' ? 'I already have an account' : 'I need an account'}</a>{mode === 'login' && <> · <a href="#" onClick={(e) => { e.preventDefault(); setMode('forgot'); }}>Forgot password?</a></>}</p>
   </form></main>;
@@ -98,11 +130,11 @@ function Auth({ onDone, send, recovery, initial, onBack }: { onDone: () => void;
 
 const TZ_COUNTRY: Record<string, string> = { 'Asia/Calcutta': 'IN', 'Asia/Kolkata': 'IN', 'America/New_York': 'US', 'America/Chicago': 'US', 'America/Los_Angeles': 'US', 'Europe/London': 'GB', 'Australia/Sydney': 'AU', 'Australia/Melbourne': 'AU', 'America/Toronto': 'CA', 'Asia/Singapore': 'SG', 'Asia/Dubai': 'AE', 'Europe/Berlin': 'DE', 'Europe/Paris': 'FR', 'Africa/Lagos': 'NG', 'Africa/Nairobi': 'KE', 'Africa/Johannesburg': 'ZA', 'America/Sao_Paulo': 'BR', 'Asia/Karachi': 'PK', 'Asia/Dhaka': 'BD', 'Asia/Colombo': 'LK', 'Asia/Kathmandu': 'NP', 'Asia/Tokyo': 'JP', 'Asia/Seoul': 'KR', 'Pacific/Auckland': 'NZ' };
 function Quiz({ cfg, me, redo, onDone, onCancel, send }: { cfg: Cfg; me: Me; redo: boolean; onDone: () => void; onCancel?: () => void; send: Send }) {
+  useEffect(() => { send('quiz_begin'); }, [send]);
   const pf = redo ? me.prefs : null;
   const guess = TZ_COUNTRY[Intl.DateTimeFormat().resolvedOptions().timeZone] ?? '';
   const [step, setStep] = useState(0); const [country, setCountry] = useState<string>(pf ? pf.quiz?.country ?? '' : guess);
   const [tags, setTags] = useState<string[]>(pf?.interestTags ?? []); const [why, setWhy] = useState<string[]>(pf?.quiz?.why ?? []); const [fmts, setFmts] = useState<string[]>(pf?.formats ?? []); const [len, setLen] = useState<string>(pf?.length ?? 'medium'); const [curious, setCurious] = useState<string>(pf?.quiz?.curious ?? ''); const [err, setErr] = useState('');
-  useEffect(() => { send('quiz_begin'); }, [send]);
   useFocusHeading(step);
   const tog = (a: string[], s: (x: string[]) => void, v: string) => s(a.includes(v) ? a.filter((x) => x !== v) : [...a, v]);
   const withStories = cfg.countriesWithStories ?? []; const total = 5;
@@ -110,7 +142,7 @@ function Quiz({ cfg, me, redo, onDone, onCancel, send }: { cfg: Cfg; me: Me; red
   const finish = async (skipNote = false) => { const r = await api('/quiz', { interestTags: tags, formats: fmts, length: len, country: country || undefined, why, curious: skipNote ? '' : curious }); if (r.ok) onDone(); else setErr(r.data.error); };
   const skippable = step === 0 || step === 2 || step === 4;
   const asks = ['Where are you reading from? I can start with stories close to home.', 'What do you actually wonder about? Pick a few.', 'Why do you want a daily rabbit hole?', 'How should a story feel?', 'Last one, and you can skip it.'];
-  return <main className="quiz">
+  return <main className="quiz" data-clarity-mask="true">
     <p className="kicker">{redo ? 'Your answers' : 'Let\'s get to know you'}</p>
     <div className="steps-bar" role="progressbar" aria-label="Quiz progress" aria-valuenow={step + 1} aria-valuemin={1} aria-valuemax={total}>{Array.from({ length: total }, (_, i) => <i key={i} className={i <= step ? 'on' : ''} />)}</div>
     <h1>{asks[step]}</h1>
@@ -163,10 +195,14 @@ function Paws({ n, of = 7 }: { n: number; of?: number }) {
   return <div className="paws" role="img" aria-label={`${Math.min(n, of)} of ${of} footprints on this trail`}>{Array.from({ length: of }, (_, i) => <svg key={i} className={i < n ? 'on' : ''} width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="16" rx="5" ry="4.200" /><circle cx="6" cy="10.500" r="2" /><circle cx="10" cy="7" r="2" /><circle cx="14.500" cy="7" r="2" /><circle cx="18.500" cy="10.500" r="2" /></svg>)}</div>;
 }
 
-function Main({ me, cfg, refresh, send, onRedo }: { me: Me; cfg: Cfg; refresh: () => void; send: Send; onRedo: () => void }) {
-  const [tab, setTab] = useState<Tab>('explore'); const [open, setOpen] = useState<string | null>(null);
-  // Tab changes sweep a leaf wipe over the page (see motion.ts); with reduced motion they just switch.
+function Main({ me, cfg, refresh, send, onRedo, initialTab }: { me: Me; cfg: Cfg; refresh: () => void; send: Send; onRedo: () => void; initialTab: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab); const [open, setOpen] = useState<string | null>(null);
+  // The account tab is a separate page load (/?you=1) so analytics scripts, which
+  // cannot be unloaded once injected, are guaranteed absent on account views.
+  // Other tab changes sweep a leaf wipe over the page (see motion.ts); with reduced motion they just switch.
   const go = (t: Tab) => {
+    if (t === 'you' && tab !== 'you') { window.location.assign('/?you=1'); return; }
+    if (t !== 'you' && tab === 'you') { window.location.assign(t === 'explore' ? '/' : `/?tab=${t}`); return; }
     if (t === tab && !open) return;
     leafWipe(() => { flushSync(() => { setTab(t); setOpen(null); }); send(t === 'connections' ? 'tab_change_finder' : 'tab_change_other'); toTop(); });
   };
@@ -223,10 +259,10 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
   </section>;
   if (!d) return <Loader label="Digging up today's detour…" />;
   const h = d.hole; const done = !!(res || d.readToday);
-  if (extra) return <article className="reading"><ReadingRail /><MarginScene /><StartScene /><p className="kicker">Another trail</p><Story hole={extra} /><Sources hole={extra} /><p><button type="button" className="go" onClick={closeBonus}>I'm back up</button></p></article>;
-  if (reading) return <article className="reading"><ReadProgress /><ReadingRail /><MarginScene /><StartScene /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Plate tags={h.tags} />
+  if (extra) return <article className="reading" data-clarity-mask="true"><ReadingRail /><MarginScene /><StartScene /><p className="kicker">Another trail</p><Story hole={extra} /><Sources hole={extra} /><p><button type="button" className="go" onClick={closeBonus}>I'm back up</button></p></article>;
+  if (reading) return <article className="reading" data-clarity-mask="true"><ReadProgress /><ReadingRail /><MarginScene /><StartScene /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Plate tags={h.tags} />
     <Story hole={h} /><Related hole={h} />
-    <aside className="takeaway"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside>
+    <aside className="takeaway" data-clarity-mask="true"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside>
     {h.shortened && <p className="note">Short version: some details are left out. Pick "A good chew" in your answers to read the full story.</p>}
     <Sources hole={h} />
     <EndScene />
@@ -234,17 +270,17 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
   </article>;
   const greeting = me.user.name ? `Where should we wander today, ${me.user.name}?` : 'Where should we wander today?';
   return <div className="explore">
-    <p className="greet">{greeting}</p>
-    {done ? <section className="detour"><ForestScene kind="carrot" /><p className="kicker">{res?.alreadyCounted ? 'Already counted' : 'Today\'s detour, found'}</p><h1 className="story-title">Look what your curiosity uncovered.</h1>
+    <p className="greet" data-clarity-mask="true">{greeting}</p>
+    {done ? <section className="detour" data-clarity-mask="true"><ForestScene kind="carrot" /><p className="kicker">{res?.alreadyCounted ? 'Already counted' : 'Today\'s detour, found'}</p><h1 className="story-title">Look what your curiosity uncovered.</h1>
       <p className="deck"><em>{h.title}</em> is in your trail. {res && !res.alreadyCounted ? `Streak: ${res.streak} day${res.streak === 1 ? '' : 's'}.` : `Streak: ${me.streak.current} day${me.streak.current === 1 ? '' : 's'}.`}</p>
       {res?.freezesUsed > 0 && <p className="note">A streak freeze covered {res.freezesUsed} missed day{res.freezesUsed > 1 ? 's' : ''}.</p>}
       {res?.reset && <p className="note">A fresh start today. No pressure. Curiosity isn't homework.</p>}
       {res?.bonusEarned && <p className="ok">Another trail turned up for you.</p>}
       <p className="row-actions"><button type="button" className="ghost" onClick={() => setAgain(!again)}>{again ? 'Hide the story' : 'Read it again'}</button><SaveButton topicId={h.topicId} initial={h.saved} /></p>
       <p className="note">Re-reading does not change your streak or count again.</p>
-      {again && <article className="reading inline"><Story hole={h} /><Related hole={h} /><Sources hole={h} /></article>}
+      {again && <article className="reading inline" data-clarity-mask="true"><Story hole={h} /><Related hole={h} /><Sources hole={h} /></article>}
     </section>
-      : <section className="detour"><Peek /><p className="kicker">Today's detour</p><h1 className="story-title">{h.title}</h1><p className="deck">{h.hook}</p>
+      : <section className="detour" data-clarity-mask="true"><Peek /><p className="kicker">Today's detour</p><h1 className="story-title">{h.title}</h1><p className="deck" data-clarity-mask="true">{h.hook}</p>
         <p className="mono-note">{h.tags.join(' · ')} · about {h.minutes} min read</p>
         <p><button type="button" className="go" onClick={start}>Go down this rabbit hole</button></p>
         <Plate tags={h.tags} /><p className="note">{h.why}</p></section>}
@@ -264,9 +300,9 @@ function Sources({ hole }: { hole: any }) {
 function StoryView({ topicId, onBack }: { topicId: string; onBack: () => void }) {
   const [h, setH] = useState<any>(null); const [err, setErr] = useState('');
   useEffect(() => { api(`/story/${topicId}`).then((r) => (r.ok ? setH(r.data.hole) : setErr(r.data.message || r.data.error))); }, [topicId]);
-  return <article className="reading"><ReadingRail /><MarginScene /><StartScene /><p><button type="button" className="ghost" onClick={onBack}>Back</button></p>
+  return <article className="reading" data-clarity-mask="true"><ReadingRail /><MarginScene /><StartScene /><p><button type="button" className="ghost" onClick={onBack}>Back</button></p>
     {err && <p className="err" role="alert">{err}</p>}{!h && !err && <p className="note" role="status">Finding it again…</p>}
-    {h && <><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Story hole={h} /><aside className="takeaway"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside><Sources hole={h} /><p className="row-actions"><SaveButton topicId={h.topicId} initial={h.saved} /></p><p className="note">Re-reading does not change your streak.</p></>}
+    {h && <><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Story hole={h} /><aside className="takeaway" data-clarity-mask="true"><p className="kicker">Worth telling someone</p><p className="serif">{h.hook}</p></aside><Sources hole={h} /><p className="row-actions"><SaveButton topicId={h.topicId} initial={h.saved} /></p><p className="note">Re-reading does not change your streak.</p></>}
   </article>;
 }
 
@@ -286,9 +322,9 @@ function Story({ hole }: { hole: any }) {
   const paras: string[] = hole.story || [];
   const beats: { q: string; a: string }[] = hole.beats || [];
   return <>
-    <div className="story">{paras.map((p, i) => <p key={i}>{p}</p>)}</div>
-    {(hole.whyModes || []).includes('learn') && (hole.sources || []).length > 0 && <aside className="recap"><p className="kicker">Check it yourself</p><p>{(hole.sources as any[]).map((x, i) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a>{i < hole.sources.length - 1 ? ', ' : ''}</span>)}</p></aside>}
-    {hole.format !== 'narrative' && beats.length > 0 && <aside className="recap"><h2 className="serif">{hole.format === 'steps' ? 'The short version, step by step' : 'The short version, as questions'}</h2>
+    <div className="story" data-clarity-mask="true">{paras.map((p, i) => <p key={i}>{p}</p>)}</div>
+    {(hole.whyModes || []).includes('learn') && (hole.sources || []).length > 0 && <aside className="recap" data-clarity-mask="true"><p className="kicker">Check it yourself</p><p>{(hole.sources as any[]).map((x, i) => <span key={i}><a href={x.url} target="_blank" rel="noreferrer">{x.label}</a>{i < hole.sources.length - 1 ? ', ' : ''}</span>)}</p></aside>}
+    {hole.format !== 'narrative' && beats.length > 0 && <aside className="recap" data-clarity-mask="true"><h2 className="serif">{hole.format === 'steps' ? 'The short version, step by step' : 'The short version, as questions'}</h2>
       {hole.format === 'qa' ? beats.map((b, i) => <div className="beat" key={i}><h3 className="serif">{b.q}</h3><p>{b.a}</p></div>)
         : <ol className="steps">{beats.map((b, i) => <li key={i}><strong>{b.q}</strong> {b.a}</li>)}</ol>}</aside>}
   </>;
@@ -321,7 +357,13 @@ function Finder({ me, send }: { me: Me; send: Send }) {
   const q = me.access.finderQuota;
   async function go(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setMsg(''); setFound(null); setCopied(false); send('tab_change_finder');
-    const r = await api('/finder', { a, b }); setBusy(false); if (r.data.ok) { setFound(r.data); send('finder_result'); } else { setMsg(r.data.message || r.data.error || ''); send('tab_change_other'); }
+    try {
+      const r = await api('/finder', { a, b });
+      // A killed or unreachable worker answers with no JSON message: never fail silently.
+      if (r.data.ok) { setFound(r.data); } else { setMsg(r.data.message || r.data.error || 'The rabbit got tangled up on that one. Wait a moment and try again.'); }
+    } catch {
+      setMsg('The connection dropped before the rabbit came back. Check your network and try again.');
+    } finally { setBusy(false); }
   }
   const random = () => { const p = PAIRS[Math.floor(Math.random() * PAIRS.length)]; setA(p[0]); setB(p[1]); };
   const line = !found ? '' : found.bridge.kind === 'direct' ? `${found.bridge.from === 'b' ? found.b.title : found.a.title} mentions ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}").` : found.bridge.kind === 'chain' ? `${found.a.title} and ${found.b.title} connect through ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}" / "${found.bridge.sentB}").` : `${found.a.title} and ${found.b.title} both point to ${found.bridge.via} (per Wikipedia: "${found.bridge.sentA}" / "${found.bridge.sentB}").`;
@@ -335,11 +377,11 @@ function Finder({ me, send }: { me: Me; send: Send }) {
         <label>Thing two<input type="text" placeholder="cheese" value={b} onChange={(e) => setB(e.target.value)} /></label></div>
       <p className="row-actions"><button type="button" className="ghost" onClick={random}>Surprise me with a pair</button><button className="go" disabled={busy || !a.trim() || !b.trim()}>{busy ? 'Following the thread…' : 'Find the connection'}</button></p>
     </form>
-    {msg && <p className="note bubble" role="status">{msg}</p>}
+    {msg && <p className="note bubble" role="status" data-clarity-mask="true">{msg}</p>}
     {found && (() => {
       const br = found.bridge; const kind = br.kind || 'shared'; const sw = br.from === 'b';
       const src = sw ? found.b : found.a, oth = sw ? found.a : found.b;
-      return <article className="bridge" role="status"><p className="kicker">{kind === 'direct' ? 'A direct mention' : kind === 'chain' ? 'A two-step route' : 'A sourced bridge'}</p>
+      return <article className="bridge" role="status" data-clarity-mask="true"><p className="kicker">{kind === 'direct' ? 'A direct mention' : kind === 'chain' ? 'A two-step route' : 'A sourced bridge'}</p>
       {kind === 'direct' ? <><BridgeViz a={src.title} b={oth.title} via="mentions" />
         <h2 className="serif"><em>{src.title}</em> mentions <em>{oth.title}</em> directly.</h2>
         <p className="note">This sentence is copied from the {src.title} page on Wikipedia.</p>
@@ -367,7 +409,7 @@ function Trail({ me, onOpen, goTab }: { me: Me; onOpen: (id: string) => void; go
   const load = () => api('/leaderboard').then((r) => setBoard(r.data.board || []));
   useEffect(() => { load(); api('/history').then((r) => r.ok && setHist(r.data)); api('/calendar').then((r) => r.ok && setCal(r.data)); }, []);
   const marks = [3, 7, 30];
-  return <section>
+  return <section data-clarity-mask="true">
     <p className="kicker">Trail</p><h1 className="story-title">{me.streak.current ? `Day ${me.streak.current} on the trail.` : 'The trail starts with one detour.'}</h1>
     <StreakBoard name={me.user.name} streak={me.streak} cal={cal} onRead={() => goTab('explore')} onSaved={() => goTab('you')} />
     <p className="note">No need to read every day. A freeze covers a missed day. Curiosity isn't homework.</p>
@@ -390,13 +432,25 @@ function Trail({ me, onOpen, goTab }: { me: Me; onOpen: (id: string) => void; go
   </section>;
 }
 
+function AnalyticsToggle({ strict }: { strict: boolean }) {
+  const [c, setC] = useState<ClarityConsent>(() => getConsent());
+  // Effective state, not just the stored choice: in default-on regions analytics
+  // are on until the visitor turns them off, even with no stored choice yet.
+  const on = c === 'yes' || (c === null && !strict);
+  const flip = () => { const v = on ? 'no' : 'yes'; setConsent(v); setC(v); };
+  return <>
+    <p className="note">Microsoft Clarity collects taps, scrolling and session replays to improve the app. After sign-in, collection is on unless you turn it off in the You tab. Where consent is required, it starts only after you agree. Sign-in, quiz and account pages are excluded; inputs and story text are masked. Data goes to Microsoft. Turning it off stops future collection on this device, but doesn't delete earlier data. <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noreferrer">Microsoft privacy statement</a></p>
+    <p><button type="button" className="ghost" onClick={flip}>{on ? 'Analytics are on. Turn off' : 'Analytics are off. Turn on'}</button></p>
+  </>;
+}
+
 function You({ me, cfg, onRedo, onOpen }: { me: Me; cfg: Cfg; onRedo: () => void; onOpen: (id: string) => void }) {
   const [saved, setSaved] = useState<any[] | null>(null); const [hist, setHist] = useState<any>(null); const [lib, setLib] = useState<any[] | null>(null);
   useEffect(() => { if (me.access.plan === 'creator') api('/creator/library').then((r) => r.ok && setLib(r.data.stories)); }, [me.access.plan]);
   useEffect(() => { api('/saved').then((r) => r.ok && setSaved(r.data.items)); api('/history').then((r) => r.ok && setHist(r.data)); }, []);
   const p = me.prefs; const fmtName = (id: string) => cfg.formats.find((f) => f.id === id)?.label ?? id;
   const mins = hist ? Math.round(hist.recorded.seconds / 60) : 0;
-  return <section className="you">
+  return <section className="you" data-clarity-mask="true">
     <p className="kicker">You</p><h1 className="story-title">{me.user.name ? `${me.user.name}'s corner.` : 'Your corner.'}</h1><p className="mono-note">{me.user.email}</p>
     <h2 className="serif">How you like your stories</h2>
     {p ? <dl className="prefs"><dt>Topics</dt><dd>{p.interestTags.join(', ')}</dd><dt>Shape</dt><dd>{p.formats.map(fmtName).join(', ')}</dd><dt>Length</dt><dd>{p.length === 'short' ? 'A quick nibble' : 'A good chew'}</dd>{p.quiz?.country && <><dt>Country</dt><dd>{(cfg.countries ?? []).find((c) => c.code === p.quiz.country)?.name ?? p.quiz.country}</dd></>}</dl> : <p className="note">No answers yet.</p>}
@@ -407,6 +461,8 @@ function You({ me, cfg, onRedo, onOpen }: { me: Me; cfg: Cfg; onRedo: () => void
     {saved === null ? <p className="note" role="status">Checking your shelf…</p> : saved.length === 0 ? <p className="note">Nothing saved yet. Use "Save for later" on a story you want to find again.</p>
       : <ul className="journal">{saved.map((x) => <li key={x.topicId}><button type="button" className="linklike" onClick={() => onOpen(x.topicId)}>{x.title}</button><span className="note"> {x.hook}</span></li>)}</ul>}
     {cfg.weather && <CitySetting />}
+    <h2 className="serif">Usage analytics</h2>
+    <AnalyticsToggle strict={!cfg || cfg.consentRegion !== 'open'} />
     <h2 className="serif">Learning history and privacy</h2>
     <p>What the app keeps about your reading: which story you were shown each day, how long you had it open, and whether you finished. It uses topic tags from stories you finish to choose what comes next, along with your answers above. Time spent is not treated as how much you learned.</p>
     {hist && <p className="mono-note">{hist.recorded.reads} opened · {hist.recorded.completed} finished · about {mins} min total</p>}
