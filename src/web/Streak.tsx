@@ -1,4 +1,5 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { countUp, petalBurst } from './motion';
 import { PacoBunny } from './Paco';
 
 type Cal = { today: string; read: string[] };
@@ -31,12 +32,14 @@ function MarkIcon({ i }: { i: number }) {
 
 export function StreakBoard({ name, streak, cal, onRead, onSaved }: { name: string | null; streak: Streak; cal: Cal | null; onRead: () => void; onSaved: () => void }) {
   const a = useRef<SVGGElement>(null), b = useRef<SVGGElement>(null), c = useRef<SVGGElement>(null);
-  const n = streak.current;
+  const n = streak.current; const numRef = useRef<HTMLParagraphElement>(null); const [grown, setGrown] = useState(false);
+  // The number counts up, the bars fill, and a streak sends up a few petals.
+  useEffect(() => { countUp(numRef.current, n); const t = window.setTimeout(() => setGrown(true), 250); const u = n > 0 ? window.setTimeout(() => { const b = numRef.current?.getBoundingClientRect(); if (b) petalBurst(b.left + b.width / 2, b.top + b.height / 2, Math.min(22, 8 + n)); }, 900) : 0; return () => { clearTimeout(t); clearTimeout(u); }; }, [n]);
   const today = cal?.today ?? iso(new Date()); const mon = addDays(today, -dow(today)); const days = Array.from({ length: 7 }, (_, i) => addDays(mon, i)); const read = cal?.read ?? [];
   const msg = n === 0 ? 'The trail starts with one detour. Take a small one today.' : n < 3 ? "That's a great start. One story a day is all it takes." : n < 7 ? 'You are finding a rhythm. Keep following what is interesting.' : 'A whole week of wandering. Curiosity looks good on you.';
   return <div className="streakboard">
     <section className="streak-card sc-left" aria-label="Your streak">
-      <div className="sc-art"><Sparks /><p className="sc-num" aria-label={`${n} ${n === 1 ? 'day' : 'days'} on the trail`}>{n}</p>
+      <div className="sc-art"><Sparks /><p className="sc-num" ref={numRef} aria-label={`${n} ${n === 1 ? 'day' : 'days'} on the trail`}>{n}</p>
         <div className="bunny streak-rabbit b-cheer" aria-hidden="true"><PacoBunny state="idle" pupils={a} head={b} ears={c} /></div></div>
       <div className="sc-text"><h2 className="sc-title">{n === 1 ? 'Day' : 'Days'} on the trail</h2><p>{msg}</p><p className="mono-note">best {streak.longest} · freezes saved {streak.freezesLeft} · extra trails {streak.bonusHoles}</p>
         <button type="button" className="go" onClick={onRead}>{streak.readToday ? 'See today\'s detour' : 'Read today\'s story'}</button></div>
@@ -51,7 +54,7 @@ export function StreakBoard({ name, streak, cal, onRead, onSaved }: { name: stri
           return <li key={d} className={'pill-day' + (r ? ' r' : '') + (t ? ' t' : '') + (fut ? ' fut' : '')} style={{ ['--i' as string]: i }}><Face mood={mood} /><b>{+d.slice(8)}</b><span>{WD[i]}</span><span className="sr">{r ? ', read' : t ? ', today' : fut ? ', upcoming' : ', not read'}</span></li>; })}</ol>
         <h3 className="sc-h">My <strong>Trail marks</strong></h3>
         <ul className="marks2">{MARKS.map(([m, label, sub], i) => { const done = streak.longest >= m; const pct = Math.min(100, Math.round((n / m) * 100));
-          return <li key={m} className={done ? 'done' : ''}><span className="mi"><MarkIcon i={i} /></span><span className="mt"><b>{label}</b><small>{done ? 'reached' : `${n} of ${m} · ${sub}`}</small></span><span className="mbar" aria-hidden="true"><i style={{ width: `${done ? 100 : pct}%` }} /></span></li>; })}</ul>
+          return <li key={m} className={done ? 'done' : ''}><span className="mi"><MarkIcon i={i} /></span><span className="mt"><b>{label}</b><small>{done ? 'reached' : `${n} of ${m} · ${sub}`}</small></span><span className="mbar" aria-hidden="true"><i style={{ width: grown ? `${done ? 100 : pct}%` : '0%' }} /></span></li>; })}</ul>
         <button type="button" className="outline" onClick={onSaved}>Saved discoveries</button>
       </div>
     </section>
