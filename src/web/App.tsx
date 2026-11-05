@@ -2,13 +2,10 @@ import { LakeBackdrop } from './LakeBackdrop';
 import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, Emblem, NextMark, WeekRow, MonthCalendar, ForestScene, SkyLayer } from './visuals';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
-import { Mascot, useMascot } from './Mascot';
 import { getConsent, setConsent, maybeLoadClarity, watchCrossTabConsent, type ClarityConsent } from './clarity';
-import type { MascotEvent } from '../shared/mascot';
 
 type Me = { user: { email: string; name: string | null; onboarded: boolean }; access: { plan: string; rabbitHoles: boolean; finderQuota: { period: string; limit: number } | null; trialEndsAt: string }; streak: { current: number; longest: number; freezesLeft: number; bonusHoles: number; readToday: boolean }; prefs: any };
 type Cfg = { consentRegion?: 'strict' | 'open'; weather?: boolean; topics: string[]; formats: { id: string; label: string }[]; plans: any; payments?: string; emailRecovery?: boolean; whyRead?: { id: string; label: string }[]; countries?: { code: string; name: string }[]; countriesWithStories?: string[] };
-type Send = (e: MascotEvent) => void;
 // Move keyboard and screen-reader focus to the page heading when the view changes, so the next Tab starts at the top of the new content.
 function useFocusHeading(dep: unknown, skipFirst = true) {
   const first = useRef(true);
@@ -19,7 +16,7 @@ type Tab = 'explore' | 'connections' | 'trail' | 'you';
 export function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [cfg, setCfg] = useState<Cfg | null>(null);
-  const [mascot, send] = useMascot(); const [redo, setRedo] = useState(new URLSearchParams(window.location.search).get('redo') === '1'); const [stage, setStage] = useState<'welcome' | 'auth'>('welcome'); const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
+  const [redo, setRedo] = useState(new URLSearchParams(window.location.search).get('redo') === '1'); const [stage, setStage] = useState<'welcome' | 'auth'>('welcome'); const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
   const loadWeather = useCallback(async () => { const r = await api('/weather'); document.documentElement.dataset.weather = r.ok && r.data.condition ? r.data.condition : ''; }, []);
   const refresh = useCallback(async () => { const r = await api('/me'); setMe(r.ok ? r.data : null); }, []);
   useEffect(() => { if (!me || !cfg?.weather) return; loadWeather(); const t = window.setInterval(loadWeather, 30 * 60 * 1000); window.addEventListener('city-changed', loadWeather); return () => { window.clearInterval(t); window.removeEventListener('city-changed', loadWeather); }; }, [!!me, cfg?.weather]);
@@ -47,10 +44,10 @@ export function App() {
   let body: React.ReactNode; let nav = false;
   if (rt || vt) body = <TokenScreen kind={rt ? 'reset' : 'verify'} token={(rt || vt) as string} />;
   else if (me === undefined || !cfg) body = <p className="note" role="status">Waking the rabbit…</p>;
-  else if (me === null) body = stage === 'welcome' ? <Welcome send={send} onStart={() => { setAuthMode('signup'); setStage('auth'); }} onLogin={() => { setAuthMode('login'); setStage('auth'); }} /> : <Auth initial={authMode} onDone={refresh} send={send} recovery={!!cfg.emailRecovery} onBack={() => setStage('welcome')} />;
-  else if (!me.user.onboarded || redo) body = <Quiz cfg={cfg} me={me} redo={redo} onDone={() => { if (redoParam) { window.location.assign('/'); return; } setRedo(false); refresh(); }} onCancel={redo ? () => window.location.assign('/') : undefined} send={send} />;
-  else { nav = true; body = <Main me={me} cfg={cfg} refresh={refresh} send={send} onRedo={() => window.location.assign('/?redo=1')} initialTab={youParam ? 'you' : tabParam} />; }
-  return <div className={nav ? 'shell has-nav' : 'shell'}><LakeBackdrop />{body}<div className="dock" aria-hidden="true" /><Mascot state={mascot} />
+  else if (me === null) body = stage === 'welcome' ? <Welcome onStart={() => { setAuthMode('signup'); setStage('auth'); }} onLogin={() => { setAuthMode('login'); setStage('auth'); }} /> : <Auth initial={authMode} onDone={refresh} recovery={!!cfg.emailRecovery} onBack={() => setStage('welcome')} />;
+  else if (!me.user.onboarded || redo) body = <Quiz cfg={cfg} me={me} redo={redo} onDone={() => { if (redoParam) { window.location.assign('/'); return; } setRedo(false); refresh(); }} onCancel={redo ? () => window.location.assign('/') : undefined} />;
+  else { nav = true; body = <Main me={me} cfg={cfg} refresh={refresh} onRedo={() => window.location.assign('/?redo=1')} initialTab={youParam ? 'you' : tabParam} />; }
+  return <div className={nav ? 'shell has-nav' : 'shell'}><LakeBackdrop />{body}<div className="dock" aria-hidden="true" />
     {clarityAllowed && consent === null && consentStrict && <ConsentBanner onChoice={(v) => { setConsent(v); setConsentState(v); if (v === 'yes') maybeLoadClarity(consentStrict); }} />}
   </div>;
 }
@@ -63,8 +60,7 @@ function ConsentBanner({ onChoice }: { onChoice: (v: 'yes' | 'no') => void }) {
   </div>;
 }
 
-function Welcome({ onStart, onLogin, send }: { onStart: () => void; onLogin: () => void; send: Send }) {
-  useEffect(() => { send('onboarding_start'); }, [send]);
+function Welcome({ onStart, onLogin }: { onStart: () => void; onLogin: () => void }) {
   return <main className="welcome">
     
     <p className="kicker">godownthisrabbithole</p>
@@ -88,10 +84,9 @@ function TokenScreen({ kind, token }: { kind: 'reset' | 'verify'; token: string 
     <p className="note"><a href="/">Back to the app</a></p></main>;
 }
 
-function Auth({ onDone, send, recovery, initial, onBack }: { onDone: () => void; send: Send; recovery: boolean; initial: 'signup' | 'login'; onBack: () => void }) {
+function Auth({ onDone, recovery, initial, onBack }: { onDone: () => void; recovery: boolean; initial: 'signup' | 'login'; onBack: () => void }) {
   const [mode, setMode] = useState<'signup' | 'login' | 'forgot'>(initial); const [note, setNote] = useState('');
   const [f, setF] = useState({ name: '', email: '', password: '' }); const [err, setErr] = useState('');
-  useEffect(() => { send('onboarding_start'); }, [send]);
   async function go(e: React.FormEvent) {
     e.preventDefault(); setErr(''); setNote('');
     if (mode === 'forgot') { const fr = await api('/password/forgot', { email: f.email }); setNote(fr.data.message || fr.data.error || 'Please try again.'); return; }
@@ -115,12 +110,11 @@ function Auth({ onDone, send, recovery, initial, onBack }: { onDone: () => void;
 }
 
 const TZ_COUNTRY: Record<string, string> = { 'Asia/Calcutta': 'IN', 'Asia/Kolkata': 'IN', 'America/New_York': 'US', 'America/Chicago': 'US', 'America/Los_Angeles': 'US', 'Europe/London': 'GB', 'Australia/Sydney': 'AU', 'Australia/Melbourne': 'AU', 'America/Toronto': 'CA', 'Asia/Singapore': 'SG', 'Asia/Dubai': 'AE', 'Europe/Berlin': 'DE', 'Europe/Paris': 'FR', 'Africa/Lagos': 'NG', 'Africa/Nairobi': 'KE', 'Africa/Johannesburg': 'ZA', 'America/Sao_Paulo': 'BR', 'Asia/Karachi': 'PK', 'Asia/Dhaka': 'BD', 'Asia/Colombo': 'LK', 'Asia/Kathmandu': 'NP', 'Asia/Tokyo': 'JP', 'Asia/Seoul': 'KR', 'Pacific/Auckland': 'NZ' };
-function Quiz({ cfg, me, redo, onDone, onCancel, send }: { cfg: Cfg; me: Me; redo: boolean; onDone: () => void; onCancel?: () => void; send: Send }) {
+function Quiz({ cfg, me, redo, onDone, onCancel }: { cfg: Cfg; me: Me; redo: boolean; onDone: () => void; onCancel?: () => void }) {
   const pf = redo ? me.prefs : null;
   const guess = TZ_COUNTRY[Intl.DateTimeFormat().resolvedOptions().timeZone] ?? '';
   const [step, setStep] = useState(0); const [country, setCountry] = useState<string>(pf ? pf.quiz?.country ?? '' : guess);
   const [tags, setTags] = useState<string[]>(pf?.interestTags ?? []); const [why, setWhy] = useState<string[]>(pf?.quiz?.why ?? []); const [fmts, setFmts] = useState<string[]>(pf?.formats ?? []); const [len, setLen] = useState<string>(pf?.length ?? 'medium'); const [curious, setCurious] = useState<string>(pf?.quiz?.curious ?? ''); const [err, setErr] = useState('');
-  useEffect(() => { send('quiz_begin'); }, [send]);
   useFocusHeading(step);
   const tog = (a: string[], s: (x: string[]) => void, v: string) => s(a.includes(v) ? a.filter((x) => x !== v) : [...a, v]);
   const withStories = cfg.countriesWithStories ?? []; const total = 5;
@@ -181,14 +175,14 @@ function Paws({ n, of = 7 }: { n: number; of?: number }) {
   return <div className="paws" role="img" aria-label={`${Math.min(n, of)} of ${of} footprints on this trail`}>{Array.from({ length: of }, (_, i) => <svg key={i} className={i < n ? 'on' : ''} width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="16" rx="5" ry="4.200" /><circle cx="6" cy="10.500" r="2" /><circle cx="10" cy="7" r="2" /><circle cx="14.500" cy="7" r="2" /><circle cx="18.500" cy="10.500" r="2" /></svg>)}</div>;
 }
 
-function Main({ me, cfg, refresh, send, onRedo, initialTab }: { me: Me; cfg: Cfg; refresh: () => void; send: Send; onRedo: () => void; initialTab: Tab }) {
+function Main({ me, cfg, refresh, onRedo, initialTab }: { me: Me; cfg: Cfg; refresh: () => void; onRedo: () => void; initialTab: Tab }) {
   const [tab, setTab] = useState<Tab>(initialTab); const [open, setOpen] = useState<string | null>(null);
   // The account tab is a separate page load (/?you=1) so analytics scripts, which
   // cannot be unloaded once injected, are guaranteed absent on account views.
   const go = (t: Tab) => {
     if (t === 'you' && tab !== 'you') { window.location.assign('/?you=1'); return; }
     if (t !== 'you' && tab === 'you') { window.location.assign(t === 'explore' ? '/' : `/?tab=${t}`); return; }
-    setTab(t); setOpen(null); send(t === 'connections' ? 'tab_change_finder' : 'tab_change_other'); window.scrollTo({ top: 0 });
+    setTab(t); setOpen(null); window.scrollTo({ top: 0 });
   };
   useFocusHeading(tab + '|' + (open ?? ''));
   const names: [Tab, string][] = [['explore', 'Explore'], ['connections', 'Connections'], ['trail', 'Trail'], ['you', 'You']];
@@ -197,8 +191,8 @@ function Main({ me, cfg, refresh, send, onRedo, initialTab }: { me: Me; cfg: Cfg
     <main>
       {open ? <StoryView topicId={open} onBack={() => setOpen(null)} />
         : <>
-          <div hidden={tab !== 'explore'}><Explore me={me} refresh={refresh} send={send} goTab={go} /></div>
-          {tab === 'connections' && <Finder me={me} send={send} />}
+          <div hidden={tab !== 'explore'}><Explore me={me} refresh={refresh} goTab={go} /></div>
+          {tab === 'connections' && <Finder me={me} />}
           {tab === 'trail' && <Trail me={me} onOpen={setOpen} />}
           {tab === 'you' && <You me={me} cfg={cfg} onRedo={onRedo} onOpen={setOpen} />}
         </>}
@@ -217,7 +211,7 @@ function Peek() {
   return <svg className="peek" width="64" height="40" viewBox="0 0 64 40" aria-hidden="true"><path d="M2 40Q32 14 62 40Z" fill="var(--burrow)" /><g fill="#fdfdf8" stroke="var(--ctl)" strokeWidth=".6"><ellipse cx="26" cy="14" rx="3.200" ry="9" /><ellipse cx="37" cy="14" rx="3.200" ry="9" /></g><g fill="var(--coral)"><ellipse cx="26" cy="15" rx="1.200" ry="6" /><ellipse cx="37" cy="15" rx="1.200" ry="6" /></g><ellipse cx="31.500" cy="30" rx="9" ry="6" fill="#fdfdf8" /><circle cx="28.500" cy="29" r="1" fill="#3b2a20" /><circle cx="34.500" cy="29" r="1" fill="#3b2a20" /></svg>;
 }
 
-function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; send: Send; goTab: (t: Tab) => void }) {
+function Explore({ me, refresh, goTab }: { me: Me; refresh: () => void; goTab: (t: Tab) => void }) {
   const [d, setD] = useState<any>(null); const [err, setErr] = useState<{ status: number; msg: string } | null>(null); const [reading, setReading] = useState(false); const [res, setRes] = useState<any>(null); const [again, setAgain] = useState(false);
   useFocusHeading(String(reading) + String(!!res));
   const t0 = useRef(0); const [extra, setExtra] = useState<any>(null); const [bmsg, setBmsg] = useState(''); const [savedN, setSavedN] = useState<number | null>(null);
@@ -225,11 +219,11 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
   async function closeBonus() { await api('/read', { holeId: extra.id, seconds: Math.round((Date.now() - t0.current) / 1000), completed: true }); setExtra(null); refresh(); }
   const load = useCallback(() => { setErr(null); api('/today').then((r) => (r.ok ? setD(r.data) : setErr({ status: r.status, msg: r.data.message || r.data.error || 'Something went sideways.' }))); }, []);
   useEffect(() => { load(); api('/saved').then((r) => r.ok && setSavedN(r.data.items.length)); }, [load]);
-  const start = () => { t0.current = Date.now(); setReading(true); send('read_start'); window.scrollTo({ top: 0 }); };
+  const start = () => { t0.current = Date.now(); setReading(true); window.scrollTo({ top: 0 }); };
   async function finish() {
     const seconds = Math.round((Date.now() - t0.current) / 1000);
     const r = await api('/read', { holeId: d.hole.id, seconds, completed: true });
-    setReading(false); setRes(r.data); send('read_finish'); refresh(); window.scrollTo({ top: 0 });
+    setReading(false); setRes(r.data); refresh(); window.scrollTo({ top: 0 });
   }
   if (err) return <section>
     {err.status === 402 ? <><p className="kicker">Your trial</p><h1>The 3 free days are up.</h1><p className="deck">Your streak and your saved stories are still here. Pick a plan whenever you like. No pressure.</p><p><button type="button" className="go" onClick={() => goTab('you')}>See plans</button></p><p className="note">Payments are not switched on yet in this preview.</p></>
@@ -330,15 +324,15 @@ function StartScene() { return null; }
 function EndScene() { return null; }
 
 const PAIRS = [['moon', 'cheese'], ['honey', 'Venus'], ['wombat', 'cube'], ['tea', 'railway'], ['octopus', 'copper'], ['monsoon', 'sailor']];
-function Finder({ me, send }: { me: Me; send: Send }) {
+function Finder({ me }: { me: Me }) {
   const [a, setA] = useState(''); const [b, setB] = useState(''); const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false); const [found, setFound] = useState<any>(null); const [copied, setCopied] = useState(false);
   const q = me.access.finderQuota;
   async function go(e: React.FormEvent) {
-    e.preventDefault(); setBusy(true); setMsg(''); setFound(null); setCopied(false); send('tab_change_finder');
+    e.preventDefault(); setBusy(true); setMsg(''); setFound(null); setCopied(false);
     try {
       const r = await api('/finder', { a, b });
       // A killed or unreachable worker answers with no JSON message: never fail silently.
-      if (r.data.ok) { setFound(r.data); send('finder_result'); } else { setMsg(r.data.message || r.data.error || 'The rabbit got tangled up on that one. Wait a moment and try again.'); if (!r.data.ok) send('tab_change_other'); }
+      if (r.data.ok) { setFound(r.data); } else { setMsg(r.data.message || r.data.error || 'The rabbit got tangled up on that one. Wait a moment and try again.'); }
     } catch {
       setMsg('The connection dropped before the rabbit came back. Check your network and try again.');
     } finally { setBusy(false); }
