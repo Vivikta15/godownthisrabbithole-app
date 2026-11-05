@@ -10,6 +10,8 @@ import '@fontsource/cormorant-garamond/600.css';
 import '@fontsource/cormorant-garamond/700.css';
 import './styles.css';
 import './meadow.css';
+import './paco.css';
+import { initFlow } from './flow';
 
 // Time-of-day theme from the device clock: dawn 5-8, day 8-17, dusk 17-20, night 20-5.
 // ?daypart= overrides it for testing. No location or weather data is read or sent anywhere.
@@ -25,3 +27,4 @@ applyDaypart();
 window.setInterval(applyDaypart, 15 * 60 * 1000);
 
 createRoot(document.getElementById('root')!).render(<App />);
+initFlow();

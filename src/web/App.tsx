@@ -1,6 +1,9 @@
 import { Meadow } from './Meadow';
 import { TagGlyph, Plate, TrailPath, MilestoneLine, InterestBars, BridgeViz, Emblem, NextMark, WeekRow, MonthCalendar, ForestScene, SkyLayer } from './visuals';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { StreakBoard } from './Streak';
+import { toTop } from './flow';
 import { api } from './api';
 import { useMascot } from './Mascot';
 import type { MascotEvent } from '../shared/mascot';
@@ -160,17 +163,27 @@ function Paws({ n, of = 7 }: { n: number; of?: number }) {
 
 function Main({ me, cfg, refresh, send, onRedo }: { me: Me; cfg: Cfg; refresh: () => void; send: Send; onRedo: () => void }) {
   const [tab, setTab] = useState<Tab>('explore'); const [open, setOpen] = useState<string | null>(null);
-  const go = (t: Tab) => { setTab(t); setOpen(null); send(t === 'connections' ? 'tab_change_finder' : 'tab_change_other'); window.scrollTo({ top: 0 }); };
+  // Tab changes cross-fade where the browser supports view transitions; otherwise they just switch.
+  const go = (t: Tab) => {
+    const run = () => { flushSync(() => { setTab(t); setOpen(null); }); send(t === 'connections' ? 'tab_change_finder' : 'tab_change_other'); toTop(); };
+    const d = document as any; if (d.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) d.startViewTransition(run); else run();
+  };
   useFocusHeading(tab + '|' + (open ?? ''));
   const names: [Tab, string][] = [['explore', 'Explore'], ['connections', 'Connections'], ['trail', 'Trail'], ['you', 'You']];
+  const navRef = useRef<HTMLElement>(null);
+  // One highlight that slides to the current tab, instead of each tab switching its own background.
+  useLayoutEffect(() => {
+    const place = () => { const nav = navRef.current, b = nav?.querySelector('button[aria-current=page]') as HTMLElement | null; if (!nav || !b) return; nav.style.setProperty('--ix', b.offsetLeft + 'px'); nav.style.setProperty('--iy', b.offsetTop + 'px'); nav.style.setProperty('--iw', b.offsetWidth + 'px'); nav.style.setProperty('--ih', b.offsetHeight + 'px'); };
+    place(); addEventListener('resize', place); return () => removeEventListener('resize', place);
+  }, [tab]);
   return <>
-    <nav className="nav" aria-label="Sections"><p className="brand" aria-hidden="true"><Logo /></p>{names.map(([k, l]) => <button key={k} type="button" aria-current={tab === k ? 'page' : undefined} onClick={() => go(k)}><Icon k={k} /><span>{l}</span></button>)}<p className="streakpill" aria-hidden="true">Day {me.streak.current}</p></nav>
+    <nav className="nav" aria-label="Sections" ref={navRef}><span className="nav-ind" aria-hidden="true" /><p className="brand" aria-hidden="true"><Logo /></p>{names.map(([k, l]) => <button key={k} type="button" aria-current={tab === k ? 'page' : undefined} onClick={() => go(k)}><Icon k={k} /><span>{l}</span></button>)}<p className="streakpill" aria-hidden="true">Day {me.streak.current}</p></nav>
     <main>
       {open ? <StoryView topicId={open} onBack={() => setOpen(null)} />
         : <>
           <div hidden={tab !== 'explore'}><Explore me={me} refresh={refresh} send={send} goTab={go} /></div>
           {tab === 'connections' && <Finder me={me} send={send} />}
-          {tab === 'trail' && <Trail me={me} onOpen={setOpen} />}
+          {tab === 'trail' && <Trail me={me} onOpen={setOpen} goTab={go} />}
           {tab === 'you' && <You me={me} cfg={cfg} onRedo={onRedo} onOpen={setOpen} />}
         </>}
     </main>
@@ -192,15 +205,15 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
   const [d, setD] = useState<any>(null); const [err, setErr] = useState<{ status: number; msg: string } | null>(null); const [reading, setReading] = useState(false); const [res, setRes] = useState<any>(null); const [again, setAgain] = useState(false);
   useFocusHeading(String(reading) + String(!!res));
   const t0 = useRef(0); const [extra, setExtra] = useState<any>(null); const [bmsg, setBmsg] = useState(''); const [savedN, setSavedN] = useState<number | null>(null);
-  async function openBonus() { const r = await api('/bonus/redeem', {}); if (r.ok) { setExtra(r.data.hole); t0.current = Date.now(); refresh(); window.scrollTo({ top: 0 }); } else setBmsg(r.data.message || r.data.error); }
+  async function openBonus() { const r = await api('/bonus/redeem', {}); if (r.ok) { setExtra(r.data.hole); t0.current = Date.now(); refresh(); toTop(); } else setBmsg(r.data.message || r.data.error); }
   async function closeBonus() { await api('/read', { holeId: extra.id, seconds: Math.round((Date.now() - t0.current) / 1000), completed: true }); setExtra(null); refresh(); }
   const load = useCallback(() => { setErr(null); api('/today').then((r) => (r.ok ? setD(r.data) : setErr({ status: r.status, msg: r.data.message || r.data.error || 'Something went sideways.' }))); }, []);
   useEffect(() => { load(); api('/saved').then((r) => r.ok && setSavedN(r.data.items.length)); }, [load]);
-  const start = () => { t0.current = Date.now(); setReading(true); send('read_start'); window.scrollTo({ top: 0 }); };
+  const start = () => { t0.current = Date.now(); setReading(true); send('read_start'); toTop(); };
   async function finish() {
     const seconds = Math.round((Date.now() - t0.current) / 1000);
     const r = await api('/read', { holeId: d.hole.id, seconds, completed: true });
-    setReading(false); setRes(r.data); send('read_finish'); refresh(); window.scrollTo({ top: 0 });
+    setReading(false); setRes(r.data); send('read_finish'); refresh(); toTop();
   }
   if (err) return <section>
     {err.status === 402 ? <><p className="kicker">Your trial</p><h1>The 3 free days are up.</h1><p className="deck">Your streak and your saved stories are still here. Pick a plan whenever you like. No pressure.</p><p><button type="button" className="go" onClick={() => goTab('you')}>See plans</button></p><p className="note">Payments are not switched on yet in this preview.</p></>
@@ -347,17 +360,14 @@ function Finder({ me, send }: { me: Me; send: Send }) {
   </section>;
 }
 
-function Trail({ me, onOpen }: { me: Me; onOpen: (id: string) => void }) {
+function Trail({ me, onOpen, goTab }: { me: Me; onOpen: (id: string) => void; goTab: (t: Tab) => void }) {
   const [board, setBoard] = useState<any[]>([]); const [code, setCode] = useState(''); const [join, setJoin] = useState(''); const [msg, setMsg] = useState(''); const [hist, setHist] = useState<any>(null); const [cal, setCal] = useState<any>(null);
   const load = () => api('/leaderboard').then((r) => setBoard(r.data.board || []));
   useEffect(() => { load(); api('/history').then((r) => r.ok && setHist(r.data)); api('/calendar').then((r) => r.ok && setCal(r.data)); }, []);
   const marks = [3, 7, 30];
   return <section>
     <p className="kicker">Trail</p><h1 className="story-title">{me.streak.current ? `Day ${me.streak.current} on the trail.` : 'The trail starts with one detour.'}</h1>
-    <Emblem n={me.streak.current} best={me.streak.longest} />
-    <NextMark n={me.streak.current} marks={marks} />
-    {cal && <WeekRow cal={cal} />}
-    <p className="mono-note">freezes saved {me.streak.freezesLeft} · extra trails {me.streak.bonusHoles}</p>
+    <StreakBoard name={me.user.name} streak={me.streak} cal={cal} onRead={() => goTab('explore')} onSaved={() => goTab('you')} />
     <p className="note">No need to read every day. A freeze covers a missed day. Curiosity isn't homework.</p>
     {cal && <MonthCalendar cal={cal} />}
     <p className="note">Marks are only marks on your trail. There are no prizes behind them yet.</p>
