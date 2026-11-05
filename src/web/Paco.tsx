@@ -67,7 +67,8 @@ export function PacoScene() {
       {canopy(11, 'tl', 120, 40, 330, 20)}{canopy(23, 'tr', 1500, 20, 360, 22)}{canopy(5, 'tm', 800, -90, 230, 12)}{canopy(31, 'lm', -60, 420, 230, 12)}{canopy(41, 'rm', 1690, 460, 250, 13)}
     </g>
     <g className="ly" style={{ ['--d' as string]: 1.2 }}>
-      <g className="flock">{[[0, 0], [38, 16], [-34, 20], [70, 36], [-66, 40]].map(([x, y], i) => <path key={i} className="bird" style={{ animationDelay: `${-i * 0.23}s` }} transform={`translate(${760 + x} ${300 + y})`} d="M0 0q6-7 12 0q6-7 12 0" />)}</g>
+      {/* Keep placement on a parent: CSS wing transforms must never replace a bird's SVG position. */}
+      <g className="flock">{[[0, 0], [38, 16], [-34, 20], [70, 36], [-66, 40]].map(([x, y], i) => <g key={i} transform={`translate(${760 + x} ${300 + y})`}><path className="bird" style={{ animationDelay: `${-i * 0.23}s` }} d="M0 0q6-7 12 0q6-7 12 0" /></g>)}</g>
     </g>
   </svg>;
 }
