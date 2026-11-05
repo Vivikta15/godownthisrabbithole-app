@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { flushSync } from 'react-dom';
 import { StreakBoard } from './Streak';
 import { toTop } from './flow';
+import { leafWipe } from './motion';
+import { Loader } from './Loader';
 import { api } from './api';
 import { useMascot } from './Mascot';
 import type { MascotEvent } from '../shared/mascot';
@@ -30,7 +32,7 @@ export function App() {
   const q = new URLSearchParams(window.location.search); const rt = q.get('reset'), vt = q.get('verify');
   let body: React.ReactNode; let nav = false;
   if (rt || vt) body = <TokenScreen kind={rt ? 'reset' : 'verify'} token={(rt || vt) as string} />;
-  else if (me === undefined || !cfg) body = <p className="note" role="status">Waking the rabbit…</p>;
+  else if (me === undefined || !cfg) body = <Loader label="Waking the rabbit…" />;
   else if (me === null) body = stage === 'welcome' ? <Welcome send={send} onStart={() => { setAuthMode('signup'); setStage('auth'); }} onLogin={() => { setAuthMode('login'); setStage('auth'); }} /> : <Auth initial={authMode} onDone={refresh} send={send} recovery={!!cfg.emailRecovery} onBack={() => setStage('welcome')} />;
   else if (!me.user.onboarded || redo) body = <Quiz cfg={cfg} me={me} redo={redo} onDone={() => { setRedo(false); refresh(); }} onCancel={redo ? () => setRedo(false) : undefined} send={send} />;
   else { nav = true; body = <Main me={me} cfg={cfg} refresh={refresh} send={send} onRedo={() => setRedo(true)} />; }
@@ -163,10 +165,10 @@ function Paws({ n, of = 7 }: { n: number; of?: number }) {
 
 function Main({ me, cfg, refresh, send, onRedo }: { me: Me; cfg: Cfg; refresh: () => void; send: Send; onRedo: () => void }) {
   const [tab, setTab] = useState<Tab>('explore'); const [open, setOpen] = useState<string | null>(null);
-  // Tab changes cross-fade where the browser supports view transitions; otherwise they just switch.
+  // Tab changes sweep a leaf wipe over the page (see motion.ts); with reduced motion they just switch.
   const go = (t: Tab) => {
-    const run = () => { flushSync(() => { setTab(t); setOpen(null); }); send(t === 'connections' ? 'tab_change_finder' : 'tab_change_other'); toTop(); };
-    const d = document as any; if (d.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) d.startViewTransition(run); else run();
+    if (t === tab && !open) return;
+    leafWipe(() => { flushSync(() => { setTab(t); setOpen(null); }); send(t === 'connections' ? 'tab_change_finder' : 'tab_change_other'); toTop(); });
   };
   useFocusHeading(tab + '|' + (open ?? ''));
   const names: [Tab, string][] = [['explore', 'Explore'], ['connections', 'Connections'], ['trail', 'Trail'], ['you', 'You']];
@@ -219,7 +221,7 @@ function Explore({ me, refresh, send, goTab }: { me: Me; refresh: () => void; se
     {err.status === 402 ? <><p className="kicker">Your trial</p><h1>The 3 free days are up.</h1><p className="deck">Your streak and your saved stories are still here. Pick a plan whenever you like. No pressure.</p><p><button type="button" className="go" onClick={() => goTab('you')}>See plans</button></p><p className="note">Payments are not switched on yet in this preview.</p></>
       : <><h1>The rabbit hit a snag.</h1><p className="deck">{err.msg}</p><p><button type="button" className="go" onClick={load}>Try again</button></p></>}
   </section>;
-  if (!d) return <p className="note" role="status">Digging up today's detour…</p>;
+  if (!d) return <Loader label="Digging up today's detour…" />;
   const h = d.hole; const done = !!(res || d.readToday);
   if (extra) return <article className="reading"><ReadingRail /><MarginScene /><StartScene /><p className="kicker">Another trail</p><Story hole={extra} /><Sources hole={extra} /><p><button type="button" className="go" onClick={closeBonus}>I'm back up</button></p></article>;
   if (reading) return <article className="reading"><ReadProgress /><ReadingRail /><MarginScene /><StartScene /><p className="kicker mono">{h.tags.join(' · ')} · about {h.minutes} min read</p><h1 className="story-title">{h.title}</h1><Plate tags={h.tags} />

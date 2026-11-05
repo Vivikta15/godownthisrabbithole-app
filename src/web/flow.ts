@@ -1,4 +1,5 @@
 import Lenis from 'lenis';
+import { petalBurst } from './motion';
 
 // The "flow" layer: inertial scrolling, content that eases in as it is reached, cards that lean toward the pointer, buttons that lean toward the finger, a soft cursor.
 // It is progressive: with reduced motion, no hover, or no JS, pages show their final readable state and scroll natively.
@@ -20,6 +21,7 @@ export function initFlow() {
   const scan = (n: any) => { if (n instanceof Element && n.matches(REVEAL)) mark(n); n.querySelectorAll?.(REVEAL).forEach(mark); };
   scan(document); new MutationObserver((ms) => { for (const m of ms) m.addedNodes.forEach((n) => { if (n.nodeType === 1) scan(n as Element); }); }).observe(document.getElementById('root')!, { childList: true, subtree: true });
 
+  addEventListener('click', (e) => { if ((e.target as Element | null)?.closest?.('button.go')) petalBurst(e.clientX, e.clientY, 12); }, { passive: true });
   if (!matchMedia('(hover: hover) and (pointer: fine)').matches) return;
   // Cursor: a small dot that follows with a little lag and swells over things you can press.
   const dot = document.createElement('div'); dot.className = 'cursor'; dot.setAttribute('aria-hidden', 'true'); document.body.appendChild(dot);

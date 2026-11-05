@@ -126,3 +126,18 @@ html.flow{scroll-behavior:auto}
   html.flow [data-rv]:not(.rv-in){opacity:1;transform:none;filter:none}
   ::view-transition-old(root),::view-transition-new(root){animation:none}
 }
+
+/* motion graphics: petals, leaf wipe, loader */
+.petal-layer{position:fixed;inset:0;pointer-events:none;z-index:150;overflow:hidden}
+.petal-layer i{position:absolute;border-radius:80% 0 80% 0;margin:-6px 0 0 -4px}
+.leafwipe{position:fixed;inset:0;z-index:200;pointer-events:none;overflow:hidden}
+.leafwipe .lw{position:absolute;top:-15%;height:130%}
+.loader{display:grid;justify-items:center;gap:8px;padding:30px 0;color:var(--ink-deep);font-family:"Baloo 2 Variable","Baloo 2",sans-serif}
+.loader p{margin:0;font-size:1.05rem}
+.lspin{transform-box:view-box;animation:lturn 6s linear infinite}
+.lpetal{transform-box:fill-box;transform-origin:50% 100%;animation:lbloom 1.2s ease-in-out infinite alternate}
+.lcore{animation:lpulse 1.2s ease-in-out infinite alternate}
+@keyframes lturn{to{transform:translate(40px,40px) rotate(360deg)}}
+@keyframes lbloom{from{transform:scale(.55)}to{transform:scale(1.08)}}
+@keyframes lpulse{to{transform:scale(1.25)}}
+@media (prefers-reduced-motion:reduce){.lspin,.lpetal,.lcore{animation:none!important}}
