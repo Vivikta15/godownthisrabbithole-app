@@ -17,17 +17,6 @@ export function TagGlyph({ tag, size = 22 }: { tag: string; size?: number }) {
   return <svg className="glyph" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{G[tag] ?? FALLBACK}</svg>;
 }
 
-// Decorative plate for a story: its own tags drawn as large line glyphs along a dashed trail over soft hills.
-export function Plate({ tags }: { tags: string[] }) {
-  const t = tags.slice(0, 3); const xs = t.length === 1 ? [160] : t.length === 2 ? [95, 225] : [60, 160, 260]; const cols = ['var(--moss)', 'var(--amber)', 'var(--coral)'];
-  return <svg className="plate" viewBox="0 0 320 120" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
-    <path d="M0 96c40-22 70-22 110-6s80 14 120-4 60-10 90-2V120H0z" fill="var(--grass)" opacity=".6" />
-    <path d="M0 100c50-14 90-10 130 2s100 8 190-8" fill="none" stroke="var(--line)" strokeWidth="1.2" />
-    {xs.length > 1 && <path d={`M${xs[0]} 64 C ${(xs[0] + xs[xs.length - 1]) / 2} 100, ${(xs[0] + xs[xs.length - 1]) / 2} 30, ${xs[xs.length - 1]} 64`} fill="none" stroke="var(--ctl)" strokeWidth="1.4" strokeDasharray="3 6" strokeLinecap="round" />}
-    {t.map((tag, i) => <g key={tag} transform={`translate(${xs[i] - 24} 36) scale(2)`} style={{ color: cols[i] }}><circle cx="12" cy="12" r="13" fill="var(--panel)" stroke="var(--line)" strokeWidth=".6" /><g fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">{G[tag] ?? FALLBACK}</g></g>)}
-  </svg>;
-}
-
 // Winding trail: one stop per day this week of the current streak (capped at 7), filled for days walked.
 export function TrailPath({ n, of = 7 }: { n: number; of?: number }) {
   const w = 640, h = 120; const k = Math.min(n, of);
@@ -208,39 +197,5 @@ export function LakeScene({ pose = 'fish', progress = 0, hero = false }: { pose?
     {caught && <g className="catchfish"><Fish x={266} y={158} s={1} c="var(--coral)" /><path d="M262 146 q3 6 2 10" stroke="var(--cloud)" strokeWidth="1.6" fill="none" /></g>}
     <g className="splash" stroke="var(--cloud)" strokeWidth="2" strokeLinecap="round" fill="none"><path d="M250 152 q4 -8 8 0 M266 148 q4 -8 8 0 M282 152 q4 -8 8 0" /></g>
     {hero && <PineS x={30} y={126} s={1.3} />}
-  </svg>;
-}
-
-// ---- Forest scenes for streak moments, in the same illustrated language. ----
-function Bunny({ x, y, eat = false, peek = false }: { x: number; y: number; eat?: boolean; peek?: boolean }) {
-  const ink = '#3b2a20';
-  return <g transform={`translate(${x} ${y})`} className={eat ? 'bunny eat' : 'bunny'}>
-    <g className="rears"><ellipse cx="-11" cy="-62" rx="7" ry="20" fill="#fdfdf8" /><ellipse cx="-11" cy="-60" rx="3" ry="12" fill="var(--coral)" opacity=".55" /><ellipse cx="11" cy="-62" rx="7" ry="20" fill="#fdfdf8" /><ellipse cx="11" cy="-60" rx="3" ry="12" fill="var(--coral)" opacity=".55" /></g>
-    {!peek && <ellipse cx="0" cy="-8" rx="34" ry="28" fill="#fdfdf8" />}
-    <g className="rhead"><circle cx="0" cy="-34" r="24" fill="#fdfdf8" /><circle cx="-9" cy="-37" r="2.8" fill={ink} /><circle cx="9" cy="-37" r="2.8" fill={ink} /><circle cx="-17" cy="-28" r="4" fill="var(--coral)" opacity=".5" /><circle cx="17" cy="-28" r="4" fill="var(--coral)" opacity=".5" /><ellipse cx="0" cy="-30" rx="2.4" ry="1.8" fill="var(--coral)" /><path d="M-5 -26 Q0 -21 5 -26" stroke={ink} strokeWidth="1.8" fill="none" strokeLinecap="round" /></g>
-  </g>;
-}
-
-export function ForestScene({ kind }: { kind: 'carrot' | 'fox' }) {
-  const label = kind === 'carrot' ? 'The rabbit sits among the trees, happily eating a carrot.' : 'A red fox trots past the trees while the rabbit watches safely from its burrow.';
-  return <svg className={'scene ' + kind} viewBox="0 0 320 190" role="img" aria-label={label}>
-    <PineS x={30} y={128} s={1.1} /><PineS x={288} y={126} s={1.2} /><RoundS x={76} y={132} s={.9} c="var(--autumn)" /><PineS x={250} y={132} s={.8} />
-    <path d="M0 150c60-10 120-8 160-2s110 6 160-4V190H0z" fill="var(--grass)" /><path d="M0 152c60-10 120-8 160-2s110 6 160-4" fill="none" stroke="var(--line)" strokeWidth="1.2" />
-    <PineS x={14} y={150} s={1.5} /><RoundS x={306} y={152} s={1.3} c="var(--autumn2)" />
-    {kind === 'carrot' ? <>
-      <Bunny x={160} y={150} eat />
-      <g transform="translate(160 134)"><g className="carrot"><path d="M-14 -10 L6 -6 L-8 22 z" fill="#e8913f" /><path d="M-9 -6 l4 1 M-6 3 l4 1" stroke="#fdfdf8" strokeWidth="1" opacity=".6" /><path d="M-16 -12 l-4 -9 M-14 -10 l-8 -4 M-12 -8 l-9 1" stroke="var(--moss)" strokeWidth="2.4" strokeLinecap="round" /></g></g>
-      <g className="crumbs" fill="#e8913f"><circle cx="138" cy="146" r="1.8" /><circle cx="184" cy="150" r="1.6" /><circle cx="130" cy="138" r="1.4" /></g>
-    </> : <>
-      <path d="M232 168 c0-26 56-26 56 0z" fill="var(--burrow)" />
-      <Bunny x={260} y={176} peek />
-      <path d="M232 168 c0-26 56-26 56 0z" fill="var(--burrow)" opacity=".35" />
-      <g className="foxg"><g transform="translate(70 150)">
-        <g className="tail"><path d="M-8 -10 C-44 -26 -52 -2 -34 8 C-24 12 -14 6 -8 -4z" fill="#c95f43" /><path d="M-34 8 C-42 2 -46 -8 -40 -14 C-50 -6 -46 6 -34 8z" fill="#fdfdf8" /></g>
-        <ellipse cx="12" cy="-12" rx="28" ry="15" fill="#c95f43" /><path d="M-4 0 v14 M22 0 v14 M8 0 v14" stroke="#3b2a20" strokeWidth="4" strokeLinecap="round" />
-        <path d="M32 -22 L38 -42 L48 -26z" fill="#c95f43" /><path d="M38 -22 L48 -40 L52 -22z" fill="#c95f43" />
-        <path d="M30 -24 C36 -34 56 -34 66 -22 L72 -16 L58 -8 C46 -6 34 -10 30 -24z" fill="#c95f43" /><path d="M58 -8 L72 -16 L64 -4z" fill="#fdfdf8" /><circle cx="73" cy="-16" r="2.4" fill="#3b2a20" /><circle cx="52" cy="-22" r="2" fill="#3b2a20" />
-      </g></g>
-    </>}
   </svg>;
 }

@@ -141,3 +141,26 @@ html.flow{scroll-behavior:auto}
 @keyframes lbloom{from{transform:scale(.55)}to{transform:scale(1.08)}}
 @keyframes lpulse{to{transform:scale(1.25)}}
 @media (prefers-reduced-motion:reduce){.lspin,.lpetal,.lcore{animation:none!important}}
+
+/* story art */
+.storyart{display:block;width:100%;height:auto;aspect-ratio:2/1;border-radius:28px;border:2px solid var(--ink-deep);box-shadow:0 5px 0 var(--ink-deep),0 18px 30px rgba(20,90,100,.18);margin:16px 0 10px;overflow:hidden;--wind:0;background:#8ccbe9}
+.storyart .tw{animation:twinkle2 3s ease-in-out infinite}
+.storyart .orbit{transform-box:fill-box;transform-origin:50% 50%;animation:lturn2 40s linear infinite}
+@keyframes lturn2{to{transform:rotate(360deg)}}
+.storyart .shoot{stroke-dasharray:60;stroke-dashoffset:60;animation:shoot 5s ease-in infinite}
+@keyframes shoot{0%,70%{stroke-dashoffset:60;opacity:0}75%{opacity:1}100%{stroke-dashoffset:-60;opacity:0}}
+.storyart .bub{animation:rise 3.2s ease-in infinite}
+@keyframes rise{from{transform:translateY(0);opacity:.9}to{transform:translateY(-70px);opacity:0}}
+.storyart .steam{animation:steam 3s ease-in-out infinite;transform-box:fill-box}
+@keyframes steam{from{transform:translateY(8px);opacity:0}40%{opacity:.9}to{transform:translateY(-14px);opacity:0}}
+.storyart .bee{animation:beefly 7s ease-in-out infinite alternate}
+@keyframes beefly{from{transform:translate(0,0)}to{transform:translate(120px,-34px)}}
+.storyart .balloon{animation:float 5s ease-in-out infinite alternate}
+@keyframes float{to{transform:translateY(-14px)}}
+.storyart .smoke{animation:smoke 3.2s ease-out infinite;transform-box:fill-box}
+@keyframes smoke{from{transform:translate(0,0) scale(.6);opacity:.9}to{transform:translate(14px,-46px) scale(1.5);opacity:0}}
+.storyart .coin{animation:coinbob 2.4s ease-in-out infinite alternate}
+@keyframes coinbob{to{transform:translateY(-12px)}}
+.storyart .fly{animation:flutter 5s ease-in-out infinite alternate}
+@keyframes flutter{from{transform:translate(0,0)}to{transform:translate(60px,-26px)}}
+@media (prefers-reduced-motion:reduce){.storyart *{animation:none!important}}

@@ -9,7 +9,7 @@ const f = (n: number) => n.toFixed(1);
 const LEAF = ['#86c63f', '#72b533', '#98d24a', '#63a82c'], DAB = ['#3f8f2d', '#2f7a2c', '#b4e06a', '#4da032'], RIM = '#e8f0b4', BRANCH = '#3a4a26';
 
 // A hanging clump of leaves: cream rim first (so neighbouring blobs share one outline), then the green blobs, then darker leaf dabs and a few branches.
-function canopy(seed: number, key: string, cx: number, cy: number, R: number, n = 15) {
+export function canopy(seed: number, key: string, cx: number, cy: number, R: number, n = 15) {
   const r = rng(seed);
   const blobs = Array.from({ length: n }, () => { const a = r() * Math.PI * 2, d = Math.sqrt(r()) * R * 0.72; return { x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d * 0.85, rx: R * (0.2 + r() * 0.16), ry: R * (0.16 + r() * 0.13), rot: r() * 180, c: LEAF[Math.floor(r() * LEAF.length)] }; });
   const dabs = Array.from({ length: n * 2 }, () => { const b = blobs[Math.floor(r() * blobs.length)]; return { x: b.x + (r() - 0.5) * b.rx * 1.2, y: b.y + (r() - 0.5) * b.ry * 1.2, rot: r() * 180, c: DAB[Math.floor(r() * DAB.length)], s: 0.8 + r() * 0.9 }; });
@@ -22,7 +22,7 @@ function canopy(seed: number, key: string, cx: number, cy: number, R: number, n 
   </g>;
 }
 
-const swan = (k: string, x: number, y: number, s: number, flip: boolean, dur: number, delay: number) => (
+export const swan = (k: string, x: number, y: number, s: number, flip: boolean, dur: number, delay: number) => (
   <g key={k} className="swan" style={{ animationDuration: `${dur}s`, animationDelay: `${delay}s` }}>
     <g transform={`translate(${x} ${y}) scale(${flip ? -s : s} ${s})`}>
       <ellipse cx="0" cy="6" rx="34" ry="6" fill="#0d6f75" opacity=".35" />
